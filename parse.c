@@ -4932,7 +4932,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
 
 
 
-  if (consume(&tok, tok, "format_arg")) {
+  if (consume(&tok, tok, "format_arg")  || consume(&tok, tok, "__format_arg__")) {
     SET_CTX(ctx); 
     tok = skip(tok, "(", ctx);
     const_expr(&tok, tok);
@@ -6476,8 +6476,6 @@ static Node *primary(Token **rest, Token *tok)
         strarray_push(&current_fn->refs, sc->var->name);
       else 
         sc->var->is_root = true;
-      //issue found with vlc when static inline functions are inside struct members!
-      sc->var->is_live = true;
     }
 
     if (sc)
