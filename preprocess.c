@@ -1528,9 +1528,9 @@ void init_macros(void)
   define_macro("_DEFAULT_SOURCE", "1");
   //define_macro("__INTEL_COMPILER", "1");
   //define_macro("__GNUC__", "9");
-   define_macro("__GNUC__", "2");
-  //define_macro("__GNUC_MINOR__", "1");
-  //define_macro("__GNUC_PATCHLEVEL__ ", "1");
+  define_macro("__GNUC__", "2");
+  define_macro("__GNUC_MINOR__", "1");
+  define_macro("__GNUC_PATCHLEVEL__ ", "1");
   //define_macro("HAVE_ATTRIBUTE_PACKED", "1");
   define_macro("linux", "1");
   define_macro("unix", "1");

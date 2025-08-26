@@ -390,7 +390,7 @@ util-linux : https://github.com/util-linux/util-linux.git
 
 nginx: https://github.com/nginx/nginx.git 
 
-    CC=chibicc CFLAGS=-fPIC ./auto/configure
+    CC=chibicc CFLAGS=-fPIC ./auto/configure --with-http_ssl_module
     make
     
 
@@ -456,10 +456,6 @@ vlc : https://github.com/videolan/vlc.git
     ./bootstrap
     CC=chibicc CFLAGS="-fPIC -std=c11"  ./configure --disable-lua --disable-xcb --disable-qt --disable-alsa --disable-sse --host x86_64-linux-gnu 
     make all
-    failed during linkage : with undefined references to missing dependency in their Makefile.
-    Adding the missing librtp_plugin_la-sdp.o solves this issue. Changes done in modules/Makefile :
-    libg64rtp_plugin_la_OBJECTS = $(am_libg64rtp_plugin_la_OBJECTS) access/rtp/.libs/librtp_plugin_la-sdp.o
-    after that make all succeeds!
 
 
 
