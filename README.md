@@ -573,7 +573,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23.1    Removing old fix on issue166 that causes side effect. Adding ND_POS for unary +. Adding new type for long long TY_LLONG. Fixing umull_overflow. Fixing issue with weak not printed for extern global variables. Adding lots of functions declarations on math.h needed for some projects. Ignoring few arguments. Fixing issue166. Fixing issue with external TLS (from @fuhsnn). Fixing temp issue with __cpuid_count (extended assembly not managed well this case) by adding my own cpuid.h. Adding some atomic_xx_n functions missing. Removing fix on VLC undefined references that causes issue with util-linux.
+1.0.23.1    Removing old fix on issue166 that causes side effect. Adding ND_POS for unary +. Adding new type for long long TY_LLONG. Fixing umull_overflow. Fixing issue with weak not printed for extern global variables. Adding lots of functions declarations on math.h needed for some projects. Ignoring few arguments. Fixing issue166. Fixing issue with external TLS (from @fuhsnn). Fixing temp issue with __cpuid_count (extended assembly not managed well this case) by adding my own cpuid.h. Adding some atomic_xx_n functions missing. Removing fix on VLC undefined references that causes issue with util-linux and fixing static inline references when they are referenced by address.
 
 ## old release notes
 

@@ -6486,6 +6486,9 @@ static Node *primary(Token **rest, Token *tok)
       else  {
         sc->var->is_root = true;
       }
+      if (sc->var->is_address_used) {
+        sc->var->is_root = true;
+      }
 
     }
 

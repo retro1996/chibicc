@@ -4065,7 +4065,11 @@ static void emit_data(Obj *prog)
       {
         if (rel && rel->offset == pos)
         {
-          println("  .quad %s%+ld", *rel->label, rel->addend);
+          if (var->is_function) {
+            println("  .long %s - . + %ld", *rel->label, rel->addend);
+          } else if (!var->is_extern) {
+            println("  .quad %s%+ld", *rel->label, rel->addend);
+          }
           rel = rel->next;
           pos += 8;
         }
@@ -4219,10 +4223,9 @@ static void emit_text(Obj *prog)
       continue;
 
 
-
     // No code is emitted for "static inline" functions
     // if no one is referencing them.
-    if (!fn->is_live && !fn->is_address_used)
+    if (!fn->is_live)
       continue;
 
     if (fn->is_static)
