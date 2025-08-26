@@ -440,29 +440,6 @@ memcached: https://github.com/memcached/memcached.git
     make
     make test
 
-
-   
-cpython: git clone git@github.com:python/cpython.git
-        
-        CC=chibicc ./configure  --host=x86_64-pc-linux-gnu ac_cv_have_lchflags=no ac_cv_have_chflags=no
-        make && make test
-        failure with  
-
-        ==241087== General Protection Fault
-        ==241087== at 0x6D2971: pymalloc_alloc (obmalloc.c:1571)
-        ==241087== by 0x6D8627: _PyObject_Malloc (obmalloc.c:2328)
-        ==241087== by 0x70F807: PyObject_Malloc (obmalloc.c:1493)
-        ==241087== by 0xA795C5: _PyObject_MallocWithType (pycore_object_alloc.h:46)
-        ==241087== by 0xA7265A: gc_alloc (gc.c:2327)
-        ==241087== by 0xA7E534: _PyObject_GC_New (gc.c:2347)
-        ==241087== by 0x67D35E: new_dict (objimpl.h:180)
-        ==241087== by 0x68CE1A: PyDict_New (dictobject.c:973)
-        ==241087== by 0x808234: init_interned_dict (unicodeobject.c:343)
-        ==241087== by 0x81E1CA: _PyUnicode_InitGlobalObjects (unicodeobject.c:15844)
-        ==241087== by 0xB3F7BE: pycore_init_global_objects (pylifecycle.c:689)
-        ==241087== by 0xB3DD55: pycore_interp_init (pylifecycle.c:873)
-
-
 nmap : https://github.com/nmap/nmap
 
     CC=chibicc ./configure --with-dbus
@@ -500,6 +477,34 @@ lxc: https://github.com/lxc/lxc.git
 Some C projects doesn't compile for now or crash after being compiled with chibicc. It helps to find some bugs and to try to fix them!
 
 
+   
+cpython: git clone https://github.com/python/cpython.git
+        
+        CC=chibicc ./configure  --host=x86_64-pc-linux-gnu ac_cv_have_lchflags=no ac_cv_have_chflags=no
+        make && make test
+        failure with :
+        do_fork_exec () at ./Modules/_posixsubprocess.c:911
+        #1 0x0000767b99afefdf in subprocess_fork_exec_impl () at ./Modules/_posixsubprocess.c:1256
+        #2 0x0000767b99afd98d in subprocess_fork_exec () at ./Modules/clinic/_posixsubprocess.c.h:148
+        #3 0x00000000006de02f in cfunction_vectorcall_FASTCALL () at Objects/methodobject.c:449
+        #4 0x00000000005b53d1 in _PyObject_VectorcallTstate () at ./Include/internal/pycore_call.h:169
+        #5 0x00000000005b8424 in PyObject_Vectorcall () at Objects/call.c:327
+        #6 0x00000000009988ce in _PyEval_EvalFrameDefault () at Python/generated_cases.c.h:1620
+        #7 0x00000000009888dc in _PyEval_EvalFrame () at ./Include/internal/pycore_ceval.h:121
+        #8 0x0000000000988857 in _PyEval_Vector () at Python/ceval.c:1982
+        #9 0x00000000005b3b8e in _PyFunction_Vectorcall () at Objects/call.c:413
+        #10 0x00000000005b6638 in _PyObject_VectorcallDictTstate () at Objects/call.c:146
+        #11 0x00000000005b68da in _PyObject_Call_Prepend () at Objects/call.c:504
+        #12 0x000000000079c6dd in call_method () at Objects/typeobject.c:3060
+        #13 0x0000000000776ab5 in slot_tp_init () at Objects/typeobject.c:10791
+        #14 0x000000000079e913 in type_call () at Objects/typeobject.c:2444
+        #15 0x00000000005b630f in _PyObject_Call () at Objects/call.c:361
+        #16 0x00000000005b90c8 in PyObject_Call () at Objects/call.c:373
+        #17 0x00000000009a03fd in _PyEval_EvalFrameDefault () at Python/generated_cases.c.h:2616
+        #18 0x00000000009888dc in _PyEval_EvalFrame () at ./Include/internal/pycore_ceval.h:121
+        #19 0x0000000000988857 in _PyEval_Vector () at Python/ceval.c:1982
+        #20 0x00000000005b3b8e in _PyFunction_Vectorcall () at Objects/call.c:413
+        => chibicc doesn't manage well vfork due to their push/pop systems!
 
 postgres: https://github.com/postgres/postgres.git  (in case of bad network use git clone --filter=blob:none --depth=1 https://github.com/postgres/postgres.git --branch master)
 
@@ -533,7 +538,7 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     git 2 tests failed
     memcached test stuck at t/binary-extstore.t ......... 5947/?
     vim: compile OK, tests KO on test_channel.vim.
-   
+    cpython : compile OK, segfault at test execution due to vfork not managed well.
 
 ## projects compiled successfully with chibicc
 
