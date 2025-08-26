@@ -6474,8 +6474,13 @@ static Node *primary(Token **rest, Token *tok)
     {
       if (current_fn)
         strarray_push(&current_fn->refs, sc->var->name);
-      else 
+      else  {
         sc->var->is_root = true;
+      }
+      //fix for vlc with extern static inline undefined reference
+      if (current_fn && sc->var->is_static && sc->var->is_inline) {
+          sc->var->is_live = true;
+        }
     }
 
     if (sc)
