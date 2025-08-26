@@ -78,6 +78,7 @@ or
         -std=c11 generates an error on implicit function declaration (without -std only a warning is emitted)
         -mmmx to allow mmx instructions and builtin functions linked to mmx like __builtin_packuswb... 
         -print-search-dirs prints minimal information on install dir.
+        -Werror any warning is sent as an error and stops the compile
         chibicc [ -o <path> ] <file>
 
 ## compile
@@ -574,7 +575,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23.2
+1.0.23.2    Managing -Werror (reporting from @fuhsnn/slimcc).
 
 ## old release notes
 

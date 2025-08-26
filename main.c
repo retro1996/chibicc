@@ -28,6 +28,7 @@ bool opt_c99;
 bool opt_c11;
 bool opt_c17;
 bool opt_implicit;
+bool opt_werror;
 
 static FileType opt_x;
 static StringArray opt_include;
@@ -793,12 +794,16 @@ static void parse_args(int argc, char **argv)
       continue;
     } 
 
-    //-Werror-implicit-function-declaration
-    //for printing AST
     if (!strcmp(argv[i], "-Werror-implicit-function-declaration")) {
       opt_implicit = true;
       continue;
     } 
+
+    if (!strcmp(argv[i], "-Werror")) {
+      opt_werror = true;
+      continue;
+    } 
+
 
 
     //other options -Axxx ignored

@@ -122,6 +122,7 @@ this " PRODUCT " contains only some differences for now like new parameters\n"
 -std=c11 generates an error on implicit function declaration (without -std only a warning is emitted) \n \
 -mmmx to allow mmx instructions and builtin functions linked to mmx like __builtin_packuswb... \n \
 -print-search-dirs prints minimal information on install dir. \n \
+-Werror any warning is sent as an error and stops the compile \n \
 chibicc [ -o <path> ] <file>\n"
 
 typedef struct Type Type;
@@ -1125,6 +1126,7 @@ extern bool opt_c17;
 extern char *weak_symbols[MAX_WEAK]; 
 extern int weak_count;
 extern bool opt_implicit;
+extern bool opt_werror;
 
 //
 // extended_asm.c
