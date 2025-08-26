@@ -3031,6 +3031,7 @@ static int64_t eval2(Node *node, char ***label)
   case ND_COND:
     return eval(node->cond) ? eval2(node->then, label) : eval2(node->els, label);
   case ND_COMMA:
+    eval2(node->lhs, label);
     return eval2(node->rhs, label);
   case ND_NOT:
     //from @fuhsnn fixing when lhs is a float
@@ -3153,7 +3154,7 @@ static bool is_const_expr(Node *node)
       return false;
     return is_const_expr(eval(node->cond) ? node->then : node->els);
   case ND_COMMA:
-    return is_const_expr(node->rhs);
+    return is_const_expr(node->rhs) && is_const_expr(node->lhs);
   case ND_POS:
   case ND_NEG:
   case ND_NOT:
@@ -3205,6 +3206,7 @@ static double eval_double(Node *node)
   case ND_COND:
     return eval_double(node->cond) ? eval_double(node->then) : eval_double(node->els);
   case ND_COMMA:
+    eval_double(node->lhs);
     return eval_double(node->rhs);
   case ND_CAST:
     // if (is_flonum(node->lhs->ty))
