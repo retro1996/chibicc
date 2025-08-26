@@ -25,9 +25,9 @@ void mycpuinfo(void) {
     printf("%d\n", cpu_info[i]);
   //it depends on which computer is it running
   //ASSERT(20, cpu_info[0]);
-  ASSERT(1752462657, cpu_info[1]);
-  ASSERT(1145913699, cpu_info[2]);
-  ASSERT(1769238117, cpu_info[3]);
+  ASSERT(1, cpu_info[1] == 1752462657 || cpu_info[1] == 1970169159);
+  ASSERT(1, cpu_info[2] == 1145913699 || cpu_info[2] == 1818588270);
+  ASSERT(1, cpu_info[3] == 1769238117 || cpu_info[3] == 1231384169);
 
 }
 

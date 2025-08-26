@@ -4487,6 +4487,15 @@ static Token *type_attributes(Token *tok, void *arg)
     return tok;
   }
 
+  if (consume(&tok, tok, "alias")) {
+    SET_CTX(ctx); 
+    tok = skip(tok, "(", ctx);
+    ty->alias_name = ConsumeStringLiteral(&tok, tok); 
+    SET_CTX(ctx); 
+    tok = skip(tok, ")", ctx);
+    return tok;
+  }
+
   if (consume(&tok, tok, "visibility") || consume(&tok, tok, "__visibility__")) {
     SET_CTX(ctx); 
     tok = skip(tok, "(", ctx);
@@ -4525,6 +4534,15 @@ static Token *thing_attributes(Token *tok, void *arg) {
       SET_CTX(ctx); 
       tok = skip(tok, ")", ctx);
     }
+    return tok;
+  }
+
+  if (consume(&tok, tok, "alias")) {
+    SET_CTX(ctx); 
+    tok = skip(tok, "(", ctx);
+    attr->alias_name = ConsumeStringLiteral(&tok, tok); 
+    SET_CTX(ctx); 
+    tok = skip(tok, ")", ctx);
     return tok;
   }
 

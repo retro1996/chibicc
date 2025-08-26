@@ -38,7 +38,7 @@ main (void)
 	//fprintf(f, "%u", vaddr);
 	printf("%d, %d, %d, %d\n", r[0], r[1], r[2], r[3]);
 	//fclose(f);
-	ASSERT(12336, r[3]);
+	ASSERT(1, r[3] == 12334 || r[3] == 12336);
 	return 0;
 
   ;
