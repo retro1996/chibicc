@@ -77,6 +77,7 @@ or
         -std=c99 generates an error on implicit function declaration (without -std only a warning is emitted)
         -std=c11 generates an error on implicit function declaration (without -std only a warning is emitted)
         -mmmx to allow mmx instructions and builtin functions linked to mmx like __builtin_packuswb... 
+        -print-search-dirs prints minimal information on install dir.
         chibicc [ -o <path> ] <file>
 
 ## compile
@@ -218,8 +219,23 @@ it means that if you don't use the ld linker or ld.lld probably some options sho
 List of options ignored :
 
     "-O"
-    "-W"
     "-P"
+    "-Wall"
+    "-Wextra"
+    "-Wno-switch"
+    "-Wno-unused-variable"    
+    "-Wno-format-y2k"
+    "-Wno-uninitialized"
+    "-Wmissing-prototypes"
+    "-Wmissing-declarations"
+    "-Wredundant-decls"
+    "-Winit-self"     
+    "-fno-math-errno"
+    "-fno-rounding-math"
+    "-fno-signaling-nans"
+    "-fcx-limited-range"
+    "-funsafe-math-optimizations"
+    "-funroll-loops"
     "-ffreestanding"
     "-fno-omit-frame-pointer"
     "-fomit-frame-pointer"
@@ -232,15 +248,11 @@ List of options ignored :
     "--no-whole-archive"
     "-fsigned-char"
     "-Bsymbolic"
-    "-z"
-    "defs"
     "-pedantic"
     "-nostdinc"
     "-mno-red-zone"
     "-fvisibility=default"
     "-fvisibility=hidden"
-    "-Werror=invalid-command-line-argument"
-    "-Werror=unknown-warning-option"
     "-Wsign-compare"
     "-Wundef"
     "-Wpointer-arith"
@@ -260,20 +272,24 @@ List of options ignored :
     "-fdiagnostics-show-option"
     "-fasynchronous-unwind-tables"
     "-fexceptions"
-    "--print-search-dirs"
-    "-msse4.1"
     "-fprofile-arcs"
     "-ftest-coverage"
     "-fdiagnostics-show-option"
     "-Xc"
     "-Aa"
-    "-rdynamic"
     "-w"
+    "-w2"
     "--param=ssp-buffer-size=4"
     "-fno-lto"
     "-fp-model"
     "-fprofile-arcs"
     "-ftest-coverage"
+    "-ansi_alias"
+    "-ffat-lto-objects"
+    "-static-libstdc++"
+    "-static-libgcc"
+    "-pipe"   
+    "-mindirect-branch-register"
 
 ## Dockerfile and devcontainer
 
@@ -315,8 +331,8 @@ curl : https://github.com/curl/curl.git
         CCLD     curl
 
     make test
-    TESTDONE: 1722 tests were considered during 3895 seconds.
-    TESTDONE: 1392 tests out of 1392 reported OK: 100%
+    TESTDONE: 1855 tests were considered during 3598 seconds.
+    TESTDONE: 1574 tests out of 1574 reported OK: 100%
 
 
 openssl : https://github.com/openssl/openssl.git
@@ -424,28 +440,6 @@ memcached: https://github.com/memcached/memcached.git
     make
     make test
 
-
-   
-cpython: git clone git@github.com:python/cpython.git
-        
-        CC=chibicc ./configure
-        make && make test
-        failure with  
-
-    Process terminating with default action of signal 11 (SIGSEGV): dumping core
-    ==82695==  Access not within mapped region at address 0x25
-    ==82695==    at 0xB7BC8B: ??? (pystate.c:1435)
-    ==82695==    by 0xB7BAFB: ??? (pystate.c:1534)
-    ==82695==    by 0xB89CEC: ??? (pystate.c:1576)
-    ==82695==    by 0xB6F3F6: ??? (pylifecycle.c:667)
-    ==82695==    by 0xB69FDA: ??? (pylifecycle.c:943)
-    ==82695==    by 0xB699A1: ??? (pylifecycle.c:1112)
-    ==82695==    by 0xB784E5: ??? (pylifecycle.c:1432)
-    ==82695==    by 0x4088D7: ??? (_freeze_module.c:65)
-    ==82695==    by 0x407294: ??? (_freeze_module.c:224)
-    ==82695==    by 0x497D1C9: (below main) (libc_start_call_main.h:58)
-
-
 nmap : https://github.com/nmap/nmap
 
     CC=chibicc ./configure --with-dbus
@@ -454,6 +448,19 @@ nmap : https://github.com/nmap/nmap
     Testing nmap_dns
     Testing nmap_dns finished without errors
     Ran 292 tests. 0 failures.
+
+
+vlc : https://github.com/videolan/vlc.git 
+
+    autoreconf -fiv
+    ./bootstrap
+    CC=chibicc CFLAGS="-fPIC -std=c11"  ./configure --disable-lua --disable-xcb --disable-qt --disable-alsa --disable-sse --host x86_64-linux-gnu 
+    make all
+    failed during linkage : with undefined references to missing dependency in their Makefile.
+    Adding the missing librtp_plugin_la-sdp.o solves this issue. Changes done in modules/Makefile :
+    libg64rtp_plugin_la_OBJECTS = $(am_libg64rtp_plugin_la_OBJECTS) access/rtp/.libs/librtp_plugin_la-sdp.o
+    after that make all succeeds!
+
 
 
 ## meson
@@ -469,17 +476,35 @@ lxc: https://github.com/lxc/lxc.git
 
 Some C projects doesn't compile for now or crash after being compiled with chibicc. It helps to find some bugs and to try to fix them!
 
-VLC : https://github.com/videolan/vlc.git 
 
-    autoreconf -fiv
-    ./bootstrap
-    CC=chibicc CFLAGS="-fPIC" CXXFLAGS="" DEFS="-DHAVE_CONFIG_H -DHAVE_ATTRIBUTE_PACKED -DVLC_USED -DVLC_API -DVLC_DEPRECATED -DVLC_MALLOC" LDFLAGS="-fPIC" ./configure  --disable-xcb --disable-qt --disable-a52 --disable-sse --disable-dbus
-    make all
-
-    VLC doesn't compile with chibicc :
-    /usr/include/systemd/sd-id128.h:138: error:                 sd_id128_t b = va_arg(ap, sd_id128_t);
-                                                                         ^ tokenize.c parse.c declaration 1328: in skip : expected ','
-
+   
+cpython: git clone https://github.com/python/cpython.git
+        
+        CC=chibicc ./configure  --host=x86_64-pc-linux-gnu ac_cv_have_lchflags=no ac_cv_have_chflags=no
+        make && make test
+        failure with :
+        do_fork_exec () at ./Modules/_posixsubprocess.c:911
+        #1 0x0000767b99afefdf in subprocess_fork_exec_impl () at ./Modules/_posixsubprocess.c:1256
+        #2 0x0000767b99afd98d in subprocess_fork_exec () at ./Modules/clinic/_posixsubprocess.c.h:148
+        #3 0x00000000006de02f in cfunction_vectorcall_FASTCALL () at Objects/methodobject.c:449
+        #4 0x00000000005b53d1 in _PyObject_VectorcallTstate () at ./Include/internal/pycore_call.h:169
+        #5 0x00000000005b8424 in PyObject_Vectorcall () at Objects/call.c:327
+        #6 0x00000000009988ce in _PyEval_EvalFrameDefault () at Python/generated_cases.c.h:1620
+        #7 0x00000000009888dc in _PyEval_EvalFrame () at ./Include/internal/pycore_ceval.h:121
+        #8 0x0000000000988857 in _PyEval_Vector () at Python/ceval.c:1982
+        #9 0x00000000005b3b8e in _PyFunction_Vectorcall () at Objects/call.c:413
+        #10 0x00000000005b6638 in _PyObject_VectorcallDictTstate () at Objects/call.c:146
+        #11 0x00000000005b68da in _PyObject_Call_Prepend () at Objects/call.c:504
+        #12 0x000000000079c6dd in call_method () at Objects/typeobject.c:3060
+        #13 0x0000000000776ab5 in slot_tp_init () at Objects/typeobject.c:10791
+        #14 0x000000000079e913 in type_call () at Objects/typeobject.c:2444
+        #15 0x00000000005b630f in _PyObject_Call () at Objects/call.c:361
+        #16 0x00000000005b90c8 in PyObject_Call () at Objects/call.c:373
+        #17 0x00000000009a03fd in _PyEval_EvalFrameDefault () at Python/generated_cases.c.h:2616
+        #18 0x00000000009888dc in _PyEval_EvalFrame () at ./Include/internal/pycore_ceval.h:121
+        #19 0x0000000000988857 in _PyEval_Vector () at Python/ceval.c:1982
+        #20 0x00000000005b3b8e in _PyFunction_Vectorcall () at Objects/call.c:413
+        => chibicc doesn't manage well vfork due to their push/pop systems!
 
 postgres: https://github.com/postgres/postgres.git  (in case of bad network use git clone --filter=blob:none --depth=1 https://github.com/postgres/postgres.git --branch master)
 
@@ -487,8 +512,7 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     make
     make check
     failed with :
-    2025-06-08 23:05:39.492 CEST [206164] FATAL:  unrecognized SI message ID: -96
-    2025-06-08 23:05:39.492 CEST [206164] STATEMENT:  ALTER TABLE pg_proc ADD PRIMARY KEY USING INDEX pg_proc_oid_index;
+    2025-08-19 21:36:40.890 CEST [1338239] PANIC: ProcKill() called in child process
 
 ## features added 
 
@@ -512,11 +536,9 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
 
     postgres execution : ko
     git 2 tests failed
-    openssh-portable regress test failed
-    curl 2 tests ko
     memcached test stuck at t/binary-extstore.t ......... 5947/?
-    vim: compile OK, tests KO (depending the version of chibicc failed early or in the last tests).
-   
+    vim: compile OK, tests KO on test_channel.vim.
+    cpython : compile OK, segfault at test execution due to vfork not managed well.
 
 ## projects compiled successfully with chibicc
 
@@ -524,6 +546,8 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     nginx: compile OK
     zlib: compile OK, tests OK
     nmap: compile OK, tests OK    
+    openssh-portable : compile OK, tests OK
+    vlc: compile OK
 
 
 ## debug
@@ -554,8 +578,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23    Reporting fixes from 1.0.22.9_dev (like implicit function declaration, -std=c11 -std=c99...). Fixing issue with \__atomic_load_n during linking of nmap. Fixing issue with vim (due to a mistake in ND_ASSIGN). Adding vector implementation (with TY_VECTOR type) in progress (basic operations seems to work fine issues with mixed non-vectors/vectors or multiple vectors parameters). Adding some builtin_ia32_xxxx (like builtin_ia32_emms...). Fixing issue with cvtpi2ps. Adding cvtps2pi builtin. Adding lots of builtin_ia32_xxxx. Reintroducing int128 management (from experimental_int128 branch). Allowing some bitwise operations for vectors of int. Fixing issue with compound literals and vectors. Adding scalar to vector promotion. Adding some missing declaration in math.h (found during postgres compile with -std=c11 that sends error on implicit function declaration). Renaming branch 1.0.22.9 to 1.0.23.
-
+1.0.23.1    Removing old fix on issue166 that causes side effect. Adding ND_POS for unary +. Adding new type for long long TY_LLONG. Fixing umull_overflow. Fixing issue with weak not printed for extern global variables. Adding lots of functions declarations on math.h needed for some projects. Ignoring few arguments. Fixing issue166. Fixing issue with external TLS (from @fuhsnn). Fixing temp issue with __cpuid_count (extended assembly not managed well this case) by adding my own cpuid.h. Adding some atomic_xx_n functions missing. Removing fix on VLC undefined references that causes issue with util-linux and fixing static inline references when they are referenced by address.
 
 ## old release notes
 

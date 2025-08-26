@@ -23,11 +23,31 @@ double log(double x);
 double log10(double x);
 double modf(double x, double *iptr);
 
+float expf(float);
+long double expl(long double);
+
+extern float powf(float x, float y);
+extern double pow(double x, double y);
+extern long double powl(long double x, long double y);
+
+extern float log10f(float x);
+extern double log10(double x);
+extern long double log10l(long double x);
+
+extern long lroundf(float x);
+extern long lround(double x);
+extern long lroundl(long double x);
+
+
 // Power and absolute-value functions
 double pow(double x, double y);
 double sqrt(double x);
 double fabs(double x);
 double fmod(double x, double y);
+
+float sqrtf(float);
+long double sqrtl(long double);
+
 
 float       fabsf(float x);
 long double fabsl(long double x);
@@ -67,6 +87,39 @@ double log1p(double);
 float log1pf(float);
 long double log1pl(long double);
 
+extern float fmodf(float x, float y);
+extern long double fmodl(long double x, long double y);
+
+extern long long llroundl(long double x);
+extern long long llround(double x);
+extern long long llroundf(float x);
+
+extern float roundf(float x);
+extern double round(double x);
+extern long double roundl(long double x);
+
+
+static inline int isless(double x, double y)   { return x < y; }
+static inline int isgreater(double x, double y){ return x > y; }
+static inline int islessequal(double x, double y)     { return x <= y; }
+static inline int isgreaterequal(double x, double y)  { return x >= y; }
+
+static inline int islessf(float x, float y)   { return x < y; }
+static inline int isgreaterf(float x, float y){ return x > y; }
+static inline int islessequalf(float x, float y)      { return x <= y; }
+static inline int isgreaterequalf(float x, float y)   { return x >= y; }
+
+
+extern float sinf(float x);
+extern float cosf(float x);
+extern float tanf(float x);
+extern float asinf(float x);
+extern float acosf(float x);
+extern float atanf(float x);
+extern float atan2f(float y, float x);
+float floorf(float);
+float ldexpf(float x, int exp);
+
 // Rounding and remainder
 double floor(double x);
 double ceil(double x);
@@ -74,6 +127,8 @@ double trunc(double x);
 double round(double x);
 double nearbyint(double x);
 double rint(double x);
+long double floorl(long double);
+long double ceill(long double);
 
 double fma(double x, double y, double z);    // fused multiply-add (optional, used in numerics)
 double copysign(double x, double y);         // result has magnitude of x and sign of y
@@ -93,6 +148,7 @@ double nextafter(double x, double y);
 float nextafterf(float x, float y);
 long double nextafterl(long double x, long double y);
 
+float nanf(const char *tagp);
 
 
 double expm1(double x);

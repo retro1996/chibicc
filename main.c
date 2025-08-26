@@ -18,6 +18,7 @@ bool opt_fbuiltin = true;
 bool opt_fpic;
 bool opt_fpie;
 bool opt_shared;
+bool opt_sse;
 bool opt_sse2;
 bool opt_sse3;
 bool opt_sse4;
@@ -25,6 +26,8 @@ bool opt_mmx;
 bool opt_g;
 bool opt_c99;
 bool opt_c11;
+bool opt_c17;
+bool opt_implicit;
 
 static FileType opt_x;
 static StringArray opt_include;
@@ -50,6 +53,7 @@ static char *r_path;
 static bool opt_nostdinc;
 static bool opt_nostdlib;
 static bool opt_v;
+static bool opt_fstack_protector;
 
 static StringArray ld_extra_args;
 static StringArray std_include_paths;
@@ -67,6 +71,9 @@ bool isPrintMacro = false;
 bool printTokens = false;
 char *previousfile = " ";
 Context *ctx;
+
+char *weak_symbols[MAX_WEAK];
+int weak_count = 0;
 
 static char logFile[] = "/tmp/chibicc.log";
 static StringArray input_paths;
@@ -314,6 +321,38 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
+    if (!strcmp(argv[i], "-mno-sse")) {
+      opt_sse = false;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-mno-sse2")) {
+      opt_sse2 = false;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-mno-sse3")) {
+      opt_sse3 = false;
+      continue;
+    }
+
+    if (startsWith(argv[i], "-mno-sse4")) {
+      opt_sse4 = false;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-mno-mmx")) {
+      opt_mmx = false;
+      continue;
+    }    
+
+
+    if (!strcmp(argv[i], "-msse")) {
+      opt_sse = true;
+      continue;
+    }
+
+
     if (!strcmp(argv[i], "-msse2")) {
       opt_sse2 = true;
       continue;
@@ -495,17 +534,36 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
-    if (!strncmp(argv[i], "-l", 2) || !strncmp(argv[i], "-Wl,", 4))
-    {
-      if (!strncmp(argv[i], "-Wl,-z", 6))
+    if (!strncmp(argv[i], "-l", 2)) {     
+        strarray_push(&input_paths, argv[i]);
         continue;
-      char *tmp = argv[i];
-      check_parms_length(tmp);
-      strarray_push(&input_paths, tmp);
-      // strarray_push(&input_paths, argv[i]);
-      continue;
     }
 
+    if (!strncmp(argv[i], "-Wl,", 4)) {
+        char *opt = argv[i] + 4;         
+        if (!strncmp(opt, "-z,", 3)) {
+            strarray_push(&input_paths, argv[i]);
+            continue;
+        }
+        if (!strncmp(opt, "-U,", 3)) {
+            char *ptr = opt + 3;
+            while (*ptr && weak_count < MAX_WEAK) {
+                char *comma = strchr(ptr, ',');
+                if (comma) *comma = '\0';
+                weak_symbols[weak_count] = strdup(ptr);    
+                weak_count++;
+                strarray_push(&ld_extra_args, "-U");
+                strarray_push(&ld_extra_args, ptr);
+                if (!comma) break;
+                ptr = comma + 1;
+            }
+            continue;
+        }
+        strarray_push(&input_paths, argv[i]);
+        continue;
+    } 
+
+    
     if (!strcmp(argv[i], "-Xlinker"))
     {
       char *tmp = argv[++i];
@@ -735,6 +793,14 @@ static void parse_args(int argc, char **argv)
       continue;
     } 
 
+    //-Werror-implicit-function-declaration
+    //for printing AST
+    if (!strcmp(argv[i], "-Werror-implicit-function-declaration")) {
+      opt_implicit = true;
+      continue;
+    } 
+
+
     //other options -Axxx ignored
     if (startsWith(argv[i], "-A"))
     {
@@ -765,15 +831,42 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
+    if (!strcmp(argv[i], "-fstack-protector") || !strcmp(argv[i], "-fstack-protector-strong") || !strcmp(argv[i], "-fstack-clash-protection") ) {
+      opt_fstack_protector = true;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-print-search-dirs")) {  
+      printf("install: %s/bin\n", LIBDIR);   
+      printf("programs: =%s/bin\n", LIBDIR);
+      printf("libraries: =%s/lib\n", LIBDIR);
+      exit(0);
+    }      
+
     if (!strcmp(argv[i], "-fp-model")) {
-      i++; // Skip the argument following -fp-model
+      i++; 
       continue;
     }
 
     // These options are ignored for now.
-    if (!strncmp(argv[i], "-O", 2) ||
-        !strncmp(argv[i], "-W", 2) ||
-        !strncmp(argv[i], "-P", 2) || 
+    if (startsWith(argv[i], "-O") ||
+        !strcmp(argv[i], "-P") || 
+        !strcmp(argv[i], "-Wall") || 
+        !strcmp(argv[i], "-Wextra") || 
+        !strcmp(argv[i], "-Wno-switch") || 
+        !strcmp(argv[i], "-Wno-unused-variable") ||
+        !strcmp(argv[i], "-Wno-format-y2k") || 
+        !strcmp(argv[i], "-Wmissing-prototypes") ||
+        !strcmp(argv[i], "-Wno-uninitialized") ||        
+        !strcmp(argv[i], "-Wmissing-declarations") || 
+        !strcmp(argv[i], "-Wredundant-decls") ||                
+        !strcmp(argv[i], "-Winit-self") ||     
+        !strcmp(argv[i], "-fno-math-errno") ||
+        !strcmp(argv[i], "-fno-rounding-math") ||   
+        !strcmp(argv[i], "-fno-signaling-nans") || 
+        !strcmp(argv[i], "-fcx-limited-range") ||
+        !strcmp(argv[i], "-funsafe-math-optimizations") ||  
+        !strcmp(argv[i], "-funroll-loops") ||
         !strcmp(argv[i], "-ffreestanding") ||
         !strcmp(argv[i], "-fno-omit-frame-pointer") ||
         !strcmp(argv[i], "-fomit-frame-pointer") ||   
@@ -786,8 +879,6 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "--no-whole-archive") ||
         !strcmp(argv[i], "-fsigned-char") ||
         !strcmp(argv[i], "-Bsymbolic") ||
-        !strcmp(argv[i], "-z") ||
-        !strcmp(argv[i], "defs") ||
         !strcmp(argv[i], "-pedantic") ||
         !strcmp(argv[i], "-mno-red-zone") ||
         !strcmp(argv[i], "-fvisibility=default") ||
@@ -805,13 +896,9 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-Wlogical-op") || 
         !strcmp(argv[i], "-Wshadow=local") || 
         !strcmp(argv[i], "-Wmultistatement-macros") || 
-        !strcmp(argv[i], "-fstack-protector") || 
-        !strcmp(argv[i], "-fstack-protector-strong") || 
-        !strcmp(argv[i], "-fstack-clash-protection") || 
         !strcmp(argv[i], "-fdiagnostics-show-option") || 
         !strcmp(argv[i], "-fasynchronous-unwind-tables") || 
         !strcmp(argv[i], "-fexceptions") || 
-        !strcmp(argv[i], "--print-search-dirs") || 
         !strcmp(argv[i], "-fdiagnostics-show-option") || 
         !strcmp(argv[i], "-Xc") ||
         !strcmp(argv[i], "-Aa") ||
@@ -828,7 +915,8 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-ansi_alias")       ||
         !strcmp(argv[i], "-ffat-lto-objects")       ||       
         !strcmp(argv[i], "-static-libstdc++")       ||    
-        !strcmp(argv[i], "-static-libgcc")       ||              
+        !strcmp(argv[i], "-static-libgcc")       ||    
+        !strcmp(argv[i], "-pipe")       ||              
         !strcmp(argv[i], "-mindirect-branch-register")         
         )
       continue;
@@ -837,10 +925,12 @@ static void parse_args(int argc, char **argv)
     {
       char *stdver = argv[i] + 5; 
 
-      if (!strcmp(stdver, "c99")) {
+      if (!strcmp(stdver, "c99") || !strcmp(stdver, "gnu99")) {
         opt_c99 = true;
-      } else if (!strcmp(stdver, "c11")) {
+      } else if (!strcmp(stdver, "c11") || !strcmp(stdver, "gnu11")) {
         opt_c11 = true;
+      } else if (!strcmp(stdver, "c17") || !strcmp(stdver, "gnu17")) {
+        opt_c17 = true;
       } else {
         error("%s : %s:%d: error: in parse_args : unsupported -std option: %s", MAIN_C, __FILE__, __LINE__, stdver);
         exit(1);
@@ -1298,6 +1388,11 @@ static void run_linker(StringArray *inputs, char *output)
     strarray_push(&arr, ld_extra_args.data[i]);
   }
 
+  if (opt_shared) {
+    opt_nostdlib = false;
+  } else if (opt_fstack_protector) {
+      opt_nostdlib = false;
+  }
 
   //enabling verbose mode for linker in case of debug
   if (isDebug)
@@ -1305,7 +1400,8 @@ static void run_linker(StringArray *inputs, char *output)
 
   char *libpath = find_libpath();
   char *gcc_libpath = find_gcc_libpath();
-
+  if (opt_shared && !opt_fpic)
+    strarray_push(&ld_extra_args, "-fPIC");
   // Only add startup files if not using -nostdlib
   if (!opt_nostdlib) {
     if (opt_shared)
@@ -1372,13 +1468,13 @@ static void run_linker(StringArray *inputs, char *output)
     //strarray_push(&arr, "--no-as-needed");
   }
 
-    // Add math lib if not -nostdlib and not static (optional)
-  if (!opt_nostdlib && !opt_static)
+  if (!opt_nostdlib) {
     strarray_push(&arr, "-lm");
+  }
 
   // Add the ending object file if not using -nostdlib
   if (!opt_nostdlib) {
-    if (opt_shared)
+    if (opt_shared || opt_fpie)
       strarray_push(&arr, format("%s/crtendS.o", gcc_libpath));
     else if(!opt_fpie)
       strarray_push(&arr, format("%s/crtend.o", gcc_libpath));

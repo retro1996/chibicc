@@ -180,6 +180,7 @@ static bool check_old_style(Token **rest, Token *tok);
 //from cosmopolitan managing builtin functions
 static Node *ParseAtomic2(NodeKind kind, Token *tok, Token **rest);
 static Node *ParseAtomic3(NodeKind kind, Token *tok, Token **rest);
+static Node *ParseAtomicCompareExchangeN(NodeKind kind, Token *tok, Token **rest);
 
 //for builtin functions
 static Node *parse_memcpy(Token *tok, Token **rest);
@@ -590,6 +591,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
   Type *ty = ty_int;
   int counter = 0;
   bool is_atomic = false;
+  
   while (is_typename(tok))
   {
     tok = attribute_list(tok, ty, type_attributes);
@@ -632,7 +634,6 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
                   PARSE_C, __LINE__);
 
       tok = tok->next;
-
         //from COSMOPOLITAN adding other GNUC attributes
       tok = attribute_list(tok, attr, thing_attributes);
       continue;
@@ -793,19 +794,23 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       break;
     case LONG:
     case LONG + INT:
-    case LONG + LONG:
-    case LONG + LONG + INT:
     case SIGNED + LONG:
     case SIGNED + LONG + INT:
+      ty = ty_long;
+      break;
+    case LONG + LONG:
+    case LONG + LONG + INT:      
     case SIGNED + LONG + LONG:
     case SIGNED + LONG + LONG + INT:
-      ty = ty_long;
+      ty = ty_llong;
       break;
     case UNSIGNED + LONG:
     case UNSIGNED + LONG + INT:
+      ty = ty_ulong;
+      break;
     case UNSIGNED + LONG + LONG:
     case UNSIGNED + LONG + LONG + INT:
-      ty = ty_ulong;
+      ty = ty_ullong;
       break;
     case UNSIGNED + INT128:
       ty = copy_type(ty_uint128);
@@ -999,8 +1004,9 @@ static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
     ty = array_dimensions(&tok, tok->next, ty);
   *rest = tok;
 
-  if (ty->kind != TY_VLA && is_const_expr(expr))
+  if (ty->kind != TY_VLA && is_const_expr(expr) )
     return array_of(ty, eval(expr));
+
 
   return vla_of(ty, expr);
 }
@@ -2006,7 +2012,11 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
 
   init->expr = assign(rest, tok);
   add_type(init->expr);
-
+  if (init->expr->kind == ND_VAR &&
+      init->expr->var && init->expr->var->is_function &&
+      init->ty->kind == TY_PTR) {
+      init->expr->var->is_address_used = true;
+  }
 }
 
 static Type *copy_struct_type(Type *ty)
@@ -2967,6 +2977,8 @@ static int64_t eval2(Node *node, char ***label)
     if (node->ty && node->ty->is_unsigned)
       return (uint64_t)eval(node->lhs) / (uint64_t)eval(node->rhs);
     return eval(node->lhs) / eval(node->rhs);
+  case ND_POS:
+    return eval(node->lhs);    
   case ND_NEG:
     return -eval(node->lhs);
   case ND_MOD:
@@ -3076,7 +3088,7 @@ static int64_t eval2(Node *node, char ***label)
     if (is_vector(node->var->ty))
       return 0;
     if (!label) {
-      error_tok(node->tok, "%s %d : in eval2 : not a compile-time constant", PARSE_C, __LINE__);
+      error_tok(node->tok, "%s %d : in eval2 : not a compile-time constant %d", PARSE_C, __LINE__, node->var->ty->kind);
     }
       //trying to fix ======ISS-145 compiling util-linux failed with invalid initalizer2 
     if (node->var->ty->kind != TY_ARRAY && node->var->ty->kind != TY_FUNC && node->var->ty->kind != TY_INT) {
@@ -3115,7 +3127,7 @@ static int64_t eval_rval(Node *node, char ***label)
 
 static bool is_const_expr(Node *node)
 {
-  add_type(node);
+  add_type(node);  
 
   switch (node->kind)
   {
@@ -3142,13 +3154,18 @@ static bool is_const_expr(Node *node)
     return is_const_expr(eval(node->cond) ? node->then : node->els);
   case ND_COMMA:
     return is_const_expr(node->rhs);
+  case ND_POS:
   case ND_NEG:
   case ND_NOT:
   case ND_BITNOT:
-  case ND_CAST:
-    return is_const_expr(node->lhs) || node->lhs->kind == ND_NUM || node->lhs->kind == ND_CAST;
+  case ND_CAST: 
+    return is_const_expr(node->lhs);
   case ND_NUM:
     return true;
+  case ND_MEMBER:
+  case ND_ADDR:
+  case ND_DEREF:
+    return is_const_expr(node->lhs);
   }
   
   return false;
@@ -3181,6 +3198,8 @@ static double eval_double(Node *node)
     return eval_double(node->lhs) * eval_double(node->rhs);
   case ND_DIV:
     return eval_double(node->lhs) / eval_double(node->rhs);
+  case ND_POS:
+    return eval_double(node->lhs);    
   case ND_NEG:
     return -eval_double(node->lhs);
   case ND_COND:
@@ -3800,7 +3819,8 @@ static Node *unary(Token **rest, Token *tok)
 {
   
   if (equal(tok, "+"))
-    return cast(rest, tok->next);
+    return new_unary(ND_POS, cast(rest, tok->next), tok);
+    //return cast(rest, tok->next);
 
   if (equal(tok, "-"))
     return new_unary(ND_NEG, cast(rest, tok->next), tok);
@@ -3812,6 +3832,11 @@ static Node *unary(Token **rest, Token *tok)
     //if (lhs->kind == ND_MEMBER && lhs->member->is_bitfield)
     if (is_bitfield(lhs))
       error_tok(tok, "%s %d: in unary : cannot take address of bitfield", PARSE_C, __LINE__);
+
+    if (lhs->kind == ND_VAR && lhs->var && lhs->var->is_function) {
+        lhs->var->is_address_used = true;
+    }
+
     return new_unary(ND_ADDR, lhs, tok);
   }
 
@@ -4123,7 +4148,7 @@ static Token *type_attributes(Token *tok, void *arg)
     return skip(tok, ")", ctx);
   }
 
-    if (consume(&tok, tok, "__target__") || 
+  if (consume(&tok, tok, "__target__") || 
        consume(&tok, tok, "target")) {
     SET_CTX(ctx);          
     tok = skip(tok, "(", ctx);
@@ -4146,7 +4171,6 @@ static Token *type_attributes(Token *tok, void *arg)
   //from COSMOPOLITAN adding deprecated, may_alias, unused
   if (consume(&tok, tok, "deprecated") || consume(&tok, tok, "__deprecated__") ||
       consume(&tok, tok, "may_alias") ||  consume(&tok, tok, "__may_alias__") ||
-      consume(&tok, tok, "unused") || consume(&tok, tok, "__unused__") || 
       consume(&tok, tok, "__transparent_union__") || consume(&tok, tok, "transparent_union")) {
     return tok;
   }
@@ -4272,6 +4296,7 @@ static Token *type_attributes(Token *tok, void *arg)
       consume(&tok, tok, "no_sanitize_undefined") ||
       consume(&tok, tok, "__no_sanitize_undefined__") ||
       consume(&tok, tok, "__nonstring__") ||
+      consume(&tok, tok, "nonstring") ||       
       consume(&tok, tok, "no_profile_instrument_function") ||
       consume(&tok, tok, "stdcall") ||
       consume(&tok, tok, "ms_struct") ||
@@ -4399,7 +4424,6 @@ static Token *type_attributes(Token *tok, void *arg)
 
   if (consume(&tok, tok, "sentinel") || consume(&tok, tok, "__sentinel__") ||
     consume(&tok, tok, "optimize") || consume(&tok, tok, "__optimize__") ||
-    consume(&tok, tok, "target") || consume(&tok, tok, "__target__") ||
     consume(&tok, tok, "assume_aligned") || consume(&tok, tok, "__assume_aligned__") ||
     consume(&tok, tok, "alloc_size") || consume(&tok, tok, "__alloc_size__") ||
     consume(&tok, tok, "attribute_alloc_size") || consume(&tok, tok, "__attribute_alloc_size__") ||
@@ -4429,7 +4453,9 @@ static Token *type_attributes(Token *tok, void *arg)
       tok = skip(tok, "(", ctx);
       two_parent = true;
     }
+
     ConsumeStringLiteral(&tok, tok); 
+
     if (two_parent) {   
       SET_CTX(ctx); 
       tok = skip(tok, ")", ctx);
@@ -4458,6 +4484,15 @@ static Token *type_attributes(Token *tok, void *arg)
       SET_CTX(ctx); 
       tok = skip(tok, ")", ctx);
     }
+    return tok;
+  }
+
+  if (consume(&tok, tok, "alias")) {
+    SET_CTX(ctx); 
+    tok = skip(tok, "(", ctx);
+    ty->alias_name = ConsumeStringLiteral(&tok, tok); 
+    SET_CTX(ctx); 
+    tok = skip(tok, ")", ctx);
     return tok;
   }
 
@@ -4502,6 +4537,15 @@ static Token *thing_attributes(Token *tok, void *arg) {
     return tok;
   }
 
+  if (consume(&tok, tok, "alias")) {
+    SET_CTX(ctx); 
+    tok = skip(tok, "(", ctx);
+    attr->alias_name = ConsumeStringLiteral(&tok, tok); 
+    SET_CTX(ctx); 
+    tok = skip(tok, ")", ctx);
+    return tok;
+  }
+
 
   if (consume(&tok, tok, "hot") || consume(&tok, tok, "__hot__")) {
     attr->section = ".text.likely";
@@ -4512,6 +4556,16 @@ static Token *thing_attributes(Token *tok, void *arg) {
     attr->section = ".text.unlikely";
     return tok;
   }
+
+  if (consume(&tok, tok, "__target__") || 
+       consume(&tok, tok, "target")) {
+    SET_CTX(ctx);          
+    tok = skip(tok, "(", ctx);
+    ConsumeStringLiteral(&tok, tok);
+    SET_CTX(ctx);  
+    return skip(tok, ")", ctx);
+  }
+
 
   if (consume(&tok, tok, "section") || consume(&tok, tok, "__section__")) {    
     SET_CTX(ctx); 
@@ -4804,6 +4858,8 @@ static Token *thing_attributes(Token *tok, void *arg) {
       consume(&tok, tok, "__no_stack_limit__") ||
       consume(&tok, tok, "no_sanitize_undefined") ||
       consume(&tok, tok, "__no_sanitize_undefined__") ||
+      consume(&tok, tok, "__nonstring__") ||
+      consume(&tok, tok, "nonstring") ||       
       consume(&tok, tok, "no_profile_instrument_function") ||
       consume(&tok, tok, "stdcall") ||
       consume(&tok, tok, "__stub__") || 
@@ -4859,7 +4915,6 @@ static Token *thing_attributes(Token *tok, void *arg) {
 
     if (consume(&tok, tok, "sentinel") || consume(&tok, tok, "__sentinel__") ||
       consume(&tok, tok, "optimize") || consume(&tok, tok, "__optimize__") ||
-      consume(&tok, tok, "target") || consume(&tok, tok, "__target__") ||
       consume(&tok, tok, "assume_aligned") || consume(&tok, tok, "__assume_aligned__") ||
       consume(&tok, tok, "alloc_size") || consume(&tok, tok, "__alloc_size__") ||
       consume(&tok, tok, "attribute_alloc_size") || consume(&tok, tok, "__attribute_alloc_size__") ||
@@ -4904,7 +4959,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
 
 
 
-  if (consume(&tok, tok, "format_arg")) {
+  if (consume(&tok, tok, "format_arg")  || consume(&tok, tok, "__format_arg__")) {
     SET_CTX(ctx); 
     tok = skip(tok, "(", ctx);
     const_expr(&tok, tok);
@@ -5544,9 +5599,10 @@ static Node *primary(Token **rest, Token *tok)
           return new_ulong((node->ty->size - mem->ty->size), tok);
       }
 
-      
-      // if (node->ty->kind == TY_VLA)
-      //   return new_var_node(node->ty->vla_size, tok);
+      if (node->ty->kind == TY_PTR) {
+        return new_ulong(8, tok); 
+      }
+
       return new_ulong(node->ty->size, start);   
 
     }
@@ -5688,6 +5744,8 @@ static Node *primary(Token **rest, Token *tok)
     equal(tok, "__builtin_ia32_rcpps") || equal(tok, "__builtin_ia32_rsqrtps") ||
     equal(tok, "__builtin_ia32_clflush") || equal(tok, "_mm_clflush") ||
     equal(tok, "__builtin_ia32_pmovmskb") || equal(tok, "__builtin_ia32_sqrtps") || 
+    equal(tok, "__builtin_parity") || equal(tok, "__builtin_parityl") ||
+    equal(tok, "__builtin_parityll") ||
     equal(tok, "__builtin_ia32_rsqrtss")) {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -6190,6 +6248,31 @@ static Node *primary(Token **rest, Token *tok)
     return parse_overflow(ND_BUILTIN_ADD_OVERFLOW, tok, rest);
   }
 
+  if (equal(tok, "__builtin_uadd_overflow")) {
+    return parse_overflow(ND_UADD_OVERFLOW, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_uaddll_overflow")) {
+    return parse_overflow(ND_UADDLL_OVERFLOW, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_uaddl_overflow")) {
+    return parse_overflow(ND_UADDL_OVERFLOW, tok, rest);
+  }
+  if (equal(tok, "__builtin_umul_overflow")) {
+    return parse_overflow(ND_UMUL_OVERFLOW, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_umulll_overflow")) {
+    return parse_overflow(ND_UMULLL_OVERFLOW, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_umull_overflow")) {
+    return parse_overflow(ND_UMULL_OVERFLOW, tok, rest);
+  }
+
+
+
   if (equal(tok, "__builtin_sub_overflow")) {
     return parse_overflow(ND_BUILTIN_SUB_OVERFLOW, tok, rest);
   }
@@ -6211,6 +6294,16 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "__builtin_atomic_exchange_n") || equal(tok, "__atomic_exchange_n")) {
     return ParseAtomic3(ND_EXCH_N, tok, rest);
   }
+
+  if (equal(tok, "__builtin_atomic_compare_exchange") || equal(tok, "__atomic_compare_exchange")) {
+    return ParseAtomicCompareExchangeN(ND_CMPEXCH, tok, rest);
+  }
+
+
+  if (equal(tok, "__builtin_atomic_compare_exchange_n") || equal(tok, "__atomic_compare_exchange_n")) {
+    return ParseAtomicCompareExchangeN(ND_CMPEXCH_N, tok, rest);
+  }
+
   if (equal(tok, "__builtin_atomic_load")) {
     return ParseAtomic3(ND_LOAD, tok, rest);
   }
@@ -6232,10 +6325,10 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "__builtin_atomic_fetch_xor")) {
     return ParseAtomic3(ND_FETCHXOR, tok, rest);
   }
-  if (equal(tok, "__builtin_atomic_fetch_and")) {
+  if (equal(tok, "__builtin_atomic_fetch_and") ) {
     return ParseAtomic3(ND_FETCHAND, tok, rest);
   }
-  if (equal(tok, "__builtin_atomic_fetch_or")) {
+  if (equal(tok, "__builtin_atomic_fetch_or") ) {
     return ParseAtomic3(ND_FETCHOR, tok, rest);
   }
   if (equal(tok, "__builtin_atomic_test_and_set")) {
@@ -6406,11 +6499,15 @@ static Node *primary(Token **rest, Token *tok)
     // For "static inline" function
     if (sc && sc->var && sc->var->is_function)
     {
-
       if (current_fn)
         strarray_push(&current_fn->refs, sc->var->name);
-      else
+      else  {
         sc->var->is_root = true;
+      }
+      if (sc->var->is_address_used) {
+        sc->var->is_root = true;
+      }
+
     }
 
     if (sc)
@@ -6426,7 +6523,7 @@ static Node *primary(Token **rest, Token *tok)
     {
       Obj *fn = find_func(token_to_string(tok));
 
-      if (!fn  && (opt_c99 || opt_c11)) {
+      if (!fn  && (opt_c99 || opt_c11 || opt_c17 || opt_implicit)) {
         error_tok(tok, "%s %d: in primary : implicit declaration of function", PARSE_C, __LINE__);
       }    
 
@@ -6579,6 +6676,7 @@ static void mark_live(Obj *var)
 {
   if (!var->is_function || var->is_live)
     return;
+
   var->is_live = true;
 
   for (int i = 0; i < var->refs.len; i++)
@@ -6959,7 +7057,7 @@ Obj *parse(Token *tok)
 
   while (tok->kind != TK_EOF)
   {
-    
+
     if (equal(tok, "_Static_assert")) {
       tok = static_assertion(tok);
       continue;
@@ -7030,6 +7128,7 @@ char *nodekind2str(NodeKind kind)
   case ND_SUB: return "SUB";
   case ND_MUL: return "MUL";
   case ND_DIV: return "DIV";
+  case ND_POS: return "POS";
   case ND_NEG: return "NEG";
   case ND_MOD: return "MOD";
   case ND_BITAND: return "BITAND";
@@ -7071,16 +7170,18 @@ char *nodekind2str(NodeKind kind)
   case ND_CAST: return "CAST";
   case ND_MEMZERO: return "MEMZERO"; 
   case ND_ASM: return "ASM";
-  case ND_CAS:
-  case ND_CAS_N: return "CAS";
-  case ND_EXCH:
-  case ND_EXCH_N: return "EXCH";
-  case ND_LOAD:
-  case ND_LOAD_N: return "LOAD";
-  case ND_STORE:
-  case ND_STORE_N: return "STORE"; 
-  case ND_TESTANDSET:
-  case ND_TESTANDSETA: return "TESTANDSET";
+  case ND_CAS: return "CAS";
+  case ND_CAS_N: return "CAS_N";
+  case ND_EXCH: return "EXCHANGE";
+  case ND_EXCH_N: return "EXCHANGE_N";
+  case ND_CMPEXCH: return "COMPARE_EXCHANGE";
+  case ND_CMPEXCH_N: return "COMPARE_EXCHANGE_N";
+  case ND_LOAD: return "LOAD";
+  case ND_LOAD_N: return "LOAD_N";
+  case ND_STORE: return "STORE"; 
+  case ND_STORE_N: return "STORE_N"; 
+  case ND_TESTANDSET: return "TESTANDSET";
+  case ND_TESTANDSETA: return "TESTANDSETA";
   case ND_CLEAR: return "CLEAR"; 
   case ND_RELEASE: return "RELEASE"; 
   case  ND_FETCHADD: return "FETCHADD";
@@ -7115,6 +7216,12 @@ char *nodekind2str(NodeKind kind)
   case ND_BUILTIN_ADD_OVERFLOW: return "ADD_OVERFLOW";    
   case ND_BUILTIN_SUB_OVERFLOW: return "SUB_OVERFLOW";    
   case ND_BUILTIN_MUL_OVERFLOW: return "MUL_OVERFLOW"; 
+  case ND_UADD_OVERFLOW: return "UADD_OVERFLOW";  
+  case ND_UADDL_OVERFLOW: return "UADDL_OVERFLOW";    
+  case ND_UADDLL_OVERFLOW: return "UADDLL_OVERFLOW";    
+  case ND_UMUL_OVERFLOW: return "UMUL_OVERFLOW";  
+  case ND_UMULL_OVERFLOW: return "UMULL_OVERFLOW";    
+  case ND_UMULLL_OVERFLOW: return "UMULLL_OVERFLOW";      
   case ND_BUILTIN_BSWAP16:  return "BSWAP16";   
   case ND_BUILTIN_BSWAP32: return "BSWAP32";    
   case ND_BUILTIN_BSWAP64: return "BSWAP64"; 
@@ -7397,7 +7504,10 @@ char *nodekind2str(NodeKind kind)
   case ND_MOVNTI: return "MOVNTI";  
   case ND_MOVNTI64: return "MOVNTI64";  
   case ND_MOVNTDQ: return "MOVNTDQ";  
-  case ND_MOVNTPD: return "MOVNTPD";                  
+  case ND_MOVNTPD: return "MOVNTPD";     
+  case ND_PARITY: return "PARITY";    
+  case ND_PARITYL: return "PARITYL";  
+  case ND_PARITYLL: return "PARITYLL";             
   default: return "UNREACHABLE"; 
   }
 }
@@ -7557,6 +7667,33 @@ static Node *ParseAtomic3(NodeKind kind, Token *tok, Token **rest) {
   *rest = skip(tok, ")", ctx);
   return node;
 }
+
+static Node *ParseAtomicCompareExchangeN(NodeKind kind, Token *tok, Token **rest) {
+  Node *node = new_node(kind, tok);
+  SET_CTX(ctx);
+  tok = skip(tok->next, "(", ctx);
+  node->cas_ptr = assign(&tok, tok);
+  add_type(node->cas_ptr);
+  tok = skip(tok, ",", ctx);
+  node->cas_expected = assign(&tok, tok);
+  add_type(node->cas_expected);
+  tok = skip(tok, ",", ctx);
+  node->cas_desired = assign(&tok, tok);
+  add_type(node->cas_desired);
+  tok = skip(tok, ",", ctx);
+  node->cas_weak = assign(&tok, tok);
+  add_type(node->cas_weak);
+  tok = skip(tok, ",", ctx);
+  node->cas_success = assign(&tok, tok);
+  add_type(node->cas_success);
+  tok = skip(tok, ",", ctx);
+  node->cas_failure = assign(&tok, tok);
+  add_type(node->cas_failure);
+  *rest = skip(tok, ")", ctx);
+  node->ty = ty_bool;
+  return node;
+}
+
 
 //builtin function memcpy
 static Node *parse_memcpy(Token *tok, Token **rest) {
@@ -8001,7 +8138,10 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_movnti", ND_MOVNTI },   
     { "__builtin_ia32_movnti64", ND_MOVNTI64 },   
     { "__builtin_ia32_movntdq", ND_MOVNTDQ },   
-    { "__builtin_ia32_movntpd", ND_MOVNTPD },   
+    { "__builtin_ia32_movntpd", ND_MOVNTPD },  
+    { "__builtin_parity", ND_PARITY }, 
+    { "__builtin_parityl", ND_PARITYL }, 
+    { "__builtin_parityll", ND_PARITYLL }, 
 };
 
 

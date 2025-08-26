@@ -30,7 +30,7 @@
         (ctx)->line_no  = __LINE__ + 1; \
     } while (0)
 
-
+#define LIBDIR "/usr/local"
 
 #define ROUNDUP(X, K)   (((X) + (K) - 1) & -(K))
 #define ROUNDDOWN(X, K) ((X) & -(K))
@@ -47,10 +47,11 @@
 #endif
 
 #define PRODUCT "chibicc"
-#define VERSION "1.0.23"
+#define VERSION "1.0.23.1"
 #define MAXLEN 501
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 #define MAX_BUILTIN_ARGS 8
+#define MAX_WEAK 20
 
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
@@ -120,6 +121,7 @@ this " PRODUCT " contains only some differences for now like new parameters\n"
 -std=c99 generates an error on implicit function declaration (without -std only a warning is emitted) \n \
 -std=c11 generates an error on implicit function declaration (without -std only a warning is emitted) \n \
 -mmmx to allow mmx instructions and builtin functions linked to mmx like __builtin_packuswb... \n \
+-print-search-dirs prints minimal information on install dir. \n \
 chibicc [ -o <path> ] <file>\n"
 
 typedef struct Type Type;
@@ -332,6 +334,7 @@ struct Obj
   int line_no; // Line number where the variable or function is defined
   bool is_prototyped; // Whether the function is prototyped or not
   Initializer *init;
+  bool is_address_used;
 };
 
 // Global variable can be initialized either by a constant expression
@@ -399,6 +402,8 @@ typedef enum
   ND_EXCH,      // Atomic exchange
   ND_CAS_N,     //atomic compare-and-swap with value
   ND_EXCH_N,       // Atomic exchange with value
+  ND_CMPEXCH,
+  ND_CMPEXCH_N,
   ND_LOAD,         // Atomic load to pointer
   ND_LOAD_N,       // Atomic load to result
   ND_STORE,        // Atomic store to pointer
@@ -723,6 +728,16 @@ typedef enum
   ND_MOVNTPD,
   ND_POPCOUNTL,
   ND_POPCOUNTLL,
+  ND_PARITY,
+  ND_PARITYL,
+  ND_PARITYLL,
+  ND_UADD_OVERFLOW,
+  ND_UADDL_OVERFLOW,
+  ND_UADDLL_OVERFLOW,
+  ND_UMUL_OVERFLOW,
+  ND_UMULL_OVERFLOW,
+  ND_UMULLL_OVERFLOW,
+  ND_POS,
 } NodeKind;
 
 // AST node type
@@ -780,6 +795,14 @@ Node
   Node *cas_addr;
   Node *cas_old;
   Node *cas_new;
+  //compare and exchange
+  Node *cas_ptr;
+  Node *cas_expected;
+  Node *cas_desired;
+  Node *cas_weak;
+  Node *cas_success;
+  Node *cas_failure;
+
 //for builtin memcpy
   Node *builtin_dest;
   Node *builtin_src;
@@ -847,6 +870,7 @@ typedef enum
   TY_UNION,
   TY_VECTOR,
   TY_INT128,
+  TY_LLONG,
 } TypeKind;
 
 
@@ -946,11 +970,13 @@ extern Type *ty_char;
 extern Type *ty_short;
 extern Type *ty_int;
 extern Type *ty_long;
+extern Type *ty_llong;
 
 extern Type *ty_uchar;
 extern Type *ty_ushort;
 extern Type *ty_uint;
 extern Type *ty_ulong;
+extern Type *ty_ullong;
 
 extern Type *ty_float;
 extern Type *ty_double;
@@ -1085,6 +1111,7 @@ extern bool printTokens;
 extern bool isPrintMacro;
 extern char *extract_filename(char *tmpl);
 extern char *extract_path(char *tmpl);
+extern bool opt_sse;
 extern bool opt_sse2;
 extern bool opt_sse3;
 extern bool opt_sse4;
@@ -1094,6 +1121,10 @@ extern FILE *open_file(char *path);
 extern FILE *ofile;
 extern bool opt_c99;
 extern bool opt_c11;
+extern bool opt_c17;
+extern char *weak_symbols[MAX_WEAK]; 
+extern int weak_count;
+extern bool opt_implicit;
 
 //
 // extended_asm.c

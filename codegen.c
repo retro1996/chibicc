@@ -145,6 +145,7 @@ static void print_visibility(Obj *obj) {
     println("  .globl\t%s", obj->name);
   }
   if (obj->is_weak) {
+    
     println("  .weak\t%s", obj->name);
   }
 }
@@ -380,6 +381,8 @@ static void gen_addr(Node *node)
       println("  mov %%fs:0, %%rax");
       if (node->var->is_definition)
         println("  add $\"%s\"@tpoff, %%rax", node->var->name);
+      else 
+        println("  add %s@gottpoff(%%rip), %%rax", node->var->name);
       return;
     }
 
@@ -742,6 +745,7 @@ static int getTypeId(Type *ty)
   case TY_INT:
     return ty->is_unsigned ? U32 : I32;
   case TY_LONG:
+  case TY_LLONG:
     return ty->is_unsigned ? U64 : I64;
   case TY_INT128:
     return ty->is_unsigned ? U128 : I128;      
@@ -1492,6 +1496,7 @@ static void scalar_to_xmm(Type *vec_ty, const char *xmm_reg) {
       println("  movd %%eax, %s", xmm_reg);      
       println("  pshufd $0x0, %s, %s", xmm_reg, xmm_reg); 
       break; 
+    case TY_LLONG:
     case TY_LONG:
       println("  movq %%rax, %s", xmm_reg);       
       println("  movddup %s, %s", xmm_reg, xmm_reg); 
@@ -1623,6 +1628,7 @@ static void gen_vector_op(Node *node) {
       error_tok(node->tok, "%s: %s:%d: error: unsupported double vector operation", CODEGEN_C, __FILE__, __LINE__);
     }
     break;
+  case TY_LLONG:
   case TY_LONG:
     switch (node->kind) {
     case ND_ADD:
@@ -1690,8 +1696,69 @@ static void gen_vector_op(Node *node) {
     }
     break;
   }
-
 }
+
+static void gen_cmpxchg(Node *node) {
+  gen_expr(node->cas_ptr);
+  println("  mov %%rax, %%rdi");
+  gen_expr(node->cas_expected);
+  println("  mov %%rax, %%rsi");
+  gen_expr(node->cas_desired);      
+  println("  mov %%rax, %%rcx");   
+  if (node->ty->size == 1) {
+    println("  movb (%%rcx), %%cl");
+  } else if (node->ty->size == 2) {
+    println("  movw (%%rcx), %%cx");
+  } else if (node->ty->size == 4) {
+    println("  movl (%%rcx), %%ecx");
+  } else if (node->ty->size == 8) {
+    println("  movq (%%rcx), %%rcx");
+  }
+  if (node->ty->size == 1) {
+    println("  movb (%%rsi), %%al");
+  } else if (node->ty->size == 2) {
+    println("  movw (%%rsi), %%ax");
+  } else if (node->ty->size == 4) {
+    println("  movl (%%rsi), %%eax");
+  } else if (node->ty->size == 8) {
+    println("  movq (%%rsi), %%rax");
+  }
+  println("  lock cmpxchg %s, (%%rdi)", reg_cx(node->ty->size));
+  println("  mov %s, (%%rsi)", reg_ax(node->ty->size));
+  println("  sete %%al");
+  println("  movzbl %%al, %%eax");
+
+  if (node->cas_success || node->cas_failure) {
+    println("  mfence");
+  }
+}
+
+
+static void gen_cmpxchgn(Node *node) {
+    gen_expr(node->cas_ptr);
+    println("  mov %%rax, %%rdi");  
+    gen_expr(node->cas_expected);
+    println("  mov %%rax, %%rsi");  
+    gen_expr(node->cas_desired);
+    println("  mov %%rax, %%rcx");
+    println("  movq (%%rsi), %%rax");
+    if (node->ty->size == 1) {
+        println("  lock cmpxchg %%cl, (%%rdi)");
+    } else if (node->ty->size == 2) {
+        println("  lock cmpxchg %%cx, (%%rdi)");
+    } else if (node->ty->size == 4) {
+        println("  lock cmpxchg %%ecx, (%%rdi)");
+    } else if (node->ty->size == 8) {
+        println("  lock cmpxchg %%rcx, (%%rdi)");
+    }
+    println("  movq %%rax, (%%rsi)");
+    println("  sete %%al");
+    println("  movzbl %%al, %%eax");
+    if (node->cas_success || node->cas_failure) {
+        println("  mfence");
+    }
+}
+
 
 static void gen_builtin(Node *node, const char *insn) {
     gen_expr(node->builtin_val); 
@@ -1997,6 +2064,209 @@ static void gen_single_addr_binop(Node *node, const char *insn){
   println("  %s (%%rax)", insn);
 }
 
+static void gen_add_overflow(Node *node) {
+  int c = count();  // Unique label counter
+  Type *ty = node->builtin_dest->ty;  
+  if (ty->base)
+    ty = ty->base;
+
+  gen_expr(node->lhs);
+  push();
+  gen_expr(node->rhs);
+  push();
+  gen_expr(node->builtin_dest);
+  push();
+
+  pop("%rdx");  
+  pop("%rsi");  
+  pop("%rdi"); 
+
+  if (ty->size == 1) {
+      println("  mov %%dil, %%al");
+      println("  add %%sil, %%al");
+      println("  mov %%al, (%%rdx)");
+  } else if (ty->size == 2) {
+      println("  mov %%di, %%ax");
+      println("  add %%si, %%ax");
+      println("  mov %%ax, (%%rdx)");
+  } else if (ty->size == 4) {
+      println("  mov %%edi, %%eax");
+      println("  add %%esi, %%eax");
+      println("  mov %%eax, (%%rdx)");
+  } else {
+      println("  mov %%rdi, %%rax");
+      println("  add %%rsi, %%rax");
+      println("  mov %%rax, (%%rdx)");
+  }
+
+  // Check for overflow
+  println("  seto %%al");          // Set AL if overflow occurred
+  println("  movzx %%al, %%eax");  // Zero-extend AL to EAX
+
+  // Return 0 if no overflow, 1 if overflow
+  println("  cmp $0, %%eax");
+  println("  jne .Loverflowa%d", c);
+  println("  mov $0, %%eax");
+  println("  jmp .Lenda%d", c);
+  println(".Loverflowa%d:", c);
+  println("  mov $1, %%eax");
+  println(".Lenda%d:", c);
+
+}
+
+static void gen_umul_overflow(Node *node) {
+    int c = count();
+    Type *ty = node->lhs->ty;
+    if (ty->base)
+        ty = ty->base;
+    int size = ty->size;
+
+    // Generate expressions
+    gen_expr(node->lhs);
+    push();
+    gen_expr(node->rhs);
+    push();
+    gen_expr(node->builtin_dest);
+    push();
+
+    // Pop arguments
+    pop("%rdx");  // result pointer (can be NULL)
+    pop("%rsi");  // rhs
+    pop("%rdi");  // lhs
+    println("  mov %%rdx, %%rcx");
+    // Multiply
+    if (size == 1) {
+        println("  movzbl %%di, %%eax");
+        println("  movzbl %%si, %%ebx");
+        println("  mul %%bl");           // AL * BL -> AX
+        println("  jc .Loverflowm%d", c);
+    } else if (size == 2) {
+        println("  movzwl %%di, %%eax");
+        println("  movzwl %%si, %%ebx");
+        println("  mul %%bx");          // AX * BX -> DX:AX
+        println("  jc .Loverflowm%d", c);
+    } else if (size == 4) {
+        println("  mov %%edi, %%eax");
+        println("  mul %%esi");        // EAX * ESI -> EDX:EAX
+        println("  jc .Loverflowm%d", c);
+    } else if (size >= 8) {
+        println("  mov %%rdi, %%rax");
+        println("  mul %%rsi");        // RAX * RSI -> RDX:RAX
+        println("  test %%rdx, %%rdx"); // overflow check
+        println("  jnz .Loverflowm%d", c);
+    }
+
+    // Store result if destination pointer is not NULL
+    println("  test %%rcx, %%rcx");
+    println("  jz .Ldonem%d", c);
+    if (size == 1) println("  mov %%al, (%%rcx)");
+    else if (size == 2) println("  mov %%ax, (%%rcx)");
+    else if (size == 4) println("  mov %%eax, (%%rcx)");
+    else if (size == 8) println("  mov %%rax, (%%rcx)");
+    
+    println(".Ldonem%d:", c);
+    println("  mov $0, %%rax");       // return 0 for no overflow
+    println("  jmp .Lend%d", c);
+
+    // Overflow label
+    println(".Loverflowm%d:", c);
+    println("  test %%rcx, %%rcx");    // only store if pointer not NULL
+    println("  jz .Loverflow_end%d", c);
+    if (size == 1) println("  movb $0, (%%rcx)");
+    else if (size == 2) println("  movw $0, (%%rcx)");
+    else if (size == 4) println("  movl $0, (%%rcx)");
+    else if (size == 8) println("  movq $0, (%%rcx)");
+    println(".Loverflow_end%d:", c);
+    println("  mov $1, %%rax");        // return 1 for overflow
+    println(".Lend%d:", c);
+}
+
+
+static void gen_uadd_overflow(Node *node) {
+  int c = count(); 
+  Type *ty = node->builtin_dest->ty;
+  if (ty->base)
+      ty = ty->base;
+
+  gen_expr(node->lhs);
+  push();
+  gen_expr(node->rhs);
+  push();
+  gen_expr(node->builtin_dest);
+  push();
+
+  pop("%rdx");  
+  pop("%rsi");  
+  pop("%rdi"); 
+
+  if (ty->size == 1) {
+      println("  mov %%dil, %%al");
+      println("  add %%sil, %%al");
+      println("  mov %%al, (%%rdx)");
+  } else if (ty->size == 2) {
+      println("  mov %%di, %%ax");
+      println("  add %%si, %%ax");
+      println("  mov %%ax, (%%rdx)");
+  } else if (ty->size == 4) {
+      println("  mov %%edi, %%eax");
+      println("  add %%esi, %%eax");
+      println("  mov %%eax, (%%rdx)");
+  } else {
+      println("  mov %%rdi, %%rax");
+      println("  add %%rsi, %%rax");
+      println("  mov %%rax, (%%rdx)");
+  }
+  println("  setc %%al");          // carry flag = unsigned overflow
+  println("  movzx %%al, %%eax");  // zero-extend AL to EAX
+
+  // Return 0 if no overflow, 1 if overflow
+  println("  cmp $0, %%eax");
+  println("  jne .Loverflowa%d", c);
+  println("  mov $0, %%eax");
+  println("  jmp .Lenda%d", c);
+  println(".Loverflowa%d:", c);
+  println("  mov $1, %%eax");
+  println(".Lenda%d:", c);
+}
+
+
+static void gen_parity(Node *node) {
+  gen_expr(node->lhs);
+  if (node->lhs->kind == ND_NUM) {
+    uint64_t x = node->lhs->val;  
+    x ^= x >> 32;
+    x ^= x >> 16;
+    x ^= x >> 8;
+    x ^= x >> 4;
+    x ^= x >> 2;
+    x ^= x >> 1;
+    int parity = x & 1;
+    println("  mov $%d, %%eax", parity); 
+
+  } else {
+    println("  mov %%rax, %%rcx");   // copy to rcx
+    println("  shr $32, %%rcx");
+    println("  xor %%rcx, %%rax");
+    println("  mov %%rax, %%rcx");
+    println("  shr $16, %%rcx");
+    println("  xor %%rcx, %%rax");
+    println("  mov %%rax, %%rcx");
+    println("  shr $8, %%rcx");
+    println("  xor %%rcx, %%rax");
+    println("  mov %%rax, %%rcx");
+    println("  shr $4, %%rcx");
+    println("  xor %%rcx, %%rax");
+    println("  mov %%rax, %%rcx");
+    println("  shr $2, %%rcx");
+    println("  xor %%rcx, %%rax");
+    println("  mov %%rax, %%rcx");
+    println("  shr $1, %%rcx");
+    println("  xor %%rcx, %%rax");
+    println("  and $1, %%eax");  // final parity in eax
+
+  }
+}
+
 
 static void gen_movq128(Node *node) {
   gen_expr(node->lhs); 
@@ -2253,6 +2523,9 @@ static void gen_expr(Node *node)
     println("  mov $%ld, %%rax", node->val);
     return;
   }
+  case ND_POS:
+    gen_expr(node->lhs);
+    return;
   case ND_NEG:
     gen_expr(node->lhs);
 
@@ -2802,55 +3075,13 @@ static void gen_expr(Node *node)
     println("  mov 8(%%rax), %%rax");
     return;
   }
-  case ND_BUILTIN_ADD_OVERFLOW: {
-   int c = count();  // Unique label counter
-    Type *ty = node->builtin_dest->ty;  
-    if (ty->base)
-      ty = ty->base;
-
-    gen_expr(node->lhs);
-    push();
-    gen_expr(node->rhs);
-    push();
-    gen_expr(node->builtin_dest);
-    push();
-
-    pop("%rdx");  
-    pop("%rsi");  
-    pop("%rdi"); 
-
-    if (ty->size == 1) {
-        println("  mov %%dil, %%al");
-        println("  add %%sil, %%al");
-        println("  mov %%al, (%%rdx)");
-    } else if (ty->size == 2) {
-        println("  mov %%di, %%ax");
-        println("  add %%si, %%ax");
-        println("  mov %%ax, (%%rdx)");
-    } else if (ty->size == 4) {
-        println("  mov %%edi, %%eax");
-        println("  add %%esi, %%eax");
-        println("  mov %%eax, (%%rdx)");
-    } else {
-        println("  mov %%rdi, %%rax");
-        println("  add %%rsi, %%rax");
-        println("  mov %%rax, (%%rdx)");
-    }
-
-    // Check for overflow
-    println("  seto %%al");          // Set AL if overflow occurred
-    println("  movzx %%al, %%eax");  // Zero-extend AL to EAX
-
-    // Return 0 if no overflow, 1 if overflow
-    println("  cmp $0, %%eax");
-    println("  jne .Loverflowa%d", c);
-    println("  mov $0, %%eax");
-    println("  jmp .Lenda%d", c);
-    println(".Loverflowa%d:", c);
-    println("  mov $1, %%eax");
-    println(".Lenda%d:", c);
-    return;
-  }
+  case ND_UMULL_OVERFLOW:
+  case ND_UMULLL_OVERFLOW:
+  case ND_UMUL_OVERFLOW: gen_umul_overflow(node); return;  
+  case ND_UADDL_OVERFLOW:
+  case ND_UADDLL_OVERFLOW:
+  case ND_UADD_OVERFLOW: gen_uadd_overflow(node); return;
+  case ND_BUILTIN_ADD_OVERFLOW: gen_add_overflow(node); return;
   case ND_BUILTIN_SUB_OVERFLOW: {
     int c = count(); 
     Type *ty = node->builtin_dest->ty;  
@@ -3002,29 +3233,34 @@ static void gen_expr(Node *node)
     push();
     gen_expr(node->rhs);
     pop("%rdi");
-    println("\txchg\t%s,(%%rdi)", reg_ax(node->ty->size));
+    println("  xchg %s, (%%rdi)", reg_ax(node->ty->size));
     return;
   }
+  case ND_CMPEXCH: gen_cmpxchg(node); return;
+  case ND_CMPEXCH_N: gen_cmpxchgn(node); return;
   case ND_TESTANDSETA: {
     gen_expr(node->lhs);
     push();
-    println("\tmov\t$1,%%eax");
+    println("  mov $1, %%eax");
     pop("%rdi");
-    println("\txchg\t%s,(%%rdi)", reg_ax(node->ty->size));
+    println("  xchg %s, (%%rdi)", reg_ax(node->ty->size));
     return;
   }
   case ND_LOAD: {
     gen_expr(node->rhs);
     push();
     gen_expr(node->lhs);
-    println("\tmov\t(%%rax),%s", reg_ax(node->ty->size));
+    println("  mov (%%rax), %s", reg_ax(node->ty->size));
     pop("%rdi");
-    println("\tmov\t%s,(%%rdi)", reg_ax(node->ty->size));
+    println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
     return;
   }
   case ND_LOAD_N: {
     gen_expr(node->lhs);
-    println("\tmov\t(%%rax),%s", reg_ax(node->ty->size));
+    println(" mov (%%rax), %s", reg_ax(node->ty->size));
+    if (node->memorder) {
+        println("  mfence");
+    }
     return;
   }
   case ND_STORE: {
@@ -3032,10 +3268,10 @@ static void gen_expr(Node *node)
     push();
     gen_expr(node->rhs);
     pop("%rdi");
-    println("\tmov\t(%%rax),%s", reg_ax(node->ty->size));
-    println("\tmov\t%s,(%%rdi)", reg_ax(node->ty->size));
+    println("  mov (%%rax),%s", reg_ax(node->ty->size));
+    println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
     if (node->memorder) {
-      println("\tmfence");
+      println("  mfence");
     }
     return;
   }
@@ -3044,18 +3280,18 @@ static void gen_expr(Node *node)
     push();
     gen_expr(node->rhs);
     pop("%rdi");
-    println("\tmov\t%s,(%%rdi)", reg_ax(node->ty->size));
+    println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
     if (node->memorder) {
-      println("\tmfence");
+      println("  mfence");
     }
     return;
   case ND_CLEAR:
     gen_expr(node->lhs);
-    println("\tmov\t%%rax,%%rdi");
-    println("\txor\t%%eax,%%eax");
-    println("\tmov\t%s,(%%rdi)", reg_ax(node->ty->size));
+    println("  mov %%rax, %%rdi");
+    println("  xor %%eax, %%eax");
+    println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
     if (node->memorder) {
-      println("\tmfence");
+      println("  mfence");
     }
     return;
   case ND_FETCHADD: gen_fetchadd(node); return;
@@ -3386,6 +3622,9 @@ static void gen_expr(Node *node)
   case ND_MOVNTI64: gen_movnti64(node); return;
   case ND_MOVNTDQ: gen_movnt_binop(node, "movntdq"); return;
   case ND_MOVNTPD: gen_movnt_binop(node, "movntpd"); return;
+  case ND_PARITYL:
+  case ND_PARITYLL:
+  case ND_PARITY: gen_parity(node); return;
 }
   
 if (is_vector(node->lhs->ty) || (node->rhs && is_vector(node->rhs->ty))) {
@@ -3510,7 +3749,7 @@ switch (node->lhs->ty->kind)
 
   char *ax, *di, *dx;
 
-  if (node->lhs->ty->kind == TY_LONG || node->lhs->ty->base)
+  if (node->lhs->ty->size == 8 || node->lhs->ty->base)
   {
     ax = "%rax";
     di = "%rdi";
@@ -3774,7 +4013,8 @@ static void emit_data(Obj *prog)
       println("  .zero %d", abs(var->ty->size));
     if (var->alias_name)
       println("  .set \"%s\", %s", var->name, var->alias_name);
-
+    if (var->is_weak)
+      println("  .weak \"%s\"", var->name);
     if (var->is_function || !var->is_definition)
       continue;
     print_visibility(var);
@@ -3803,11 +4043,6 @@ static void emit_data(Obj *prog)
     // .data or .tdata
     if (var->init_data)
     {
-      // if (var->is_tls)
-      //   println("  .section .tdata,\"awT\",@progbits");
-      // else
-      //   println("  .section .data,\"aw\",@progbits");
-      //   //println("  .data");
       //from cosmopolitan
       if (var->section) {
         println("  .section %s,\"aw\",@progbits", var->section);
@@ -3820,7 +4055,6 @@ static void emit_data(Obj *prog)
             
       println("  .type %s, @object", var->name);
       println("  .size %s, %d", var->name, abs(var->ty->size));
-      //println("  .align %d", align);
       if (align > 1) println("  .align %d", align);
       println("%s:", var->name);
 
@@ -3831,7 +4065,11 @@ static void emit_data(Obj *prog)
       {
         if (rel && rel->offset == pos)
         {
-          println("  .quad %s%+ld", *rel->label, rel->addend);
+          if (var->is_function) {
+            println("  .long %s - . + %ld", *rel->label, rel->addend);
+          } else if (!var->is_extern) {
+            println("  .quad %s%+ld", *rel->label, rel->addend);
+          }
           rel = rel->next;
           pos += 8;
         }
@@ -3864,13 +4102,6 @@ static void emit_data(Obj *prog)
       continue;
     }
 
-    // // .bss or .tbss
-    // if (var->is_tls)
-    //   println("  .section .tbss,\"awT\",@nobits");
-    // else
-    //   println("  .section .bss,\"aw\",@nobits");
-    //   //println("  .bss");
-
     if (var->section) {
       println("  .section %s,\"aw\",@nobits", var->section);
     }
@@ -3879,7 +4110,6 @@ static void emit_data(Obj *prog)
     else
       println("  .section .bss,\"aw\",@nobits");
 
-    //println("  .align %d", align);
     if (align > 1) println("  .align %d", align);
     println("%s:", var->name);
     if (var->ty->size != 0)
@@ -3991,7 +4221,6 @@ static void emit_text(Obj *prog)
 
     if (!fn->is_function || !fn->is_definition)
       continue;
-
 
 
     // No code is emitted for "static inline" functions
