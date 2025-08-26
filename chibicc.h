@@ -334,6 +334,7 @@ struct Obj
   int line_no; // Line number where the variable or function is defined
   bool is_prototyped; // Whether the function is prototyped or not
   Initializer *init;
+  bool is_address_used;
 };
 
 // Global variable can be initialized either by a constant expression

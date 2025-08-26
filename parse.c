@@ -2012,7 +2012,11 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
 
   init->expr = assign(rest, tok);
   add_type(init->expr);
-
+  if (init->expr->kind == ND_VAR &&
+      init->expr->var && init->expr->var->is_function &&
+      init->ty->kind == TY_PTR) {
+      init->expr->var->is_address_used = true;
+  }
 }
 
 static Type *copy_struct_type(Type *ty)
@@ -3828,6 +3832,11 @@ static Node *unary(Token **rest, Token *tok)
     //if (lhs->kind == ND_MEMBER && lhs->member->is_bitfield)
     if (is_bitfield(lhs))
       error_tok(tok, "%s %d: in unary : cannot take address of bitfield", PARSE_C, __LINE__);
+
+    if (lhs->kind == ND_VAR && lhs->var && lhs->var->is_function) {
+        lhs->var->is_address_used = true;
+    }
+
     return new_unary(ND_ADDR, lhs, tok);
   }
 
@@ -6477,10 +6486,7 @@ static Node *primary(Token **rest, Token *tok)
       else  {
         sc->var->is_root = true;
       }
-      //fix for vlc with extern static inline undefined reference
-      if (current_fn && sc->var->is_static && sc->var->is_inline) {
-          sc->var->is_live = true;
-        }
+
     }
 
     if (sc)
