@@ -223,6 +223,7 @@ List of options ignored :
     "-P"
     "-Wall"
     "-Wextra"
+    "-Wpedantic"
     "-Wno-switch"
     "-Wno-unused-variable"    
     "-Wno-format-y2k"

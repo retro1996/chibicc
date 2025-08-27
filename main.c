@@ -860,6 +860,7 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-P") || 
         !strcmp(argv[i], "-Wall") || 
         !strcmp(argv[i], "-Wextra") || 
+        !strcmp(argv[i], "-Wpedantic") || 
         !strcmp(argv[i], "-Wno-switch") || 
         !strcmp(argv[i], "-Wno-unused-variable") ||
         !strcmp(argv[i], "-Wno-format-y2k") || 
