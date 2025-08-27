@@ -4252,6 +4252,7 @@ static void emit_text(Obj *prog)
     println("  sub $%d, %%rsp", fn->stack_size);
     println("  mov %%rsp, %d(%%rbp)", fn->alloca_bottom->offset);
 
+
     // Save arg registers if function is variadic
     if (fn->va_area)
     {
