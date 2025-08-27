@@ -638,6 +638,6 @@ int main() {
     cf.crc = crc;
 
     printf("ControlFileData CRC: %u\n", cf.crc);
-    //ASSERT(897250140, crc);
+    ASSERT(3365522903, crc);
     return 0;
 }

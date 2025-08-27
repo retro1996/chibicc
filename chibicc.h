@@ -336,6 +336,7 @@ struct Obj
   bool is_prototyped; // Whether the function is prototyped or not
   Initializer *init;
   bool is_address_used;
+  bool is_param;
 };
 
 // Global variable can be initialized either by a constant expression

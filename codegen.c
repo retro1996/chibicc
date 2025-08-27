@@ -4252,6 +4252,17 @@ static void emit_text(Obj *prog)
     println("  sub $%d, %%rsp", fn->stack_size);
     println("  mov %%rsp, %d(%%rbp)", fn->alloca_bottom->offset);
 
+    //issue with postgres and local variables not initialized!
+    for (Obj *var = fn->locals; var; var = var->next) {
+        if (!var->init && !var->is_param &&
+            (var->ty->kind == TY_STRUCT ||
+            var->ty->kind == TY_UNION ||
+            var->ty->kind == TY_ARRAY ||
+            is_vector(var->ty))) {
+            gen_mem_zero(var->offset, var->ty->size);
+        }
+    }
+
 
     // Save arg registers if function is variadic
     if (fn->va_area)
@@ -4471,7 +4482,7 @@ void assign_lvar_offsets(Obj *prog)
     // Assign offsets to pass-by-stack parameters.
     for (Obj *var = fn->params; var; var = var->next)
     {
-
+      var->is_param = true;
       if (var->offset) {
         continue;
       }
