@@ -785,12 +785,6 @@ static Token *subst(Macro *m, MacroArg *args)
 
     if (equal(tok, "##"))
     {
-      // if (cur == &head)
-      //   error_tok(tok, "%s: in subst : '##' cannot appear at start of macro expansion", PREPROCESS_C);
-
-      // if (tok->next->kind == TK_EOF)
-      //   error_tok(tok, "%s: in subst : '##' cannot appear at end of macro expansion", PREPROCESS_C);
-
       MacroArg *arg = find_arg(args, tok->next);
       if (arg)
       {
@@ -928,18 +922,6 @@ static bool expand_macro(Token **rest, Token *tok)
   // as explained in the Dave Prossor's algorithm.
   Hideset *hs = hideset_intersection(macro_token->hideset, rparen->hideset);
   hs = hideset_union(hs, new_hideset(m->name));
-  // Token *body = subst(m->body, args);
-  // body = add_hideset(body, hs);
-  
-  // for (Token *t = body; t->kind != TK_EOF; t = t->next)
-  // {
-  //   t->origin = macro_token;
-
-  // }
-  // *rest = append(body, tok->next);
-  // //#issue 108 not sure why but this corrupts some tokens "#" that are not recognized starting at beginning of the line.
-  // // (*rest)->at_bol = macro_token->at_bol;
-  // (*rest)->has_space = macro_token->has_space;
    if (m->body->kind != TK_EOF) { // If replacement list is not empty
     Token *body = subst(m, args);
     body = add_hideset(body, hs);
@@ -1141,6 +1123,26 @@ static void print_macro(Macro *m) {
 
   fprintf(out, "\n");
 }
+
+static Token *stdver_macro(Token *tok) {
+  if (opt_c99)
+    tok->val = 199901L;
+  else if (opt_c11)
+    tok->val = 201112L;
+  else if (opt_c17)
+    tok->val = 201710L;
+  else if (opt_c23)
+    tok->val = 202311L;
+  else if (opt_c89)
+    tok->val =0;
+  else 
+    tok->val = 201112L;
+
+  tok->kind = TK_NUM;
+  tok->ty = ty_long;
+  return tok;  
+}
+
 
 // Read #line arguments
 static void read_line_marker(Token **rest, Token *tok)
@@ -1498,7 +1500,7 @@ void init_macros(void)
   define_macro("__STDC_NO_COMPLEX__", "1");
   define_macro("__STDC_UTF_16__", "1");
   define_macro("__STDC_UTF_32__", "1");
-  define_macro("__STDC_VERSION__", "201112L");
+  //define_macro("__STDC_VERSION__", "201112L");
   define_macro("__STDC__", "1");
   // define_macro("__STDC_IEC_559__" , "1");
   // define_macro("__STDC_ISO_10646__" , "201706L");
@@ -1587,7 +1589,7 @@ void init_macros(void)
   //   define_macro("memset", "__builtin_memset");
   // }
 
-
+  add_builtin("__STDC_VERSION__", stdver_macro);
   add_builtin("__FILE__", file_macro);
   add_builtin("__LINE__", line_macro);
   add_builtin("__COUNTER__", counter_macro);

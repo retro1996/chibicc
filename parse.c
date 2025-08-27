@@ -5435,7 +5435,7 @@ static Node *generic_selection(Token **rest, Token *tok)
   Type *t1 = ctrl->ty;
   if (t1->kind == TY_FUNC)
     t1 = pointer_to(t1);
-  else if (t1->kind == TY_ARRAY)
+  else if (is_array(t1))
     t1 = pointer_to(t1->base);
 
   // try to fix issue with VLC
@@ -6525,7 +6525,7 @@ static Node *primary(Token **rest, Token *tok)
     {
       Obj *fn = find_func(token_to_string(tok));
 
-      if (!fn  && (opt_c99 || opt_c11 || opt_c17 || opt_implicit)) {
+      if (!fn  && (opt_c99 || opt_c11 || opt_c17 || opt_c23 || opt_implicit)) {
         error_tok(tok, "%s %d: in primary : implicit declaration of function", PARSE_C, __LINE__);
       }    
 

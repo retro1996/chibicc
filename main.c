@@ -27,6 +27,8 @@ bool opt_g;
 bool opt_c99;
 bool opt_c11;
 bool opt_c17;
+bool opt_c89;
+bool opt_c23;
 bool opt_implicit;
 bool opt_werror;
 
@@ -932,10 +934,14 @@ static void parse_args(int argc, char **argv)
 
       if (!strcmp(stdver, "c99") || !strcmp(stdver, "gnu99")) {
         opt_c99 = true;
+      } else if (!strcmp(stdver, "c89") || !strcmp(stdver, "gnu89")) {
+        opt_c89 = true;
       } else if (!strcmp(stdver, "c11") || !strcmp(stdver, "gnu11")) {
         opt_c11 = true;
       } else if (!strcmp(stdver, "c17") || !strcmp(stdver, "gnu17")) {
         opt_c17 = true;
+      } else if (!strcmp(stdver, "c23")) {
+        opt_c23 = true;
       } else {
         error("%s : %s:%d: error: in parse_args : unsupported -std option: %s", MAIN_C, __FILE__, __LINE__, stdver);
         exit(1);

@@ -1123,6 +1123,8 @@ extern FILE *ofile;
 extern bool opt_c99;
 extern bool opt_c11;
 extern bool opt_c17;
+extern bool opt_c89;
+extern bool opt_c23;
 extern char *weak_symbols[MAX_WEAK]; 
 extern int weak_count;
 extern bool opt_implicit;
