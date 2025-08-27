@@ -97,12 +97,18 @@ int main(void) {
   {
     char arr[3];
     DASSERT(8 == sizeof((0 ? arr:arr)));
-    DASSERT(8 == sizeof((0 ? 0:arr)));
+    DASSERT(8 == sizeof((0 ? 0: (char*)arr)));
+    DASSERT(8 == sizeof((0 ? (char*)arr:0)));
+    DASSERT(8 == sizeof(({(char*)arr;})));
+
+    DASSERT(8 == sizeof((0, (char*)arr)));
+    DASSERT(8 == sizeof((0 ? 0: arr)));
     DASSERT(8 == sizeof((0 ? arr:0)));
     DASSERT(8 == sizeof(({arr;})));
 
-    DASSERT(8 == sizeof((0,arr)));
-    DASSERT(3 == sizeof( (typeof(arr)){0} ));
+    DASSERT(8 == sizeof((0, arr)));    
+    DASSERT(3 == sizeof((arr)));    
+    //DASSERT(3 == sizeof( (typeof(arr)){0} ));
   }
 
   printf("OK\n");

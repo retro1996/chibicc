@@ -5,6 +5,8 @@
 #define DASSERT(x) _Static_assert((x), ""); ASSERT(1, x)
 #define EASSERT(x, y) _Static_assert((x) == (y), ""); ASSERT(x, y)
 #define LASSERT(x, y) assert64(x, y, #y)
+#define SASSERT(x) _Static_assert(x,"")
+#define RASSERT(x) assert(1, x, #x) 
 #define ASSERT128(x, y) assert128(x, y, #y, __FILE__, __LINE__)
 void assert128(__int128, __int128, char *, char *, int);
 
@@ -30,5 +32,9 @@ extern void assert(int expected, int actual, char *code);
 extern void assert128(__int128, __int128, char *, char *, int);
 #define ASSERT(x, y) assert(x, y, #y)
 #define LASSERT(x, y) assert(x, y, #y)
+#define DASSERT(x) _Static_assert((x), ""); ASSERT(1, x)
+#define EASSERT(x, y) _Static_assert((x) == (y), ""); ASSERT(x, y)
+#define SASSERT(x) _Static_assert(x,"")
 #define ASSERT128(x, y) assert128(x, y, #y, __FILE__, __LINE__)
+#define RASSERT(x) assert(1, x, #x) 
 #endif

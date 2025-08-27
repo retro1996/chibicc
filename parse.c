@@ -3044,8 +3044,8 @@ static int64_t eval2(Node *node, char ***label)
     return eval(node->lhs) && eval(node->rhs);
   case ND_LOGOR:
     return eval(node->lhs) || eval(node->rhs);
-  case ND_CAST:
-  {
+  case ND_CAST: {
+    
      if (is_flonum(node->lhs->ty)) {
         if (node->ty->kind == TY_BOOL)
           return !!eval_double(node->lhs);
@@ -3061,6 +3061,7 @@ static int64_t eval2(Node *node, char ***label)
       int64_t val = eval2(node->lhs, label);
       if (is_integer(node->ty))
         return eval_sign_extend(node->ty, val);
+
       return val;
   }
   case ND_ADDR:
@@ -3088,6 +3089,7 @@ static int64_t eval2(Node *node, char ***label)
   case ND_VAR:
     if (is_vector(node->var->ty))
       return 0;
+    // For arrays or pointers, return their size
     if (!label) {
       error_tok(node->tok, "%s %d : in eval2 : not a compile-time constant %d", PARSE_C, __LINE__, node->var->ty->kind);
     }
@@ -5600,7 +5602,7 @@ static Node *primary(Token **rest, Token *tok)
         if (mem->ty->kind == TY_ARRAY)
           return new_ulong((node->ty->size - mem->ty->size), tok);
       }
-
+      
       if (node->ty->kind == TY_PTR) {
         return new_ulong(8, tok); 
       }

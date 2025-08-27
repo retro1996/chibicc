@@ -322,6 +322,7 @@ static Type *get_common_type(Node **lhs, Node **rhs)
     return pointer_to(ty1->base);
   }
 
+
   if (ty1->kind == TY_FUNC)
     return pointer_to(ty1);
   if (ty2->kind == TY_FUNC)
@@ -413,6 +414,9 @@ bool is_int128(Type *ty) {
   return ty && ty->kind == TY_INT128;
 }
 
+bool is_pointer(Type *ty) {
+  return ty && ty->kind == TY_PTR;
+}
 
 
 void add_type(Node *node)
@@ -506,24 +510,30 @@ void add_type(Node *node)
   case ND_COND:
     //======ISS-154 trying to fix deferencing pointer issue when we have a macro that can return a pointer or null  (self) ? NULL
     //printf("======%d %d %s\n", node->then->ty->kind, node->els->ty->kind,  node->tok->loc);
-    if (node->then->ty->kind == TY_VOID && node->els->ty->kind == TY_VOID)
-    {
+    if (node->then->ty->kind == TY_VOID && node->els->ty->kind == TY_VOID) {
       node->ty = ty_void;
+    } else if (node->then->ty && is_array(node->then->ty) && node->els->ty && is_integer(node->els->ty)) {
+      node->then->ty = pointer_to(node->then->ty->base);
+      node->ty = node->then->ty;
+    } else if (node->els->ty && is_array(node->els->ty) && node->then->ty && is_integer(node->then->ty)) {
+      node->els->ty = pointer_to(node->els->ty->base);
+      node->ty = node->els->ty;
     }
-    else
-    {
+    else {
       usual_arith_conv(&node->then, &node->els);
       node->ty = node->then->ty;
     }
     return;
   case ND_COMMA:
-    node->ty = node->rhs->ty;
+    if (node->rhs->ty && is_array(node->rhs->ty))
+      node->ty = pointer_to(node->rhs->ty->base);
+    else 
+      node->ty = node->rhs->ty;
     return;
   case ND_MEMBER:
     node->ty = node->member->ty;
     return;
-  case ND_ADDR:
-  {
+  case ND_ADDR: {
     Type *ty = node->lhs->ty;
   //from @fuhsnn add_type():Remove overaggressive array decaying
     node->ty = pointer_to(ty);
@@ -546,8 +556,7 @@ void add_type(Node *node)
     node->ty = node->lhs->ty->base;
     return;
   case ND_STMT_EXPR:
-    if (node->body)
-    {
+    if (node->body) {
       Node *stmt = node->body;
       while (stmt->next) {
         stmt = stmt->next;
