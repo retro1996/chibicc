@@ -4010,7 +4010,7 @@ static void emit_data(Obj *prog)
   {
     //issue 35 about array not initialized completely.
     if (var->ty->size != 0)
-      println("  .zero %d", abs(var->ty->size));
+      println("  .zero %ld", labs(var->ty->size));
     if (var->alias_name)
       println("  .set \"%s\", %s", var->name, var->alias_name);
     if (var->is_weak)
@@ -4035,7 +4035,7 @@ static void emit_data(Obj *prog)
       //from @fuhsnn incomplete array assuming to have one element
       if (var->ty->kind == TY_ARRAY && var->ty->size < 0)
         var->ty->size = var->ty->base->size;
-      println("  .comm %s, %d, %d", var->name, var->ty->size, align);
+      println("  .comm %s, %ld, %d", var->name, var->ty->size, align);
       continue;
     }
     
@@ -4054,7 +4054,7 @@ static void emit_data(Obj *prog)
 
             
       println("  .type %s, @object", var->name);
-      println("  .size %s, %d", var->name, abs(var->ty->size));
+      println("  .size %s, %ld", var->name, labs(var->ty->size));
       if (align > 1) println("  .align %d", align);
       println("%s:", var->name);
 
@@ -4098,7 +4098,7 @@ static void emit_data(Obj *prog)
 
         }
       }
-      println("  .size %s, %d", var->name, var->ty->size);
+      println("  .size %s, %ld", var->name, var->ty->size);
       continue;
     }
 
@@ -4113,7 +4113,7 @@ static void emit_data(Obj *prog)
     if (align > 1) println("  .align %d", align);
     println("%s:", var->name);
     if (var->ty->size != 0)
-      println("  .zero %d", abs(var->ty->size));
+      println("  .zero %ld", labs(var->ty->size));
   }
 }
 

@@ -879,7 +879,7 @@ typedef enum
 struct Type
 {
   TypeKind kind;
-  int size;          // sizeof() value
+  int64_t size;          // sizeof() value
   int align;         // alignment
   bool is_unsigned;  // unsigned or signed
   bool is_atomic;    // true if _Atomic
@@ -911,7 +911,7 @@ struct Type
   Token *name_pos;
 
   // Array
-  int array_len;
+  int64_t array_len;
   //from COSMOPOLITAN adding vector_size
   int vector_size;
 
@@ -993,8 +993,8 @@ bool is_compatible(Type *t1, Type *t2);
 Type *copy_type(Type *ty);
 Type *pointer_to(Type *base);
 Type *func_type(Type *return_ty);
-Type *array_of(Type *base, int size);
-Type *vector_of(Type *base, int size);
+Type *array_of(Type *base, int64_t  size);
+Type *vector_of(Type *base, int64_t  size);
 Type *vla_of(Type *base, Node *expr);
 Type *enum_type(void);
 Type *struct_type(void);

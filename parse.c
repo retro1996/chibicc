@@ -407,7 +407,7 @@ static Initializer *new_initializer(Type *ty, bool is_flexible)
 
     init->children = calloc(ty->array_len, sizeof(Initializer *));
     if (init->children == NULL)
-      error("%s: %s:%d: error: in new_initializer : init->children is null %d %d", PARSE_C, __FILE__, __LINE__, ty->array_len, ty->size);
+      error("%s: %s:%d: error: in new_initializer : init->children is null %ld %ld", PARSE_C, __FILE__, __LINE__, ty->array_len, ty->size);
     for (int i = 0; i < ty->array_len; i++)
       init->children[i] = new_initializer(ty->base, false);
     return init;
@@ -419,7 +419,7 @@ static Initializer *new_initializer(Type *ty, bool is_flexible)
 
     init->children = calloc(ty->array_len, sizeof(Initializer *));
     if (init->children == NULL)
-      error("%s: %s:%d: error: in new_initializer : init->children is null %d %d", PARSE_C, __FILE__, __LINE__, ty->array_len, ty->size);
+      error("%s: %s:%d: error: in new_initializer : init->children is null %ld %ld", PARSE_C, __FILE__, __LINE__, ty->array_len, ty->size);
     for (int i = 0; i < ty->array_len; i++)
       init->children[i] = new_initializer(ty->base, false);
     return init;
@@ -7817,7 +7817,7 @@ static int64_t eval_sign_extend(Type *ty, uint64_t val) {
   case 16: return ty->is_unsigned ? (uint64_t)val : (int64_t)val;
 
   }
-  printf("====FATAL ERROR %d\n", ty->size );
+  printf("====FATAL ERROR %ld\n", ty->size );
   unreachable();
 }
 

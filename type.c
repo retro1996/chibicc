@@ -26,7 +26,7 @@ Type *ty_int128 = &(Type){TY_INT128, 16, 16};
 Type *ty_uint128 = &(Type){TY_INT128, 16, 16, true}; 
 
 
-static Type *new_type(TypeKind kind, int size, int align)
+static Type *new_type(TypeKind kind, int64_t size, int align)
 {
   Type *ty = calloc(1, sizeof(Type));
   if (ty == NULL)
@@ -254,7 +254,7 @@ Type *func_type(Type *return_ty)
   return ty;
 }
 
-Type *array_of(Type *base, int len)
+Type *array_of(Type *base, int64_t len)
 {
   if (!base)
   error("%s %d: in array_of : base is null", TYPE_C, __LINE__); 
@@ -266,7 +266,7 @@ Type *array_of(Type *base, int len)
 }
 
 
-Type *vector_of(Type *base, int len)
+Type *vector_of(Type *base, int64_t len)
 {
   if (!base)
     error("%s %d: in vector_of : base is null", TYPE_C, __LINE__); 
