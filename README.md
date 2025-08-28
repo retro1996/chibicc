@@ -523,6 +523,7 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
 
 - trying to compile other C projects from source to see what is missing or which bug we have with chibicc.
 - Trying to find the root cause of segmentation fault with postgres initdb command.
+- Need to change the system of push/pops to solve issue with postgres(stack corruption)/cpython(vfork) probably using virtual stack like @fuhsnn/slimcc.
 
 
 ## issues and pull requests fixed
@@ -576,7 +577,8 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23.2    Managing -Werror (reporting from @fuhsnn/slimcc). Adding decay array/vla to pointer in ND_COND, ND_COMMA.
+1.0.23.2    Managing -Werror (reporting from @fuhsnn/slimcc). Adding decay array/vla to pointer in ND_COND, ND_COMMA. Merging pull request from @Superstart64 removing hard-coding on includes and Makefile.
+
 
 ## old release notes
 
