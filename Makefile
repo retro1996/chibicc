@@ -1,5 +1,8 @@
+# The installation prefix
+PREFIX=/usr/local
+
 CC=gcc
-CFLAGS =-std=c11 -g -fno-common -Wall -Wno-switch 
+CFLAGS =-std=c11 -g -fno-common -Wall -Wno-switch
 CFLAGS_DIAG=-dotfile -std=c11 
 OBJECT=chibicc
 OBJECTLIB=libchibicc
@@ -122,14 +125,12 @@ clean:
 	rm -rf $(OBJECT) tmp* $(TESTS) issues/*.s issues/*.exe issues/*.dot test/*.s test/*.exe stage2 diagram/*.png test/*.dot $(OBJECTLIB)
 	find * -type f '(' -name '*~' -o -name '*.o' ')' -exec rm {} ';'
 
-install:
-	sudo rm -rf	/usr/local/include/x86_64-linux-gnu/chibicc && sudo rm -rf /usr/local/bin/chibicc
-	test -d /usr/local/include/x86_64-linux-gnu/chibicc || \
-		sudo mkdir -p /usr/local/include/x86_64-linux-gnu/chibicc
-	sudo cp -r include/* /usr/local/include/x86_64-linux-gnu/chibicc/
-	sudo cp ./chibicc /usr/local/bin/chibicc
+install: $(OBJECT)
+	install -v -D -m 755 -t $(PREFIX)/bin/ $(OBJECT)
+	install -v -D -m 644 -t $(PREFIX)/include/x86_64-linux-gnu/chibicc/ include/*
 
 uninstall:
-	sudo rm -rf	/usr/local/include/x86_64-linux-gnu/chibicc && sudo rm /usr/local/bin/chibicc
+	rm -f $(PREFIX)/bin/chibicc
+	rm -f $(PREFIX)/include/x86_64-linux-gnu/chibicc/*
 
 .PHONY: test clean test-stage2 libchibicc projects projects-all  projects-oth test-all install uninstall
