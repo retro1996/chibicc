@@ -1,6 +1,10 @@
 #include "chibicc.h"
 #define MAIN_C "main.c"
 
+#ifndef PREFIX
+#define PREFIX "/usr/local"
+#endif
+
 typedef enum
 {
   FILE_NONE,
@@ -114,11 +118,13 @@ static void print_string_array(StringArray *arr) {
 static void print_include_directories() {
     strarray_push(&include_paths,  "./include");
     // Add standard include paths.
-    strarray_push(&include_paths, "/usr/local/include/x86_64-linux-gnu/chibicc");
+    strarray_push(&include_paths, PREFIX "/include/x86_64-linux-gnu/chibicc");
     strarray_push(&include_paths, "/usr/include/x86_64-linux-gnu");
     strarray_push(&include_paths, "/usr/local/include");
     strarray_push(&include_paths, "/usr/include");
-    strarray_push(&include_paths, "/usr/lib/gcc/x86_64-linux-gnu/13/include");
+    #ifdef GCC_VERSION
+    strarray_push(&include_paths, "/usr/lib/gcc/x86_64-linux-gnu/" GCC_VERSION "/include");
+    #endif
     //strarray_push(&include_paths, "/usr/include/chibicc/include");
     #if defined(__APPLE__) && defined(__MACH__)
     strarray_push(&include_paths, "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include");
@@ -190,11 +196,13 @@ static void add_default_include_paths(char *argv0)
   strarray_push(&include_paths, format("%s/include", dirname(strdup(argv0))));
 
   // Add standard include paths.
-  strarray_push(&include_paths, "/usr/local/include/x86_64-linux-gnu/chibicc");
+  strarray_push(&include_paths, PREFIX "/include/x86_64-linux-gnu/chibicc");
   strarray_push(&include_paths, "/usr/include");
   strarray_push(&include_paths, "/usr/local/include");
   strarray_push(&include_paths, "/usr/include/x86_64-linux-gnu");
-  strarray_push(&include_paths, "/usr/lib/gcc/x86_64-linux-gnu/13/include");
+  #ifdef GCC_VERSION
+  strarray_push(&include_paths, "/usr/lib/gcc/x86_64-linux-gnu/" GCC_VERSION "/include");
+  #endif
   //strarray_push(&include_paths, "/usr/include/chibicc/include");
   #if defined(__APPLE__) && defined(__MACH__)
   strarray_push(&include_paths, "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include");
@@ -1358,12 +1366,21 @@ static char *find_libpath(void)
 
 static char *find_gcc_libpath(void)
 {
+#ifdef GCC_VERSION
+  char *paths[] = {
+      "/usr/lib/gcc/x86_64-linux-gnu/" GCC_VERSION "/crtbegin.o",
+      "/usr/lib/gcc/x86_64-*/" GCC_VERSION "/crtbegin.o",
+      "/usr/lib/gcc/x86_64-pc-linux-gnu/" GCC_VERSION "/crtbegin.o", // For Gentoo
+      "/usr/lib/gcc/x86_64-redhat-linux/" GCC_VERSION "/crtbegin.o", // For Fedora
+  };
+#else
   char *paths[] = {
       "/usr/lib/gcc/x86_64-linux-gnu/*/crtbegin.o",
       "/usr/lib/gcc/x86_64-*/*/crtbegin.o",
       "/usr/lib/gcc/x86_64-pc-linux-gnu/*/crtbegin.o", // For Gentoo
       "/usr/lib/gcc/x86_64-redhat-linux/*/crtbegin.o", // For Fedora
   };
+#endif
 
   for (int i = 0; i < sizeof(paths) / sizeof(*paths); i++)
   {
