@@ -1,8 +1,9 @@
 # The installation prefix
 PREFIX=/usr/local
 
+GCC_VERSION!=gcc -dumpversion
 CC=gcc
-CFLAGS =-std=c11 -g -fno-common -Wall -Wno-switch
+CFLAGS =-std=c11 -g -fno-common -Wall -Wno-switch -DPREFIX=\"$(PREFIX)\" -DGCC_VERSION=\"$(GCC_VERSION)\"
 CFLAGS_DIAG=-dotfile -std=c11 
 OBJECT=chibicc
 OBJECTLIB=libchibicc
