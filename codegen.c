@@ -4243,17 +4243,20 @@ static void emit_text(Obj *prog)
     println("  .type %s, @function", fn->name);
     println("%s:", fn->name);
 
-    
     current_fn = fn;
 
+    println("  .cfi_startproc");
     // Prologue
     println("  push %%rbp");
+    println("  .cfi_def_cfa_offset 16");
+    println("  .cfi_offset %%rbp, -16");    
     println("  mov %%rsp, %%rbp");
+    println("  .cfi_def_cfa_register %%rbp");  
     println("  sub $%d, %%rsp", fn->stack_size);
     println("  mov %%rsp, %d(%%rbp)", fn->alloca_bottom->offset);
 
     //issue with postgres and local variables not initialized!
-    for (Obj *var = fn->locals; var; var = var->next) {
+    for (Obj *var = fn->locals; var; var = var->next) {     
         if (!var->init && !var->is_param &&
             (var->ty->kind == TY_STRUCT ||
             var->ty->kind == TY_UNION ||
@@ -4410,12 +4413,15 @@ static void emit_text(Obj *prog)
     println(".L.return.%s:", fn->name);
     println("  mov %%rbp, %%rsp");
     println("  pop %%rbp");
+    println("  .cfi_def_cfa %%rsp, 8");
     println("  ret");
+    println("  .cfi_endproc");
     println("  .size %s, .-%s", fn->name, fn->name);
   }
   emit_constructors(); 
   emit_destructors(); 
 }
+
 
 void codegen(Obj *prog, FILE *out)
 {
@@ -4428,7 +4434,6 @@ void codegen(Obj *prog, FILE *out)
   assign_lvar_offsets(prog);
   emit_data(prog);
   emit_text(prog);
-  
   println("  .section  .note.GNU-stack,\"\",@progbits");
   //print offset for each variable
   if (isDebug)
