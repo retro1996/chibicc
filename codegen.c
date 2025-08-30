@@ -1326,6 +1326,51 @@ static void HandleAtomicArithmetic(Node *node, const char *op) {
   println("\tmov\t%s,%s", reg_di(node->ty->size), reg_ax(node->ty->size));
 }
 
+static void gen_memset(Node *node) {
+    gen_expr(node->builtin_dest);
+    push();
+    gen_expr(node->builtin_val);
+    push();
+    gen_expr(node->builtin_size);
+    push();
+    pop("%rcx");  // size
+    pop("%rsi");  // value
+    pop("%rdi");  // destination
+    println("  mov %%sil, %%al");  
+    println("  rep stosb");       
+}
+
+
+static void gen_memcpy(Node *node) {
+  if (opt_fbuiltin) {
+    gen_expr(node->builtin_dest);
+    push();
+    println("  mov %%rax, %%rdi"); 
+    gen_expr(node->builtin_src);
+    push();
+    println("  mov %%rax, %%rsi");
+    gen_expr(node->builtin_size);
+    push();
+    println("  mov %%rax, %%rcx"); 
+    println("  rep movsb");
+    pop("%rcx");
+    pop("%rsi");
+    pop("%rdi");
+  }
+  else {
+    gen_expr(node->builtin_dest); 
+    push();    
+    gen_expr(node->builtin_src);  
+    push();    
+    gen_expr(node->builtin_size); 
+    push();
+    println("  call memcpy");
+    pop("%rdx"); // size
+    pop("%rsi"); // source
+    pop("%rdi"); // destination    
+  }  
+}
+
 static void gen_int128_op(Node *node) {
     if (node->rhs) {
       gen_expr(node->rhs);
@@ -1760,9 +1805,9 @@ static void gen_cmpxchgn(Node *node) {
 }
 
 
-static void gen_builtin(Node *node, const char *insn) {
+static void gen_builtin(Node *node, const char *insn, const char *reg) {
     gen_expr(node->builtin_val); 
-    println("  %s %%rax, %%rax", insn); 
+    println("  %s %%%s, %%%s", insn, reg, reg); 
 }
 
 static void gen_vec_init_v2si(Node *node) {
@@ -2006,6 +2051,105 @@ static void gen_release(Node *node) {
   println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
 }
 
+static void gen_mul_overflow(Node *node) {
+  int c = count(); 
+  Type *ty = node->lhs->ty;  
+  if (ty->base)
+    ty = ty->base;
+  int size = ty->size;
+  gen_expr(node->lhs);
+  push();
+  gen_expr(node->rhs);
+  push();
+  gen_expr(node->builtin_dest);
+  push();
+  pop("%rdx"); 
+  pop("%rsi"); 
+  pop("%rdi"); 
+  if (size == 1) {
+    // For 8-bit values (char)
+    println("  movzbl %%di, %%eax");  
+    println("  movzbl %%si, %%ebx");  
+    println("  imul %%ebx, %%eax");  
+    println("  jo .L.overflowm%d", c);  
+    println("  mov %%al, (%%rdx)");    
+    println("  mov $0, %%al");       
+    println("  jmp .L.donem%d", c);   
+  } else if (size == 2) {
+    // For 16-bit values (short)
+    println("  movzwl %%di, %%eax");  
+    println("  movzwl %%si, %%ebx");  
+    println("  imul %%ebx, %%eax");  
+    println("  jo .L.overflowm%d", c);
+    println("  mov %%ax, (%%rdx)");    
+    println("  mov $0, %%ax");       
+    println("  jmp .L.donem%d", c);   
+  } else if (size == 4) {
+    // For 32-bit values (int)
+    println("  mov %%edi, %%eax");   
+    println("  imul %%esi, %%eax");   
+    println("  jo .L.overflowm%d", c);  
+    println("  mov %%eax, (%%rdx)");   
+    println("  mov $0, %%eax");       
+    println("  jmp .L.donem%d", c);   
+  } else if (size == 8) {
+    // For 64-bit values (long long)
+    println("  mov %%rdi, %%rax");    
+    println("  imul %%rsi, %%rax");   
+    println("  jo .L.overflowm%d", c);  
+    println("  mov %%rax, (%%rdx)"); 
+    println("  mov $0, %%rax");       
+    println("  jmp .L.donem%d", c);  
+  }
+  println(".L.overflowm%d:", c);
+  println("  mov %%al, (%%rdx)");      
+  println("  mov $1, %%rax");           
+  println(".L.donem%d:", c);
+}
+
+
+static void gen_sub_overflow(Node *node) {
+    int c = count(); 
+    Type *ty = node->builtin_dest->ty;  
+    if (ty->base)
+      ty = ty->base;
+    gen_expr(node->lhs);
+    push();
+    gen_expr(node->rhs);
+    push();
+    gen_expr(node->builtin_dest);
+    push();
+    pop("%rdx");  
+    pop("%rsi");  
+    pop("%rdi"); 
+
+    if (ty->size == 1) {
+        println("  mov %%dil, %%al");
+        println("  sub %%sil, %%al");
+        println("  mov %%al, (%%rdx)");
+    } else if (ty->size == 2) {
+        println("  mov %%di, %%ax");
+        println("  sub %%si, %%ax");
+        println("  mov %%ax, (%%rdx)");
+    } else if (ty->size == 4) {
+        println("  mov %%edi, %%eax");
+        println("  sub %%esi, %%eax");
+        println("  mov %%eax, (%%rdx)");
+    } else {
+        println("  mov %%rdi, %%rax");
+        println("  sub %%rsi, %%rax");
+        println("  mov %%rax, (%%rdx)");
+    }
+    println("  seto %%al");         
+    println("  movzx %%al, %%eax");  
+    println("  cmp $0, %%eax");
+    println("  jne .Loverflows%d", c);
+    println("  mov $0, %%eax");
+    println("  jmp .Lends%d", c);
+    println(".Loverflows%d:", c);
+    println("  mov $1, %%eax");
+    println(".Lends%d:", c);
+}
 
 static void gen_subfetch(Node *node) {
   gen_expr(node->lhs);
@@ -2904,60 +3048,8 @@ static void gen_expr(Node *node)
     println("  mfence"); // x86-64 instruction for full memory barrier
     return;
   }
-  case ND_BUILTIN_MEMCPY: {
-    if (opt_fbuiltin) {
-      gen_expr(node->builtin_dest);
-      push();
-      println("  mov %%rax, %%rdi"); 
-      gen_expr(node->builtin_src);
-      push();
-      println("  mov %%rax, %%rsi");
-      gen_expr(node->builtin_size);
-      push();
-      println("  mov %%rax, %%rcx"); 
-      println("  rep movsb");
-      pop("%rcx");
-      pop("%rsi");
-      pop("%rdi");
-    }
-    else {
-    gen_expr(node->builtin_dest); 
-    push();
-    
-    gen_expr(node->builtin_src);  
-    push();
-    
-    gen_expr(node->builtin_size); 
-    push();
-
-    println("  call memcpy");
-
-    // Restore the stack
-    pop("%rdx"); // size
-    pop("%rsi"); // source
-    pop("%rdi"); // destination
-    
-    }
-    return;   
-  }
-
-  case ND_BUILTIN_MEMSET: {
-    gen_expr(node->builtin_dest);
-    push();
-    gen_expr(node->builtin_val);
-    push();
-    gen_expr(node->builtin_size);
-    push();
-
-    pop("%rcx");  // size
-    pop("%rsi");  // value
-    pop("%rdi");  // destination
-
-    println("  mov %%sil, %%al");  
-    println("  rep stosb");       
-
-    return;
-  }
+  case ND_BUILTIN_MEMCPY: gen_memcpy(node); return;
+  case ND_BUILTIN_MEMSET: gen_memset(node); return;
   case ND_BUILTIN_CLZ: {
     gen_expr(node->builtin_val); 
     println("  bsr %%eax, %%eax"); 
@@ -2972,19 +3064,9 @@ static void gen_expr(Node *node)
 
     return;
   }
-  case ND_BUILTIN_CTZ: {
-    gen_expr(node->builtin_val); 
-    println("  bsf %%eax, %%eax"); 
-    return;
-  }
+  case ND_BUILTIN_CTZ: gen_builtin(node, "bsf", "eax"); return;
   case ND_BUILTIN_CTZLL:
-  case ND_BUILTIN_CTZL: gen_builtin(node, "bsf"); return;
-  // {
-  //   gen_expr(node->builtin_val); 
-  //   println("  bsf %%rax, %%rax"); 
-  //   return;
-  // }
-
+  case ND_BUILTIN_CTZL: gen_builtin(node, "bsf", "rax"); return;
   case ND_BUILTIN_BSWAP16: {
       gen_expr(node->builtin_val);  
       println("  mov %%ax, %%dx");  
@@ -3050,7 +3132,7 @@ static void gen_expr(Node *node)
   }
   case ND_POPCOUNTL:
   case ND_POPCOUNTLL:
-  case ND_POPCOUNT: gen_builtin(node, "popcnt"); return;
+  case ND_POPCOUNT: gen_builtin(node, "popcnt", "rax"); return;
   case ND_EXPECT: {
     gen_expr(node->lhs); 
     push(); 
@@ -3082,119 +3164,8 @@ static void gen_expr(Node *node)
   case ND_UADDLL_OVERFLOW:
   case ND_UADD_OVERFLOW: gen_uadd_overflow(node); return;
   case ND_BUILTIN_ADD_OVERFLOW: gen_add_overflow(node); return;
-  case ND_BUILTIN_SUB_OVERFLOW: {
-    int c = count(); 
-    Type *ty = node->builtin_dest->ty;  
-    if (ty->base)
-      ty = ty->base;
-
-    gen_expr(node->lhs);
-    push();
-    gen_expr(node->rhs);
-    push();
-    gen_expr(node->builtin_dest);
-    push();
-
-    pop("%rdx");  
-    pop("%rsi");  
-    pop("%rdi"); 
-
-    if (ty->size == 1) {
-        println("  mov %%dil, %%al");
-        println("  sub %%sil, %%al");
-        println("  mov %%al, (%%rdx)");
-    } else if (ty->size == 2) {
-        println("  mov %%di, %%ax");
-        println("  sub %%si, %%ax");
-        println("  mov %%ax, (%%rdx)");
-    } else if (ty->size == 4) {
-        println("  mov %%edi, %%eax");
-        println("  sub %%esi, %%eax");
-        println("  mov %%eax, (%%rdx)");
-    } else {
-        println("  mov %%rdi, %%rax");
-        println("  sub %%rsi, %%rax");
-        println("  mov %%rax, (%%rdx)");
-    }
-
-    // Check for overflow
-    println("  seto %%al");          // Set AL if overflow occurred
-    println("  movzx %%al, %%eax");  // Zero-extend AL to EAX
-
-    // Return 0 if no overflow, 1 if overflow
-    println("  cmp $0, %%eax");
-    println("  jne .Loverflows%d", c);
-    println("  mov $0, %%eax");
-    println("  jmp .Lends%d", c);
-    println(".Loverflows%d:", c);
-    println("  mov $1, %%eax");
-    println(".Lends%d:", c);
-    return;
-  }
-  case ND_BUILTIN_MUL_OVERFLOW: {
-    int c = count();  // Unique label counter
-    Type *ty = node->lhs->ty;  // Get the type of the operands
-    if (ty->base)
-      ty = ty->base;
-    int size = ty->size;
-    // Evaluate left-hand side and right-hand side expressions
-    gen_expr(node->lhs);
-    push();
-    gen_expr(node->rhs);
-    push();
-    gen_expr(node->builtin_dest);
-    push();
-
-    // Load values into registers and perform multiplication
-    pop("%rdx");  // Load address of result variable
-    pop("%rsi");  // Load rhs
-    pop("%rdi");  // Load lhs
-
-    // Determine the suffix and size for the operations
-    if (size == 1) {
-        // For 8-bit values (char)
-        println("  movzbl %%di, %%eax");  // Zero-extend to 32-bit
-        println("  movzbl %%si, %%ebx");  // Zero-extend to 32-bit
-        println("  imul %%ebx, %%eax");   // Perform 32-bit multiplication
-        println("  jo .L.overflowm%d", c);  // Jump if overflow
-        println("  mov %%al, (%%rdx)");    // Store result (8-bit)
-        println("  mov $0, %%al");       
-        println("  jmp .L.donem%d", c);    // Jump to done
-    } else if (size == 2) {
-        // For 16-bit values (short)
-        println("  movzwl %%di, %%eax");  // Zero-extend to 32-bit
-        println("  movzwl %%si, %%ebx");  // Zero-extend to 32-bit
-        println("  imul %%ebx, %%eax");   // Perform 32-bit multiplication
-        println("  jo .L.overflowm%d", c);  // Jump if overflow
-        println("  mov %%ax, (%%rdx)");    // Store result (16-bit)
-        println("  mov $0, %%ax");       
-        println("  jmp .L.donem%d", c);    // Jump to done
-    } else if (size == 4) {
-        // For 32-bit values (int)
-        println("  mov %%edi, %%eax");    // Move to 32-bit
-        println("  imul %%esi, %%eax");   // Perform 32-bit multiplication
-        println("  jo .L.overflowm%d", c);  // Jump if overflow
-        println("  mov %%eax, (%%rdx)");    // Store result (32-bit)
-        println("  mov $0, %%eax");       
-        println("  jmp .L.donem%d", c);    // Jump to done
-    } else if (size == 8) {
-        // For 64-bit values (long long)
-        println("  mov %%rdi, %%rax");    // Move to 64-bit
-        println("  imul %%rsi, %%rax");   // Perform 64-bit multiplication
-        println("  jo .L.overflowm%d", c);  // Jump if overflow
-        println("  mov %%rax, (%%rdx)");    // Store result (64-bit)
-        println("  mov $0, %%rax");       
-        println("  jmp .L.donem%d", c);    // Jump to done
-    }
-
-    // Overflow handling
-    println(".L.overflowm%d:", c);
-    println("  mov %%al, (%%rdx)");        // Store result
-    println("  mov $1, %%rax");            // Set return value to 1 (overflow detected)
-    println(".L.donem%d:", c);
-
-    return;
-  }
+  case ND_BUILTIN_SUB_OVERFLOW: gen_sub_overflow(node); return;
+  case ND_BUILTIN_MUL_OVERFLOW: gen_mul_overflow(node); return;
   case ND_UNREACHABLE:
     println("  // __builtin_unreachable: no code generation needed");
     return;
