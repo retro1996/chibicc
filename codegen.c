@@ -29,8 +29,9 @@ static void print_offset(Obj *prog);
 static int cmp_ctor(const void *a, const void *b);
 static void emit_constructors(void);
 static void emit_destructors(void); 
+static void emit_builtin_aliases(void);
 
-
+static bool aliases_emitted = false;
 static int last_loc_line = 0;
 
 typedef struct CtorFunc {
@@ -43,6 +44,19 @@ static int constructor_cnt = 0;
 
 static CtorFunc *destructors[256];
 static int destructor_cnt = 0;
+
+typedef struct {
+    char *builtin;
+    char *libc;
+} BuiltinAlias;
+
+static BuiltinAlias builtin_aliases[] = {
+    {"__builtin_memcpy",  "memcpy"},
+    {"__builtin_memset",  "memset"},
+    // {"__builtin_memmove", "memmove"},
+    // {"__builtin_strlen",  "strlen"},
+    // {"__builtin_strcpy",  "strcpy"},    
+};
 
 
 __attribute__((format(printf, 1, 2))) static void println(char *fmt, ...)
@@ -1316,14 +1330,14 @@ static void HandleAtomicArithmetic(Node *node, const char *op) {
   push();
   gen_expr(node->rhs);
   pop("%r9");
-  println("\tmov\t%s,%s", reg_ax(node->ty->size), reg_si(node->ty->size));
-  println("\tmov\t(%%r9),%s", reg_ax(node->ty->size));
-  println("1:\tmov\t%s,%s", reg_ax(node->ty->size), reg_dx(node->ty->size));
-  println("\tmov\t%s,%s", reg_ax(node->ty->size), reg_di(node->ty->size));
-  println("\t%s\t%s,%s", op, reg_si(node->ty->size), reg_dx(node->ty->size));
-  println("\tlock cmpxchg\t%s,(%%r9)", reg_dx(node->ty->size));
-  println("\tjnz\t1b");
-  println("\tmov\t%s,%s", reg_di(node->ty->size), reg_ax(node->ty->size));
+  println("  mov %s, %s", reg_ax(node->ty->size), reg_si(node->ty->size));
+  println("  mov (%%r9), %s", reg_ax(node->ty->size));
+  println("1:  mov %s, %s", reg_ax(node->ty->size), reg_dx(node->ty->size));
+  println("  mov %s, %s", reg_ax(node->ty->size), reg_di(node->ty->size));
+  println("  %s %s, %s", op, reg_si(node->ty->size), reg_dx(node->ty->size));
+  println("  lock cmpxchg %s, (%%r9)", reg_dx(node->ty->size));
+  println("  jnz 1b");
+  println("  mov %s, %s", reg_di(node->ty->size), reg_ax(node->ty->size));
 }
 
 static void gen_memset(Node *node) {
@@ -1340,36 +1354,23 @@ static void gen_memset(Node *node) {
     println("  rep stosb");       
 }
 
-
 static void gen_memcpy(Node *node) {
   if (opt_fbuiltin) {
-    gen_expr(node->builtin_dest);
-    push();
-    println("  mov %%rax, %%rdi"); 
-    gen_expr(node->builtin_src);
-    push();
-    println("  mov %%rax, %%rsi");
-    gen_expr(node->builtin_size);
-    push();
-    println("  mov %%rax, %%rcx"); 
+    gen_expr(node->builtin_dest);   
+    push();                         
+    gen_expr(node->builtin_src);    
+    push();                         
+    gen_expr(node->builtin_size);   
+    println("  mov %%rax, %%rcx");  
+    pop("%rsi");                    
+    pop("%rdi");                   
+    println("  cld");
     println("  rep movsb");
-    pop("%rcx");
-    pop("%rsi");
-    pop("%rdi");
+    println("  mov %%rdi, %%rax");
+    return;
   }
-  else {
-    gen_expr(node->builtin_dest); 
-    push();    
-    gen_expr(node->builtin_src);  
-    push();    
-    gen_expr(node->builtin_size); 
-    push();
-    println("  call memcpy");
-    pop("%rdx"); // size
-    pop("%rsi"); // source
-    pop("%rdi"); // destination    
-  }  
 }
+
 
 static void gen_int128_op(Node *node) {
     if (node->rhs) {
@@ -4391,6 +4392,7 @@ static void emit_text(Obj *prog)
   }
   emit_constructors(); 
   emit_destructors(); 
+  emit_builtin_aliases();
 }
 
 
@@ -4750,3 +4752,16 @@ static void emit_destructors(void) {
   }
   println("  .text");
 }
+
+static void emit_builtin_aliases(void) {
+
+    if (aliases_emitted) 
+      return; 
+    aliases_emitted = true;
+    for (int i = 0; i < sizeof(builtin_aliases)/sizeof(*builtin_aliases); i++) {
+        BuiltinAlias *a = &builtin_aliases[i];
+        println("  .weak %s", a->builtin);
+        println("  .set %s, %s", a->builtin, a->libc);
+    }
+}
+

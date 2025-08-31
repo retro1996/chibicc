@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include "test.h"
 #include <string.h>
 
 // Function pointers
@@ -24,5 +24,6 @@ int main() {
     buffer[sizeof(buffer) - 1] = '\0'; // Null-terminate the buffer
     printf("After keymset: buffer = \"%s\"\n", buffer);
 
+    ASSERT(49, strlen(buffer));
     return 0;
 }

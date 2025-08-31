@@ -32,7 +32,7 @@ static inline long syscall(long n, long a1, long a2, long a3, long a4, long a5, 
     return ret;
 }
 
-void *memcpy(void *dest, const void *src, size_t n) {
+void *mymemcpy(void *dest, const void *src, size_t n) {
     __asm__ volatile(
         "rep movsb"
         : "+D"(dest), "+S"(src), "+c"(n)

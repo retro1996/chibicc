@@ -6036,11 +6036,11 @@ static Node *primary(Token **rest, Token *tok)
       return node;
   }
 
-  if (equal(tok, "__builtin_memcpy")) {
+  if (equal(tok, "__builtin_memcpy") && equal(tok->next, "(")) {
       return parse_memcpy(tok, rest);
   }
 
-  if (equal(tok, "__builtin_memset")) {
+  if (equal(tok, "__builtin_memset") && equal(tok->next, "(")) {
       return parse_memset(tok, rest);
   }
 
