@@ -1584,10 +1584,10 @@ void init_macros(void)
   define_macro("__BYTE_ORDER__", "__ORDER_LITTLE_ENDIAN__");
   define_macro("USE_BUILTINS", "1");
   define_macro("_Pragma(message) ", "");
-  if (opt_fbuiltin) {
-    define_macro("memcpy", "__builtin_memcpy");
-    define_macro("memset", "__builtin_memset");
-  }
+  // if (opt_fbuiltin) {
+  //   define_macro("memcpy", "__builtin_memcpy");
+  //   define_macro("memset", "__builtin_memset");
+  // }
 
   add_builtin("__STDC_VERSION__", stdver_macro);
   add_builtin("__FILE__", file_macro);
