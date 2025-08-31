@@ -14,7 +14,7 @@ int main(void) {
     putchar('\n');
 
     // --- Indirect call via function pointer: should use alias to libc memset ---
-    void *(*ptr)(void *, int, size_t) = __builtin_memset;
+    void *(*ptr)(void *, int, size_t) = memset;
     ptr(buf2, 'B', sizeof(buf2));
 
     for (int i = 0; i < sizeof(buf2); i++)

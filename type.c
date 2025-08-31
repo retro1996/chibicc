@@ -352,17 +352,13 @@ static Type *get_common_type(Node **lhs, Node **rhs)
         return ty2;
   }
 
-  // if (ty1->size < 4)
-  //   ty1 = ty_int;
-  // if (ty2->size < 4)
-  //   ty2 = ty_int;
 
-  // if (ty1->size != ty2->size)
-  //   return (ty1->size < ty2->size) ? ty2 : ty1;
+  if (ty1->kind == TY_PTR)
+      return ty1;
+  if (ty2->kind == TY_PTR)
+      return ty2;
 
-  // if (ty2->is_unsigned)
-  //   return ty2;
-  // return ty1;
+
   int_promotion(lhs);
   int_promotion(rhs);
   ty1 = (*lhs)->ty;
@@ -578,34 +574,18 @@ void add_type(Node *node)
   case ND_LABEL_VAL:
     node->ty = pointer_to(ty_void);
     return;
-  case ND_CAS:
+  case ND_CAS:  
     add_type(node->cas_addr);
     add_type(node->cas_old);
     add_type(node->cas_new);
     node->ty = ty_bool;
-
-    if (node->cas_addr->ty->kind != TY_PTR)
-      error_tok(node->cas_addr->tok, "%s %d: pointer expected", TYPE_C, __LINE__);
-    if (node->cas_old->ty->kind != TY_PTR)
-      error_tok(node->cas_old->tok, "%s %d: pointer expected", TYPE_C, __LINE__);
     return;
   case ND_CAS_N:
-    add_type(node->cas_addr);
-    add_type(node->cas_old);
-    add_type(node->cas_new);
     node->ty = ty_bool;
-    if (node->cas_addr->ty->kind != TY_PTR)
-      error_tok(node->cas_addr->tok, "%s %d: pointer expected", TYPE_C, __LINE__);
     return;
+  case ND_BUILTIN_MEMSET:    
   case ND_BUILTIN_MEMCPY:
-    add_type(node->builtin_dest);
-    add_type(node->builtin_src);
-    add_type(node->builtin_size);
-    return;
-  case ND_BUILTIN_MEMSET:
-    add_type(node->builtin_dest);
-    add_type(node->builtin_val);
-    add_type(node->builtin_size);
+    node->ty = ty_void_ptr;
     return;
   case ND_PSADBW:
   case ND_PMULUDQ:
@@ -1028,6 +1008,7 @@ void add_type(Node *node)
   case ND_PMOVMSKB128:
   case ND_PARITY:
     node->ty = ty_int;
-
+  default:
+    node->ty = ty_void_ptr;
   }
 }

@@ -5975,15 +5975,12 @@ static Node *primary(Token **rest, Token *tok)
     SET_CTX(ctx);     
     tok = skip(tok->next, "(", ctx);
     node->cas_addr = assign(&tok, tok);
-    add_type(node->cas_addr);
     SET_CTX(ctx);     
     tok = skip(tok, ",", ctx);
     node->cas_old = assign(&tok, tok);
-    add_type(node->cas_old);
     SET_CTX(ctx); 
     tok = skip(tok, ",", ctx);
     node->cas_new = assign(&tok, tok);
-    add_type(node->cas_new);
     SET_CTX(ctx); 
     *rest = skip(tok, ")", ctx);
     return node;
@@ -7009,6 +7006,45 @@ static void scan_globals2(void)
   globals = head.next;
 }
 
+static char *prefix_builtin(const char *name) {
+    const char *prefix = "__builtin_";
+    size_t len = strlen(prefix) + strlen(name) + 1;
+    char *buf = malloc(len);
+    if (!buf) return NULL; 
+    strcpy(buf, prefix);
+    strcat(buf, name);
+    return buf;
+}
+
+static Obj *declare0(char *name, Type *ret) {
+  if (!opt_fbuiltin) new_gvar(name, func_type(ret));
+  return new_gvar(prefix_builtin(name), func_type(ret));
+}
+
+static Obj *declare1(char *name, Type *ret, Type *p1) {
+  Type *ty = func_type(ret);
+  ty->params = copy_type(p1);
+  if (!opt_fbuiltin) new_gvar(name, ty);
+  return new_gvar(prefix_builtin(name), ty);
+}
+
+static Obj *declare2(char *name, Type *ret, Type *p1, Type *p2) {
+  Type *ty = func_type(ret);
+  ty->params = copy_type(p1);
+  ty->params->next = copy_type(p2);
+  if (!opt_fbuiltin) new_gvar(name, ty);
+  return new_gvar(prefix_builtin(name), ty);
+}
+
+static Obj *declare3(char *s, Type *r, Type *a, Type *b, Type *c) {
+  Type *ty = func_type(r);
+  ty->params = copy_type(a);
+  ty->params->next = copy_type(b);
+  ty->params->next->next = copy_type(c);
+  if (!opt_fbuiltin) new_gvar(s, ty);
+  return new_gvar(prefix_builtin(s), ty);
+}
+
 
 static void declare_builtin_functions(void)
 {
@@ -7018,6 +7054,10 @@ static void declare_builtin_functions(void)
   builtin_alloca->is_definition = false;
   Obj *builtin = new_gvar("__builtin_alloca", ty);
   builtin->is_definition = false;
+  Type *pvoid = pointer_to(ty_void);
+  Type *pchar = pointer_to(ty_char);
+  declare3("memcpy", pvoid, pvoid, pvoid, ty_ulong);
+  declare3("memset", pvoid, pvoid, ty_int, ty_ulong);
 }
 
 // program = (typedef | function-definition | global-variable)*

@@ -528,6 +528,7 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
 - trying to compile other C projects from source to see what is missing or which bug we have with chibicc.
 - Trying to find the root cause of segmentation fault with postgres initdb command.
 - Need to change the system of push/pops to solve issue with postgres(stack corruption)/cpython(vfork) probably using virtual stack like @fuhsnn/slimcc.
+- manage builtin memcpy/memset when defining inside a source it causes duplicated symbol during linkage (due to the .set defined)
 
 
 ## issues and pull requests fixed
