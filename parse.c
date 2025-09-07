@@ -3044,8 +3044,7 @@ static int64_t eval2(Node *node, char ***label)
     return eval(node->lhs) && eval(node->rhs);
   case ND_LOGOR:
     return eval(node->lhs) || eval(node->rhs);
-  case ND_CAST: {
-    
+  case ND_CAST: {  
      if (is_flonum(node->lhs->ty)) {
         if (node->ty->kind == TY_BOOL)
           return !!eval_double(node->lhs);
@@ -3074,31 +3073,37 @@ static int64_t eval2(Node *node, char ***label)
   //   return eval2(node->lhs, label);
   //from @fuhsnn eval2():Evaluate ND_DEREF for TY_ARRAY
   case ND_DEREF:
-    if (node->ty->kind != TY_ARRAY && !is_vector(node->ty))
-      error_tok(node->tok, "%s:%d: in eval2 : not a compile-time constant node->ty->kind=%d", PARSE_C, __LINE__, node->ty->kind);
+    // if (node->ty->kind != TY_ARRAY && !is_vector(node->ty))
+    //   error_tok(node->tok, "%s:%d: in eval2 : not a compile-time constant node->ty->kind=%d ", PARSE_C, __LINE__, node->ty->kind);
     return eval2(node->lhs, label);    
   case ND_MEMBER:
     
     if (!label) {
       error_tok(node->tok, "%s:%d: in eval2 : not a compile-time constant", PARSE_C, __LINE__ );
     }
-    if (node->ty->kind != TY_ARRAY) {
-      error_tok(node->tok, "%s %d: in eval2 : invalid initializer", PARSE_C, __LINE__);
-    }
+    // if (node->ty->kind != TY_ARRAY) {
+    //   error_tok(node->tok, "%s %d: in eval2 : invalid initializer", PARSE_C, __LINE__);
+    // }
     return eval_rval(node->lhs, label) + node->member->offset;
   case ND_VAR:
     if (is_vector(node->var->ty))
-      return 0;
-    // For arrays or pointers, return their size
+      return 0; 
+ 
+    if (node->var->is_static || node->var->is_definition) {
+      if (label)
+          *label = &node->var->name;
+      return 0;          
+    }
+    
     if (!label) {
       error_tok(node->tok, "%s %d : in eval2 : not a compile-time constant %d", PARSE_C, __LINE__, node->var->ty->kind);
     }
       //trying to fix ======ISS-145 compiling util-linux failed with invalid initalizer2 
-    if (node->var->ty->kind != TY_ARRAY && node->var->ty->kind != TY_FUNC && node->var->ty->kind != TY_INT) {
-      error_tok(node->tok, "%s %d: in eval2 : invalid initializer2 %d", PARSE_C, __LINE__, node->var->ty->kind);
-    }
+    // if (node->var->ty->kind != TY_ARRAY && node->var->ty->kind != TY_FUNC && node->var->ty->kind != TY_INT) {
+    //   error_tok(node->tok, "%s %d: in eval2 : invalid initializer2 %d", PARSE_C, __LINE__, node->var->ty->kind);
+    // }
     //trying to fix ======ISS-145 compiling util-linux failed with invalid initalizer2 
-    if (node->var->ty->kind == TY_INT)
+    if (is_integer(node->var->ty))
       return 0;
     *label = &node->var->name;
     return 0;
