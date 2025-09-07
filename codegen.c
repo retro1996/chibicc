@@ -29,7 +29,7 @@ static void print_offset(Obj *prog);
 static int cmp_ctor(const void *a, const void *b);
 static void emit_constructors(void);
 static void emit_destructors(void); 
-static void emit_builtin_aliases(void);
+
 
 
 static int last_loc_line = 0;
@@ -45,31 +45,6 @@ static int constructor_cnt = 0;
 static CtorFunc *destructors[256];
 static int destructor_cnt = 0;
 
-// typedef enum {
-//     BUILTIN_MEMCPY,
-//     BUILTIN_MEMSET,
-//     // BUILTIN_MEMMOVE,
-//     // BUILTIN_STRLEN,
-//     // BUILTIN_STRCPY,
-//     BUILTIN_COUNT
-// } BuiltinKind;
-
-// static bool builtin_used[BUILTIN_COUNT];
-
-// typedef struct {
-//     char *builtin;
-//     char *libc;
-//     BuiltinKind kind;
-// } BuiltinAlias;
-
-// static BuiltinAlias builtin_aliases[] = {
-//     {"__builtin_memcpy",  "memcpy", BUILTIN_MEMCPY},
-//     {"__builtin_memset",  "memset", BUILTIN_MEMSET},
-//     // {"__builtin_memmove", "memmove", BUILTIN_MEMMOVE},
-//     // {"__builtin_strlen",  "strlen", BUILTIN_STRLEN},
-//     // {"__builtin_strcpy",  "strcpy", BUILTIN_STRCPY},    
-// };
-
 
 __attribute__((format(printf, 1, 2))) static void println(char *fmt, ...)
 {
@@ -79,10 +54,6 @@ __attribute__((format(printf, 1, 2))) static void println(char *fmt, ...)
   va_end(ap);
   fprintf(output_file, "\n");
 }
-
-// static void mark_builtin_used(BuiltinKind kind) {
-//     builtin_used[kind] = true;
-// }
 
 
 static int count(void)
@@ -1358,8 +1329,7 @@ static void HandleAtomicArithmetic(Node *node, const char *op) {
 }
 
 static void gen_memset(Node *node) {
-  if (opt_fbuiltin) {
-    //mark_builtin_used(BUILTIN_MEMSET);
+  if (opt_fbuiltin) {    
     gen_expr(node->builtin_dest);
     push();
     gen_expr(node->builtin_val);
@@ -1375,8 +1345,7 @@ static void gen_memset(Node *node) {
 }
 
 static void gen_memcpy(Node *node) {
-  if (opt_fbuiltin) {
-    //mark_builtin_used(BUILTIN_MEMCPY);
+  if (opt_fbuiltin) {    
     gen_expr(node->builtin_dest);   
     push();                         
     gen_expr(node->builtin_src);    
@@ -4413,7 +4382,7 @@ static void emit_text(Obj *prog)
   }
   emit_constructors(); 
   emit_destructors(); 
-  //emit_builtin_aliases();
+  
 }
 
 
@@ -4773,14 +4742,4 @@ static void emit_destructors(void) {
   }
   println("  .text");
 }
-
-
-// //emit weak when the builtin is referenced by address and we never called ND_BUILTIN_xxx in this case we fallback to the libc builtin.
-// static void emit_builtin_aliases(void) {
-//   for (int i = 0; i < sizeof(builtin_aliases)/sizeof(*builtin_aliases); i++) {
-//       BuiltinAlias *a = &builtin_aliases[i];
-//       println("  .weak %s", a->builtin);
-//       println("  .set %s, %s", a->builtin, a->libc);
-//   }
-// }
 
