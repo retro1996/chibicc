@@ -2764,9 +2764,21 @@ static void gen_expr(Node *node)
       println("  mov $%ld, %%r9", ~mask);
       println("  and %%r9, %%rax");
       println("  or %%rdi, %%rax");
-      store(mem->ty);
+      store(node->ty);
       println("  mov %%r8, %%rax");
+      if (mem->ty->kind == TY_BOOL)
+        return;
+      long mask2 = (1L << mem->bit_width) - 1;
+      println("  mov $%ld, %%r9", mask2);
+      println("  and %%r9, %%rax");       
+      int shift = 64 - mem->bit_width - mem->bit_offset;
+      println("  shl $%d, %%rax", shift);
+      if (mem->ty->is_unsigned)
+        println("  shr $%d, %%rax", shift);
+      else
+        println("  sar $%d, %%rax", shift);
       return;
+      //return;
     }
 
     store(node->ty);
