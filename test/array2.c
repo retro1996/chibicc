@@ -23,9 +23,10 @@ int main() {
         printf("result[%d] = %.1f\n", i, result[i]);
 
     int *a1 = get_array();
-    printf("a[0]=%d\n", a1[0]);
-    printf("a[1]=%d\n", a1[1]);
-    printf("a[2]=%d\n", a1[2]);
-    printf("a[3]=%d\n", a1[3]);        
+    printf("a1[0]=%d\n", a1[0]);
+    printf("a1[1]=%d\n", a1[1]);
+    printf("a1[2]=%d\n", a1[2]);
+    printf("a1[3]=%d\n", a1[3]);      
+      
     return 0;
 }
