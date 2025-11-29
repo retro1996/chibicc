@@ -255,6 +255,7 @@ List of options ignored :
     "-fsigned-char"
     "-Bsymbolic"
     "-pedantic"
+    "-pedantic-errors"
     "-nostdinc"
     "-mno-red-zone"
     "-fvisibility=default"
@@ -295,6 +296,7 @@ List of options ignored :
     "-static-libstdc++"
     "-static-libgcc"
     "-pipe"   
+    "-Wno-missing-declarations"
     "-mindirect-branch-register"
 
 ## Dockerfile and devcontainer
@@ -582,7 +584,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23.2    Managing -Werror (reporting from @fuhsnn/slimcc). Adding decay array/vla to pointer in ND_COND, ND_COMMA. Merging pull request from @Superstart64 removing hard-coding on includes and Makefile. Managing builtin_memcpy and builtin_memset. Fixing issue on some bitfield operations (bitfield2 testcase).
+1.0.23.2    Managing -Werror (reporting from @fuhsnn/slimcc). Adding decay array/vla to pointer in ND_COND, ND_COMMA. Merging pull request from @Superstart64 removing hard-coding on includes and Makefile. Managing builtin_memcpy and builtin_memset. Fixing issue on some bitfield operations (bitfield2 testcase). Ignoring -pedantic-errors and all warnings that starts with -W. Adding llrint in math.h. Ignoring gnu attribute \__noescape\__ and \__common\__. 
 
 
 ## old release notes

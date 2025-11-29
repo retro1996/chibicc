@@ -177,7 +177,7 @@ static void check_parms_length(char *arg)
 static bool take_arg(char *arg)
 {
   char *x[] = {
-      "-o", "-I", "-idirafter", "-include", "-x", "-MF", "-MT", "-MQ", "-Xlinker", "-cc1-input", "-cc1-output", "-fuse-ld", "-soname", "-rpath", "--version-script"};
+      "-o", "-I", "-idirafter", "-include", "-x", "-MF", "-MT", "-MQ", "-Xlinker", "-cc1-input", "-cc1-output", "-fuse-ld", "-soname", "-rpath", "--version-script", "-isystem"};
 
   for (int i = 0; i < sizeof(x) / sizeof(*x); i++)
   {
@@ -283,7 +283,7 @@ static void parse_args(int argc, char **argv)
       if (!argv[++i])
       {
         printf("parameter without value! the following parameters need to be followed by a value :\n");
-        printf("-o, -I, -idirafter, -include, -x, -MF, -MQ, -MT, -Xlinker, -cc1-input, -cc1-output, -fuse-ld, -soname, -rpath, --version-script \n");
+        printf("-o, -I, -idirafter, -include, -x, -MF, -MQ, -MT, -Xlinker, -cc1-input, -cc1-output, -fuse-ld, -soname, -rpath, --version-script, -isystem\n");
         usage(1);
       }
 
@@ -863,6 +863,19 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
+    if (!strcmp(argv[i], "-isystem")) {
+    char *path;
+    if (argv[i][8] != '\0') {
+        path = argv[i] + 8;
+    } else {
+        if (i+1 >= argc)            
+            error("%s : %s:%d: error: in parse_args expected argument after -isystem", MAIN_C, __FILE__, __LINE__);
+        path = argv[++i];
+    }
+    strarray_push(&include_paths, path);
+    continue;
+    }
+
     // These options are ignored for now.
     if (startsWith(argv[i], "-O") ||
         !strcmp(argv[i], "-P") || 
@@ -900,6 +913,7 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-fsigned-char") ||
         !strcmp(argv[i], "-Bsymbolic") ||
         !strcmp(argv[i], "-pedantic") ||
+        !strcmp(argv[i], "-pedantic-errors") ||         
         !strcmp(argv[i], "-mno-red-zone") ||
         !strcmp(argv[i], "-fvisibility=default") ||
         !strcmp(argv[i], "-fvisibility=hidden") ||
@@ -936,11 +950,14 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-ffat-lto-objects")       ||       
         !strcmp(argv[i], "-static-libstdc++")       ||    
         !strcmp(argv[i], "-static-libgcc")       ||    
-        !strcmp(argv[i], "-pipe")       ||              
-        !strcmp(argv[i], "-mindirect-branch-register")         
+        !strcmp(argv[i], "-pipe")       ||     
+        !strcmp(argv[i], "-Wno-missing-declarations")       ||  
+        !strcmp(argv[i], "-mindirect-branch-register")    ||
+        startswith(argv[i], "-W")     
         )
       continue;
 
+      
     if (startsWith(argv[i], "-std"))
     {
       char *stdver = argv[i] + 5; 

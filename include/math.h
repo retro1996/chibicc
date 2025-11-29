@@ -93,6 +93,10 @@ extern long double fmodl(long double x, long double y);
 extern long long llroundl(long double x);
 extern long long llround(double x);
 extern long long llroundf(float x);
+extern long long llrintl(long double x);
+extern long long llrint(double x);
+extern long long llrintf(float x);
+
 
 extern float roundf(float x);
 extern double round(double x);

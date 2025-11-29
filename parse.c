@@ -4388,12 +4388,21 @@ static Token *type_attributes(Token *tok, void *arg)
 
   if (consume(&tok, tok, "nothrow") || consume(&tok, tok, "__nothrow__")) {
     return tok;
-    }
+  }
 
 
   if (consume(&tok, tok, "noreturn") || consume(&tok, tok, "__noreturn__")) {
     return tok;
-    }
+  }
+
+  if (consume(&tok, tok, "__noescape__")) {
+    return tok;
+  }
+
+  if (consume(&tok, tok, "__common__")) {
+    return tok;
+  }
+
 
   if (consume(&tok, tok, "const") || consume(&tok, tok, "__const__")) {
       ty->is_const = true;
@@ -4587,6 +4596,14 @@ static Token *thing_attributes(Token *tok, void *arg) {
   
   if (consume(&tok, tok, "noreturn") || consume(&tok, tok, "__noreturn__")) {
     attr->is_noreturn = true;
+    return tok;
+  }
+
+  if (consume(&tok, tok, "__noescape__")) {
+    return tok;
+  }
+
+  if (consume(&tok, tok, "__common__")) {
     return tok;
   }
 
