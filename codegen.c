@@ -4032,6 +4032,7 @@ static void emit_data(Obj *prog)
       if (align > 1) println("  .align %d", align);
       println("%s:", var->name);
 
+
       Relocation *rel = var->rel;
       int unit_size = (var->ty->kind == TY_ARRAY) ? var->ty->base->size : var->ty->size;
       int pos = 0;
@@ -4072,6 +4073,8 @@ static void emit_data(Obj *prog)
 
         }
       }
+
+
       println("  .size %s, %ld", var->name, var->ty->size);
       continue;
     }

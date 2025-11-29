@@ -953,6 +953,9 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-pipe")       ||     
         !strcmp(argv[i], "-Wno-missing-declarations")       ||  
         !strcmp(argv[i], "-mindirect-branch-register")    ||
+        !strcmp(argv[i], "-fno-fast-math") ||
+        !strcmp(argv[i], "-fno-strict-overflow") ||
+        !strcmp(argv[i], "-fexcess-precision=standard") ||
         startswith(argv[i], "-W")     
         )
       continue;

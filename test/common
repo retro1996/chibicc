@@ -299,6 +299,7 @@ struct180 struct_test181(struct180 t1,...) {
 
   t.ld += va_arg(ap, struct180).ld;
 
+
   va_end(ap);
   return t;
 }
