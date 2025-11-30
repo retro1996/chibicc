@@ -96,7 +96,7 @@ vlc:
     make all
 
 cpython:
-	cd ../cpython && make clean && CC=chibicc ./configure \
+	cd ../cpython &&  CC=chibicc ./configure \
 	 --build=x86_64-pc-linux-gnu ac_cv_have_lchflags=no ac_cv_have_chflags=no && make && make test
 
 # vlc2:

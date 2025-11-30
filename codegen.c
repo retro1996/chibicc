@@ -45,6 +45,12 @@ static int constructor_cnt = 0;
 static CtorFunc *destructors[256];
 static int destructor_cnt = 0;
 
+struct {
+  int *data;
+  int capacity;
+  int depth;
+  int bottom;
+} static tmp_stack;
 
 __attribute__((format(printf, 1, 2))) static void println(char *fmt, ...)
 {
@@ -60,6 +66,46 @@ static int count(void)
 {
   static int i = 1;
   return i++;
+}
+
+static int push_tmpstack(void) {
+  if (tmp_stack.depth == tmp_stack.capacity) {
+    tmp_stack.capacity += 4;
+    tmp_stack.data = realloc(tmp_stack.data, sizeof(int) * tmp_stack.capacity);
+  }
+
+  tmp_stack.bottom += 8;
+  int offset = -tmp_stack.bottom;
+
+  tmp_stack.data[tmp_stack.depth] = offset;
+  tmp_stack.depth++;
+  return offset;
+}
+
+static int pop_tmpstack(void) {
+  tmp_stack.depth--;
+  return tmp_stack.data[tmp_stack.depth];
+}
+
+static int push_tmp(void) {
+  int offset = push_tmpstack();
+  println("  mov %%rax, %d(%%rbp)", offset);
+  return offset;
+}
+
+static void pop_tmp(char *arg) {
+  int offset = pop_tmpstack();
+  println("  mov %d(%%rbp), %s", offset, arg);
+}
+
+static void push_tmpf(void) {
+  int offset = push_tmpstack();
+  println("  movsd %%xmm0, %d(%%rbp)", offset);
+}
+
+static void pop_tmpf(int reg) {
+  int offset = pop_tmpstack();
+  println("  movsd %d(%%rbp), %%xmm%d", offset, reg);
 }
 
 static void push(void)
@@ -112,6 +158,20 @@ void popx(char *a, char *b) {
   println("  pop %s", b);
   depth--;
   depth--;  
+}
+
+static void pushx_tmp(void) {
+  int off_rdx = push_tmpstack(); 
+  println("  mov %%rdx, %d(%%rbp)", off_rdx);
+  int off_rax = push_tmpstack();  
+  println("  mov %%rax, %d(%%rbp)", off_rax);
+}
+
+static void popx_tmp(char *a, char *b) {
+  int off_rax = pop_tmpstack();   
+  println("  mov %d(%%rbp), %s", off_rax, a);
+  int off_rdx = pop_tmpstack();   
+  println("  mov %d(%%rbp), %s", off_rdx, b);
 }
 
 static void push_xmm(int x) {
@@ -615,7 +675,7 @@ static void store(Type *ty)
 {
   if (!ty)
     error("%s %d: in store : ty is null!", CODEGEN_C, __LINE__);
-  pop("%rdi");
+  pop_tmp("%rdi");
 
 
   switch (ty->kind)
@@ -1315,9 +1375,9 @@ static void builtin_alloca(Node *node)
 //from cosmopolitan
 static void HandleAtomicArithmetic(Node *node, const char *op) {
   gen_expr(node->lhs);
-  push();
+  push_tmp();
   gen_expr(node->rhs);
-  pop("%r9");
+  pop_tmp("%r9");
   println("  mov %s, %s", reg_ax(node->ty->size), reg_si(node->ty->size));
   println("  mov (%%r9), %s", reg_ax(node->ty->size));
   println("1:  mov %s, %s", reg_ax(node->ty->size), reg_dx(node->ty->size));
@@ -1331,14 +1391,14 @@ static void HandleAtomicArithmetic(Node *node, const char *op) {
 static void gen_memset(Node *node) {
   if (opt_fbuiltin) {    
     gen_expr(node->builtin_dest);
-    push();
+    push_tmp();
     gen_expr(node->builtin_val);
-    push();
+    push_tmp();
     gen_expr(node->builtin_size);
-    push();
-    pop("%rcx");  
-    pop("%rsi");  
-    pop("%rdi");  
+    push_tmp();
+    pop_tmp("%rcx");  
+    pop_tmp("%rsi");  
+    pop_tmp("%rdi");  
     println("  mov %%sil, %%al");  
     println("  rep stosb");  
   }     
@@ -1347,13 +1407,13 @@ static void gen_memset(Node *node) {
 static void gen_memcpy(Node *node) {
   if (opt_fbuiltin) {    
     gen_expr(node->builtin_dest);   
-    push();                         
+    push_tmp();                         
     gen_expr(node->builtin_src);    
-    push();                         
+    push_tmp();                         
     gen_expr(node->builtin_size);   
     println("  mov %%rax, %%rcx");  
-    pop("%rsi");                    
-    pop("%rdi");                   
+    pop_tmp("%rsi");                    
+    pop_tmp("%rdi");                   
     println("  cld");
     println("  rep movsb");
     println("  mov %%rdi, %%rax");
@@ -1365,11 +1425,11 @@ static void gen_memcpy(Node *node) {
 static void gen_int128_op(Node *node) {
     if (node->rhs) {
       gen_expr(node->rhs);
-      pushx();
+      pushx_tmp();
     }
     gen_expr(node->lhs);
     if (node->rhs)
-      popx("%rdi", "%rsi");
+      popx_tmp("%rdi", "%rsi");
 
   switch (node->kind) {
     case ND_ADD:
@@ -2036,8 +2096,8 @@ static void gen_alloc(Node *node) {
 
 static void gen_release(Node *node) {
   gen_expr(node->lhs);
-  push();
-  pop("%rdi");
+  push_tmp();
+  pop_tmp("%rdi");
   println("  xor %%eax, %%eax");
   println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
 }
@@ -2049,14 +2109,14 @@ static void gen_mul_overflow(Node *node) {
     ty = ty->base;
   int size = ty->size;
   gen_expr(node->lhs);
-  push();
+  push_tmp();
   gen_expr(node->rhs);
-  push();
+  push_tmp();
   gen_expr(node->builtin_dest);
-  push();
-  pop("%rdx"); 
-  pop("%rsi"); 
-  pop("%rdi"); 
+  push_tmp();
+  pop_tmp("%rdx"); 
+  pop_tmp("%rsi"); 
+  pop_tmp("%rdi"); 
   if (size == 1) {
     // For 8-bit values (char)
     println("  movzbl %%di, %%eax");  
@@ -2105,14 +2165,14 @@ static void gen_sub_overflow(Node *node) {
     if (ty->base)
       ty = ty->base;
     gen_expr(node->lhs);
-    push();
+    push_tmp();
     gen_expr(node->rhs);
-    push();
+    push_tmp();
     gen_expr(node->builtin_dest);
-    push();
-    pop("%rdx");  
-    pop("%rsi");  
-    pop("%rdi"); 
+    push_tmp();
+    pop_tmp("%rdx");  
+    pop_tmp("%rsi");  
+    pop_tmp("%rdi"); 
 
     if (ty->size == 1) {
         println("  mov %%dil, %%al");
@@ -2144,30 +2204,30 @@ static void gen_sub_overflow(Node *node) {
 
 static void gen_subfetch(Node *node) {
   gen_expr(node->lhs);
-  push();
+  push_tmp();
   gen_expr(node->rhs);
-  pop("%rdi");
-  push();
+  pop_tmp("%rdi");
+  push_tmp();
   println("  neg %s", reg_ax(node->ty->size));
   println("  xadd %s, (%%rdi)", reg_ax(node->ty->size));
-  pop("%rdi");
+  pop_tmp("%rdi");
   println("  sub %s, %s", reg_di(node->ty->size), reg_ax(node->ty->size));
 }
 
 static void gen_fetchadd(Node *node) {
   gen_expr(node->lhs);
-  push();
+  push_tmp();
   gen_expr(node->rhs);
-  pop("%rdi");
+  pop_tmp("%rdi");
   println("  xadd %s, (%%rdi)", reg_ax(node->ty->size));
 }
 
 
 static void gen_fetchsub(Node *node) {
   gen_expr(node->lhs);
-  push();
+  push_tmp();
   gen_expr(node->rhs);
-  pop("%rdi");
+  pop_tmp("%rdi");
   println("  neg %s", reg_ax(node->ty->size));
   println("  xadd %s, (%%rdi)", reg_ax(node->ty->size));
 }
@@ -2206,15 +2266,15 @@ static void gen_add_overflow(Node *node) {
     ty = ty->base;
 
   gen_expr(node->lhs);
-  push();
+  push_tmp();
   gen_expr(node->rhs);
-  push();
+  push_tmp();
   gen_expr(node->builtin_dest);
-  push();
+  push_tmp();
 
-  pop("%rdx");  
-  pop("%rsi");  
-  pop("%rdi"); 
+  pop_tmp("%rdx");  
+  pop_tmp("%rsi");  
+  pop_tmp("%rdi"); 
 
   if (ty->size == 1) {
       println("  mov %%dil, %%al");
@@ -2258,16 +2318,16 @@ static void gen_umul_overflow(Node *node) {
 
     // Generate expressions
     gen_expr(node->lhs);
-    push();
+    push_tmp();
     gen_expr(node->rhs);
-    push();
+    push_tmp();
     gen_expr(node->builtin_dest);
-    push();
+    push_tmp();
 
     // Pop arguments
-    pop("%rdx");  // result pointer (can be NULL)
-    pop("%rsi");  // rhs
-    pop("%rdi");  // lhs
+    pop_tmp("%rdx");  // result pointer (can be NULL)
+    pop_tmp("%rsi");  // rhs
+    pop_tmp("%rdi");  // lhs
     println("  mov %%rdx, %%rcx");
     // Multiply
     if (size == 1) {
@@ -2324,15 +2384,15 @@ static void gen_uadd_overflow(Node *node) {
       ty = ty->base;
 
   gen_expr(node->lhs);
-  push();
+  push_tmp();
   gen_expr(node->rhs);
-  push();
+  push_tmp();
   gen_expr(node->builtin_dest);
-  push();
+  push_tmp();
 
-  pop("%rdx");  
-  pop("%rsi");  
-  pop("%rdi"); 
+  pop_tmp("%rdx");  
+  pop_tmp("%rsi");  
+  pop_tmp("%rdi"); 
 
   if (ty->size == 1) {
       println("  mov %%dil, %%al");
@@ -2735,7 +2795,7 @@ static void gen_expr(Node *node)
     return;
   case ND_ASSIGN:    
     gen_addr(node->lhs);
-    push();
+    int tmp_offset = push_tmp();
     gen_expr(node->rhs);
     if (node->lhs->kind == ND_MEMBER && node->lhs->member->is_bitfield)
     {
@@ -2757,7 +2817,8 @@ static void gen_expr(Node *node)
       // println("  and $%ld, %%rdi", (1L << mem->bit_width) - 1);
       println("  shl $%d, %%rdi", mem->bit_offset);
 
-      println("  mov (%%rsp), %%rax");
+      //println("  mov (%%rsp), %%rax");
+      println("  mov %d(%%rbp), %%rax", tmp_offset);
       load(mem->ty);
 
       long mask = ((1L << mem->bit_width) - 1) << mem->bit_offset;
@@ -3004,16 +3065,16 @@ static void gen_expr(Node *node)
   case ND_CAS:
   {
     gen_expr(node->cas_addr);
-    push();
+    push_tmp();
     gen_expr(node->cas_new);
-    push();
+    push_tmp();
     gen_expr(node->cas_old);
     println("  mov %%rax, %%r8");
     if (!node->cas_old->ty->base)
       error("%s %d: in gen_expr : ND_CAS node base type is null!", CODEGEN_C, __LINE__); 
     load(node->cas_old->ty->base);
-    pop("%rdx"); // new
-    pop("%rdi"); // addr
+    pop_tmp("%rdx"); // new
+    pop_tmp("%rdi"); // addr
 
     int sz = node->cas_addr->ty->base->size;
     println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz));
@@ -3026,16 +3087,16 @@ static void gen_expr(Node *node)
   }
   case ND_CAS_N: {
     gen_expr(node->cas_addr);
-    push();
+    push_tmp();
     gen_expr(node->cas_new);  
-    push();
+    push_tmp();
     gen_expr(node->cas_old); 
 
     // Move the old value to r8 to preserve it
     println("  mov %%rax, %%r8"); 
 
-    pop("%rdx"); 
-    pop("%rdi"); 
+    pop_tmp("%rdx"); 
+    pop_tmp("%rdi"); 
     int sz = node->cas_addr->ty->base->size;
 
     // Perform the atomic compare-and-swap operation
@@ -3138,9 +3199,9 @@ static void gen_expr(Node *node)
   case ND_POPCOUNT: gen_builtin(node, "popcnt", "rax"); return;
   case ND_EXPECT: {
     gen_expr(node->lhs); 
-    push(); 
+    push_tmp(); 
     gen_expr(node->rhs); 
-    pop("%rdi"); 
+    pop_tmp("%rdi"); 
     println("  cmp %%rax, %%rdi");
     println("  mov %%rdi, %%rax");
     return;
@@ -3193,9 +3254,9 @@ static void gen_expr(Node *node)
   case ND_EXCH:
   {
     gen_expr(node->lhs);
-    push();
+    push_tmp();
     gen_expr(node->rhs);
-    pop("%rdi");
+    pop_tmp("%rdi");
 
     int sz = node->lhs->ty->base->size;
     println("  xchg %s, (%%rdi)", reg_ax(sz));
@@ -3204,9 +3265,9 @@ static void gen_expr(Node *node)
   case ND_EXCH_N:
   case ND_TESTANDSET: {
     gen_expr(node->lhs);
-    push();
+    push_tmp();
     gen_expr(node->rhs);
-    pop("%rdi");
+    pop_tmp("%rdi");
     println("  xchg %s, (%%rdi)", reg_ax(node->ty->size));
     return;
   }
@@ -3214,18 +3275,18 @@ static void gen_expr(Node *node)
   case ND_CMPEXCH_N: gen_cmpxchgn(node); return;
   case ND_TESTANDSETA: {
     gen_expr(node->lhs);
-    push();
+    push_tmp();
     println("  mov $1, %%eax");
-    pop("%rdi");
+    pop_tmp("%rdi");
     println("  xchg %s, (%%rdi)", reg_ax(node->ty->size));
     return;
   }
   case ND_LOAD: {
     gen_expr(node->rhs);
-    push();
+    push_tmp();
     gen_expr(node->lhs);
     println("  mov (%%rax), %s", reg_ax(node->ty->size));
-    pop("%rdi");
+    pop_tmp("%rdi");
     println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
     return;
   }
@@ -3239,9 +3300,9 @@ static void gen_expr(Node *node)
   }
   case ND_STORE: {
     gen_expr(node->lhs);
-    push();
+    push_tmp();
     gen_expr(node->rhs);
-    pop("%rdi");
+    pop_tmp("%rdi");
     println("  mov (%%rax),%s", reg_ax(node->ty->size));
     println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
     if (node->memorder) {
@@ -3251,9 +3312,9 @@ static void gen_expr(Node *node)
   }
   case ND_STORE_N:
     gen_expr(node->lhs);
-    push();
+    push_tmp();
     gen_expr(node->rhs);
-    pop("%rdi");
+    pop_tmp("%rdi");
     println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
     if (node->memorder) {
       println("  mfence");
@@ -3617,9 +3678,9 @@ switch (node->lhs->ty->kind)
   case TY_DOUBLE:
   {
     gen_expr(node->rhs);
-    pushf();
+    push_tmpf();
     gen_expr(node->lhs);
-    popf(1);
+    pop_tmpf(1);
 
     char *sz = (node->lhs->ty->kind == TY_FLOAT) ? "ss" : "sd";
 
@@ -3716,9 +3777,9 @@ switch (node->lhs->ty->kind)
 
   if (!is_int128(node->rhs->ty)) {
     gen_expr(node->rhs);
-    push();
+    push_tmp();
     gen_expr(node->lhs);
-    pop("%rdi");
+    pop_tmp("%rdi");
   }
 
   char *ax, *di, *dx;
@@ -4221,6 +4282,7 @@ static void emit_text(Obj *prog)
     println("%s:", fn->name);
 
     current_fn = fn;
+    tmp_stack.bottom = fn->stack_size;
 
     println("  .cfi_startproc");
     // Prologue
@@ -4229,7 +4291,9 @@ static void emit_text(Obj *prog)
     println("  .cfi_offset %%rbp, -16");    
     println("  mov %%rsp, %%rbp");
     println("  .cfi_def_cfa_register %%rbp");  
-    println("  sub $%d, %%rsp", fn->stack_size);
+    //println("  sub $%d, %%rsp", fn->stack_size);
+    long reserved_pos = ftell(output_file);
+    println("                           ");
     println("  mov %%rsp, %d(%%rbp)", fn->alloca_bottom->offset);
 
     //issue with postgres and local variables not initialized!
@@ -4377,6 +4441,11 @@ static void emit_text(Obj *prog)
     // Emit code
     gen_stmt(fn->body);
     assert(depth == 0);
+    assert(tmp_stack.depth == 0);
+    long cur_pos = ftell(output_file);
+    fseek(output_file, reserved_pos, SEEK_SET);
+    println("  sub $%d, %%rsp", align_to(tmp_stack.bottom, 16));
+    fseek(output_file, cur_pos, SEEK_SET);
 
     // [https://www.sigbus.info/n1570#5.1.2.2.3p1] The C spec defines
     // a special rule for the main function. Reaching the end of the
