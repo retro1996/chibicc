@@ -5792,7 +5792,8 @@ static Node *primary(Token **rest, Token *tok)
     equal(tok, "__builtin_ia32_clflush") || equal(tok, "_mm_clflush") ||
     equal(tok, "__builtin_ia32_pmovmskb") || equal(tok, "__builtin_ia32_sqrtps") || 
     equal(tok, "__builtin_parity") || equal(tok, "__builtin_parityl") ||
-    equal(tok, "__builtin_parityll") ||
+    equal(tok, "__builtin_parityll") || equal(tok, "__builtin_ia32_movshdup") ||
+    equal(tok, "__builtin_ia32_movsldup") || equal(tok, "__builtin_ia32_lddqu") ||
     equal(tok, "__builtin_ia32_rsqrtss")) {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -5857,6 +5858,32 @@ static Node *primary(Token **rest, Token *tok)
     }
   }
 
+  if (equal(tok, "__builtin_ia32_monitor") || equal(tok, "__builtin_ia32_mwait")) {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+        Node *node = new_node(builtin, tok);
+        SET_CTX(ctx); 
+        tok = skip(tok->next, "(", ctx);
+        node->builtin_args[0] = assign(&tok, tok);
+        add_type(node->builtin_args[0]);
+        tok = skip(tok, ",", ctx);
+        node->builtin_args[1] = assign(&tok, tok);
+        add_type(node->builtin_args[1]);
+        if (builtin == ND_MONITOR) { // third argument only for monitor
+            tok = skip(tok, ",", ctx);
+            node->builtin_args[2] = assign(&tok, tok);
+            add_type(node->builtin_args[2]);
+            node->builtin_nargs = 3;
+        } else {
+            node->builtin_nargs = 2;
+        }
+        SET_CTX(ctx);       
+        *rest = skip(tok, ")", ctx);
+        return node;
+    }
+  }
+
+  
     
   if (equal(tok, "__builtin_ia32_maskmovdqu"))
   {
@@ -7594,7 +7621,17 @@ char *nodekind2str(NodeKind kind)
   case ND_MOVNTPD: return "MOVNTPD";     
   case ND_PARITY: return "PARITY";    
   case ND_PARITYL: return "PARITYL";  
-  case ND_PARITYLL: return "PARITYLL";             
+  case ND_PARITYLL: return "PARITYLL";    
+  case ND_MWAIT: return "MWAIT";
+  case ND_MONITOR: return "MONITOR";
+  case ND_ADDSUBPS: return "ADDSUBPS";
+  case ND_HADDPS: return "HADDPS";
+  case ND_HSUBPS: return "HSUBPS";
+  case ND_MOVSHDUP: return "MOVSHDUP";
+  case ND_MOVSLDUP: return "MOVSLDUP";
+  case ND_ADDSUBPD: return "ADDSUBPD";
+  case ND_HADDPD: return "HADDPD";
+  case ND_HSUBPD: return "HSUBPD";
   default: return "UNREACHABLE"; 
   }
 }
@@ -8229,6 +8266,17 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_parity", ND_PARITY }, 
     { "__builtin_parityl", ND_PARITYL }, 
     { "__builtin_parityll", ND_PARITYLL }, 
+    { "__builtin_ia32_mwait", ND_MWAIT }, 
+    { "__builtin_ia32_monitor", ND_MONITOR }, 
+    { "__builtin_ia32_addsubps", ND_ADDSUBPS }, 
+    { "__builtin_ia32_haddps", ND_HADDPS }, 
+    { "__builtin_ia32_hsubps", ND_HSUBPS }, 
+    { "__builtin_ia32_movshdup", ND_MOVSHDUP }, 
+    { "__builtin_ia32_movsldup", ND_MOVSLDUP },
+    { "__builtin_ia32_addsubpd", ND_ADDSUBPD }, 
+    { "__builtin_ia32_haddpd", ND_HADDPD }, 
+    { "__builtin_ia32_hsubpd", ND_HSUBPD },
+    { "__builtin_ia32_lddqu", ND_LDDQU },
 };
 
 

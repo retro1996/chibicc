@@ -624,6 +624,9 @@ void add_type(Node *node)
   case ND_CVTTPD2PI:
     node->ty = vector_of(ty_int, 2);
     return;   
+  case ND_LDDQU:
+    node->ty = vector_of(ty_int, 16); 
+    return;
   case ND_CVTPD2DQ:
   case ND_CVTTPD2DQ:
   case ND_CVTPS2DQ:
@@ -686,6 +689,11 @@ void add_type(Node *node)
   case ND_CVTDQ2PS:
   case ND_CVTPD2PS:
   case ND_CVTSD2SS:
+  case ND_ADDSUBPS:
+  case ND_HADDPS:
+  case ND_HSUBPS:
+  case ND_MOVSHDUP:
+  case ND_MOVSLDUP:
     node->ty = vector_of(ty_float, 4);
     return;  
   case ND_EXPECT:
@@ -778,6 +786,8 @@ void add_type(Node *node)
     node->rhs = new_cast(node->rhs, node->lhs->ty->base);
     node->ty = node->lhs->ty->base;
     return;
+  case ND_MWAIT:
+  case ND_MONITOR:
   case ND_EMMS:
   case ND_SFENCE:
   case ND_LFENCE:
@@ -960,6 +970,9 @@ void add_type(Node *node)
   case ND_LOADLPD:
   case ND_MOVMSKPD:
   case ND_MOVNTPD:
+  case ND_ADDSUBPD:
+  case ND_HADDPD:
+  case ND_HSUBPD:
     node->ty = vector_of(ty_double, 2);
     return;
   case ND_PACKUSWB128:

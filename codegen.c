@@ -2462,6 +2462,28 @@ static void gen_parity(Node *node) {
   }
 }
 
+static void gen_mwait(Node *node) {
+  gen_expr(node->builtin_args[0]); 
+  push_tmp();
+  pop_tmp("%rax");
+  gen_expr(node->builtin_args[1]); 
+  push_tmp();
+  pop_tmp("%rcx");
+  println("mwait");
+}
+
+static void gen_monitor(Node *node) {
+  gen_expr(node->builtin_args[0]); 
+  push_tmp();
+  pop_tmp("%rax");
+  gen_expr(node->builtin_args[1]); 
+  push_tmp();
+  pop_tmp("%rcx");
+  gen_expr(node->builtin_args[2]); 
+  push_tmp();
+  pop_tmp("%rdx");
+  println("monitor");
+}
 
 static void gen_movq128(Node *node) {
   gen_expr(node->lhs); 
@@ -2551,7 +2573,7 @@ static void gen_sse_binop6(Node *node, const char *insn, const char *insn2) {
 
 static void gen_sse_binop7(Node *node, const char *insn) {
   gen_expr(node->lhs);
-  println("  movdqa %%xmm0, %%xmm1");  
+  println("  movups %%xmm0, %%xmm1");  
   gen_expr(node->rhs);
   println("  %s %%xmm0, %%xmm1", insn);  
   println("  movdqa %%xmm1, %%xmm0");  
@@ -2583,6 +2605,17 @@ static void gen_sse_binop11(Node *node, const char *insn, const char *reg) {
   println("  movq %%rax, %%rdi");    
   gen_expr(node->rhs);  
   println("  %s %%%s, %%xmm0", insn, reg);  
+}
+
+static void gen_sse_binop12(Node *node, const char *insn) {
+  gen_expr(node->lhs); 
+  println("  movups %%xmm0, %%xmm1");   
+  println("  %s  %%xmm0, %%xmm1", insn);  
+}
+
+static void gen_lddqu(Node *node) {
+    gen_addr(node->lhs);       
+    println("  lddqu (%%rax), %%xmm0");
 }
 
 static void gen_cvt_mmx_binop(Node *node, const char *insn) {
@@ -3660,6 +3693,17 @@ static void gen_expr(Node *node)
   case ND_PARITYL:
   case ND_PARITYLL:
   case ND_PARITY: gen_parity(node); return;
+  case ND_MWAIT: gen_mwait(node); return;
+  case ND_MONITOR: gen_monitor(node); return;
+  case ND_ADDSUBPS: gen_sse_binop3(node, "addsubps", false);  return;
+  case ND_HADDPS: gen_sse_binop3(node, "haddps", false);  return;
+  case ND_HSUBPS: gen_sse_binop3(node, "hsubps", false);  return;
+  case ND_MOVSHDUP: gen_sse_binop12(node, "movshdup");  return;
+  case ND_MOVSLDUP: gen_sse_binop12(node, "movsldup");  return;
+  case ND_ADDSUBPD: gen_sse_binop3(node, "addsubpd", false);  return;
+  case ND_HADDPD: gen_sse_binop3(node, "haddpd", false);  return;
+  case ND_HSUBPD: gen_sse_binop3(node, "hsubpd", false);  return;  
+  case ND_LDDQU: gen_lddqu(node); return;
 }
   
 if (is_vector(node->lhs->ty) || (node->rhs && is_vector(node->rhs->ty))) {
