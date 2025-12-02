@@ -1,6 +1,7 @@
-#include <stdio.h>
+#include "test.h"
 #include <stdlib.h>
-#include <unistd.h>
+#include <sys/types.h>
+#include <unistd.h> 
 
 int main(void) {
     pid_t pid = 0;
@@ -20,6 +21,7 @@ int main(void) {
 
     // parent reads updated value
     printf("errpipe = %d\n", errpipe);
+    ASSERT(123, errpipe);
     printf("OK\n");
     return 0;
 }

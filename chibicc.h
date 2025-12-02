@@ -48,7 +48,7 @@
 
 #define PRODUCT "chibicc"
 #define VERSION "1.0.23.2"
-#define MAXLEN 501
+#define MAXLEN 1001
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 #define MAX_BUILTIN_ARGS 8
 #define MAX_WEAK 20
@@ -315,6 +315,8 @@ struct Obj
   bool is_force_align_arg_pointer;
   bool is_no_caller_saved_registers;
   
+  // Function calls vfork returns twice unsafe with stack frames
+  bool vfork_used;
 
   Obj *params;
   Node *body;

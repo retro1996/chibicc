@@ -4330,16 +4330,24 @@ static void emit_text(Obj *prog)
 
     println("  .cfi_startproc");
     // Prologue
-    println("  push %%rbp");
-    println("  .cfi_def_cfa_offset 16");
-    println("  .cfi_offset %%rbp, -16");    
-    println("  mov %%rsp, %%rbp");
-    println("  .cfi_def_cfa_register %%rbp");  
-    //println("  sub $%d, %%rsp", fn->stack_size);
+    // Check if function calls vfork - if so, avoid creating a frame
+    // (vfork is "returns_twice", meaning the child process shares the parent's stack,
+    // so stack-based temporaries would be unsafe)
     long reserved_pos = ftell(output_file);
-    println("                           ");
-    println("  mov %%rsp, %d(%%rbp)", fn->alloca_bottom->offset);
-
+    if (!fn->vfork_used) {
+      println("  push %%rbp");
+      println("  .cfi_def_cfa_offset 16");
+      println("  .cfi_offset %%rbp, -16");    
+      println("  mov %%rsp, %%rbp");
+      println("  .cfi_def_cfa_register %%rbp");  
+    
+      //println("  sub $%d, %%rsp", fn->stack_size);
+      reserved_pos = ftell(output_file);
+      println("                           ");
+      // Save RSP for alloca/VLA support if needed
+      if (fn->alloca_bottom && fn->alloca_bottom->offset)
+        println("  mov %%rsp, %d(%%rbp)", fn->alloca_bottom->offset);
+    }
     //issue with postgres and local variables not initialized!
     for (Obj *var = fn->locals; var; var = var->next) {     
         if (!var->init && !var->is_param &&
@@ -4488,7 +4496,8 @@ static void emit_text(Obj *prog)
     assert(tmp_stack.depth == 0);
     long cur_pos = ftell(output_file);
     fseek(output_file, reserved_pos, SEEK_SET);
-    println("  sub $%d, %%rsp", align_to(tmp_stack.bottom, 16));
+    if (!fn->vfork_used)
+      println("  sub $%d, %%rsp", align_to(tmp_stack.bottom, 16));
     fseek(output_file, cur_pos, SEEK_SET);
 
     // [https://www.sigbus.info/n1570#5.1.2.2.3p1] The C spec defines
@@ -4501,9 +4510,11 @@ static void emit_text(Obj *prog)
 
     // Epilogue
     println(".L.return.%s:", fn->name);
-    println("  mov %%rbp, %%rsp");
-    println("  pop %%rbp");
-    println("  .cfi_def_cfa %%rsp, 8");
+    if (!fn->vfork_used) {
+      println("  mov %%rbp, %%rsp");
+      println("  pop %%rbp");
+      println("  .cfi_def_cfa %%rsp, 8");
+    }
     println("  ret");
     println("  .cfi_endproc");
     println("  .size %s, .-%s", fn->name, fn->name);
