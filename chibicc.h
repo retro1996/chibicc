@@ -753,6 +753,12 @@ typedef enum
   ND_HADDPD,
   ND_HSUBPD,
   ND_LDDQU,
+  ND_PHADDW128,
+  ND_PHADDD128,
+  ND_PHADDSW128,
+  ND_PHADDW,
+  ND_PHADDD,
+  ND_PHADDSW,
 } NodeKind;
 
 // AST node type

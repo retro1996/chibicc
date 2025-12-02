@@ -3541,6 +3541,12 @@ static void gen_expr(Node *node)
   case ND_CMPNGEPS:  gen_sse_binop3(node, "cmpps $1,", false);  return;
   case ND_CMPORDPS: gen_sse_binop3(node, "cmpordps", false);  return;  
   case ND_CMPUNORDPS: gen_sse_binop3(node, "cmpunordps", false);  return;  
+  case ND_PHADDW128: gen_sse_binop3(node, "phaddw", false);  return; 
+  case ND_PHADDD128: gen_sse_binop3(node, "phaddd", false);  return; 
+  case ND_PHADDSW128: gen_sse_binop3(node, "phaddsw", false);  return;
+  case ND_PHADDW: gen_mmx_binop(node, "phaddw", false); return;
+  case ND_PHADDD: gen_mmx_binop(node, "phaddd", false);  return;
+  case ND_PHADDSW: gen_mmx_binop(node, "phaddsw", false);  return;
   case ND_COMIEQ: gen_sse_binop4(node, "comiss", "sete");  return;  
   case ND_COMILT: gen_sse_binop4(node, "comiss", "setb");  return;  
   case ND_COMILE: gen_sse_binop4(node, "comiss", "setbe");  return;  

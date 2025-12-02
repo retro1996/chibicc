@@ -5463,7 +5463,7 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
     if (!strcmp(fn->var->name, "vfork") || !strcmp(fn->var->name, "__vfork"))
       current_fn->vfork_used = true;
   }
-  
+
   // If a function returns a struct, it is caller's responsibility
   // to allocate a space for the return value.
   if (node->ty->kind == TY_STRUCT || node->ty->kind == TY_UNION)
@@ -7639,6 +7639,12 @@ char *nodekind2str(NodeKind kind)
   case ND_ADDSUBPD: return "ADDSUBPD";
   case ND_HADDPD: return "HADDPD";
   case ND_HSUBPD: return "HSUBPD";
+  case ND_PHADDW128: return "PHADDW128";
+  case ND_PHADDD128: return "PHADDD128";
+  case ND_PHADDSW128: return "PHADDSW128";
+  case ND_PHADDW: return "PHADDW";
+  case ND_PHADDD: return "PHADDD";
+  case ND_PHADDSW: return "PHADDSW";
   default: return "UNREACHABLE"; 
   }
 }
@@ -8283,7 +8289,13 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_addsubpd", ND_ADDSUBPD }, 
     { "__builtin_ia32_haddpd", ND_HADDPD }, 
     { "__builtin_ia32_hsubpd", ND_HSUBPD },
-    { "__builtin_ia32_lddqu", ND_LDDQU },
+    { "__builtin_ia32_lddqu", ND_LDDQU },    
+    { "__builtin_ia32_phaddw128", ND_PHADDW128 },
+    { "__builtin_ia32_phaddd128", ND_PHADDD128 },
+    { "__builtin_ia32_phaddsw128", ND_PHADDSW128 },
+    { "__builtin_ia32_phaddw", ND_PHADDW },
+    { "__builtin_ia32_phaddd", ND_PHADDD },
+    { "__builtin_ia32_phaddsw", ND_PHADDSW },
 };
 
 

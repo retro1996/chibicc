@@ -587,7 +587,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23.2    Managing -Werror (reporting from @fuhsnn/slimcc). Adding decay array/vla to pointer in ND_COND, ND_COMMA. Merging pull request from @Superstart64 removing hard-coding on includes and Makefile. Managing builtin_memcpy and builtin_memset. Fixing issue on some bitfield operations (bitfield2 testcase). Ignoring -pedantic-errors and all warnings that starts with -W. Adding llrint in math.h. Ignoring gnu attribute \__noescape\__ and \__common\__.  Ignoring some arguments found during ruby compile. Reporting fix from @fuhsnn/slimcc da9d04c077357ac39f80acf2b9d6b5a47cd50cfc to fix setjmp issue. Adding some missing builtin_ia32_xxx from pmmintrin.h. Fixing issue with vfork.
+1.0.23.2    Managing -Werror (reporting from @fuhsnn/slimcc). Adding decay array/vla to pointer in ND_COND, ND_COMMA. Merging pull request from @Superstart64 removing hard-coding on includes and Makefile. Managing builtin_memcpy and builtin_memset. Fixing issue on some bitfield operations (bitfield2 testcase). Ignoring -pedantic-errors and all warnings that starts with -W. Adding llrint in math.h. Ignoring gnu attribute \__noescape\__ and \__common\__.  Ignoring some arguments found during ruby compile. Reporting fix from @fuhsnn/slimcc da9d04c077357ac39f80acf2b9d6b5a47cd50cfc to fix setjmp issue. Adding some missing builtin_ia32_xxx from pmmintrin.h. Fixing issue with vfork. Adding other builtin_ia32_phxxx from tmmintrin.h.m
 
 
 ## old release notes
