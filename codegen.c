@@ -2677,6 +2677,49 @@ static void gen_mmx_binop(Node *node, const char *insn, bool rhs_is_imm) {
   println("  emms");
 }
 
+static void gen_mmx_binop1(Node *node, const char *insn) {
+  gen_expr(node->lhs);    
+  println("  movq (%%rax), %%mm0");
+  println("  %s %%mm0, %%mm0", insn);
+  println("  movq %%mm0, %%rax");
+  println("  movq %%rax, %%xmm0");
+  println("  emms");
+}
+
+static void gen_sse_testz(Node *node) {
+    gen_expr(node->lhs);   // %xmm0 = M
+    println("  movups %%xmm0, %%xmm1");
+    gen_expr(node->rhs);   // %xmm0 = V
+    // ptest performs V & M
+    println("  ptest %%xmm0, %%xmm1");  // sets ZF and CF
+    println("  setz %%al");             // AL = 1 if ZF=1
+    println("  movzx %%al, %%eax");     // zero-extend to EAX
+}
+
+static void gen_sse_testc(Node *node) {
+    gen_expr(node->lhs);              // %xmm0 = M
+    println("  movups %%xmm0, %%xmm1"); // copy M to xmm1
+    gen_expr(node->rhs);              // %xmm0 = V
+    // ptest xmm1, xmm0 → sets ZF/CF
+    println("  ptest %%xmm0, %%xmm1"); // CF = ((V & M) != M)
+    // set result based on CF
+    println("  setc %%al");            // AL = 1 if CF=1
+    println("  movzx %%al, %%eax");    // zero-extend to EAX
+}
+
+static void gen_sse_testnzc(Node *node) {              
+    gen_expr(node->rhs);   
+    println("  movups %%xmm0, %%xmm1"); 
+    gen_expr(node->lhs);             
+    println("  ptest %%xmm1, %%xmm0");  
+    // ptestnzc returns 1 if ZF==0 AND CF==0 (not zero and not carry)
+    println("  setnz %%al");            // al = 1 if ZF==0
+    println("  setnc %%cl");            // cl = 1 if CF==0
+    println("  and %%cl, %%al");        // al = al & cl
+    println("  movzx %%al, %%eax");     
+}
+
+
 static void gen_single_binop(const char *insn) {
   println("  %s", insn);
 }
@@ -3686,8 +3729,26 @@ static void gen_expr(Node *node)
   case ND_PMAXUB128:gen_sse_binop3(node, "pmaxub", false); return; 
   case ND_PMINSW128:gen_sse_binop3(node, "pminsw", false); return; 
   case ND_PMINUB128:gen_sse_binop3(node, "pminub", false); return; 
+  case ND_PHSUBW128:gen_sse_binop3(node, "phsubw", false); return;
+  case ND_PHSUBD128:gen_sse_binop3(node, "phsubd", false); return;
+  case ND_PHSUBSW128: gen_sse_binop3(node, "phsubsw", false); return;
+  case ND_PMADDUBSW128: gen_sse_binop3(node, "pmaddubsw", false); return;
+  case ND_PMULHRSW128: gen_sse_binop3(node, "pmulhrsw", false); return;
   case ND_PMOVMSKB128: gen_sse_binop2(node, "pmovmskb", "eax", false);  return;   
   case ND_PMULHUW128: gen_sse_binop9(node, "pmulhuw"); return; 
+  case ND_PSHUFB128: gen_sse_binop3(node, "pshufb", false); return;
+  case ND_PSIGNB128: gen_sse_binop3(node, "psignb", false); return;
+  case ND_PSIGNW128: gen_sse_binop3(node, "psignw", false); return;
+  case ND_PSIGND128: gen_sse_binop3(node, "psignd", false); return;  
+  case ND_PHSUBW: gen_mmx_binop(node, "phsubw", false); return;
+  case ND_PHSUBD: gen_mmx_binop(node, "phsubd", false); return;
+  case ND_PHSUBSW: gen_mmx_binop(node, "phsubsw", false); return;
+  case ND_PMADDUBSW: gen_mmx_binop(node, "pmaddubsw", false); return;
+  case ND_PMULHRSW: gen_mmx_binop(node, "pmulhrsw", false); return;
+  case ND_PSHUFB: gen_mmx_binop(node, "pshufb", false); return;
+  case ND_PSIGNB: gen_mmx_binop(node, "psignb", false); return;
+  case ND_PSIGNW: gen_mmx_binop(node, "psignw", false); return;
+  case ND_PSIGND: gen_mmx_binop(node, "psignd", false); return;
   case ND_MASKMOVDQU: gen_maskmovdqu(node); return;
   case ND_PAVGB128:gen_sse_binop3(node, "pavgb", false); return; 
   case ND_PAVGW128:gen_sse_binop3(node, "pavgw", false); return; 
@@ -3710,6 +3771,15 @@ static void gen_expr(Node *node)
   case ND_HADDPD: gen_sse_binop3(node, "haddpd", false);  return;
   case ND_HSUBPD: gen_sse_binop3(node, "hsubpd", false);  return;  
   case ND_LDDQU: gen_lddqu(node); return;
+  case ND_PABSB128: gen_sse_binop2(node, "pabsb", "xmm0", false); return;
+  case ND_PABSW128: gen_sse_binop2(node, "pabsw", "xmm0", false); return;
+  case ND_PABSD128: gen_sse_binop2(node, "pabsd", "xmm0", false); return;
+  case ND_PABSB: gen_mmx_binop1(node, "pabsb"); return;
+  case ND_PABSW: gen_mmx_binop1(node, "pabsw"); return;
+  case ND_PABSD: gen_mmx_binop1(node, "pabsd"); return;
+  case ND_PTESTZ128: gen_sse_testz(node); return;
+  case ND_PTESTC128: gen_sse_testc(node); return;
+  case ND_PTESTNZC128: gen_sse_testnzc(node); return;
 }
   
 if (is_vector(node->lhs->ty) || (node->rhs && is_vector(node->rhs->ty))) {

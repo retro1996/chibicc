@@ -5801,6 +5801,9 @@ static Node *primary(Token **rest, Token *tok)
     equal(tok, "__builtin_parity") || equal(tok, "__builtin_parityl") ||
     equal(tok, "__builtin_parityll") || equal(tok, "__builtin_ia32_movshdup") ||
     equal(tok, "__builtin_ia32_movsldup") || equal(tok, "__builtin_ia32_lddqu") ||
+    equal(tok, "__builtin_ia32_pabsb128") || equal(tok, "__builtin_ia32_pabsw128") || 
+    equal(tok, "__builtin_ia32_pabsd128") || equal(tok, "__builtin_ia32_pabsb") || 
+    equal(tok, "__builtin_ia32_pabsw") || equal(tok, "__builtin_ia32_pabsd") ||
     equal(tok, "__builtin_ia32_rsqrtss")) {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -7645,6 +7648,33 @@ char *nodekind2str(NodeKind kind)
   case ND_PHADDW: return "PHADDW";
   case ND_PHADDD: return "PHADDD";
   case ND_PHADDSW: return "PHADDSW";
+  case ND_PHSUBW128: return "PHSUBW128";
+  case ND_PHSUBD128: return "PHSUBD128";
+  case ND_PHSUBSW128: return "PHSUBSW128";
+  case ND_PHSUBW: return "PHSUBW";
+  case ND_PHSUBD: return "PHSUBD";
+  case ND_PHSUBSW: return "PHSUBSW";
+  case ND_PMADDUBSW128: return "PMADDUBSW128";
+  case ND_PMADDUBSW: return "PMADDUBSW";
+  case ND_PMULHRSW128: return "PMULHRSW128";
+  case ND_PMULHRSW: return "PMULHRSW";
+  case ND_PSHUFB128: return "PSHUFB128";
+  case ND_PSHUFB: return "PSHUFB";
+  case ND_PSIGNB128: return "PSIGNB128";
+  case ND_PSIGNW128: return "PSIGNW128";
+  case ND_PSIGND128: return "PSIGND128";
+  case ND_PSIGNB: return "PSIGNB";
+  case ND_PSIGNW: return "PSIGNW";
+  case ND_PSIGND: return "PSIGND";
+  case ND_PABSB128: return "PABSB128";
+  case ND_PABSW128: return "PABSW128";
+  case ND_PABSD128: return "PABSD128";
+  case ND_PABSB: return "PABSB";
+  case ND_PABSW: return "PABSW";
+  case ND_PABSD: return "PABSD";
+  case ND_PTESTZ128: return "PTESTZ128";
+  case ND_PTESTC128: return "PTESTC128";
+  case ND_PTESTNZC128: return "PTESTNZC128";
   default: return "UNREACHABLE"; 
   }
 }
@@ -8295,7 +8325,35 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_phaddsw128", ND_PHADDSW128 },
     { "__builtin_ia32_phaddw", ND_PHADDW },
     { "__builtin_ia32_phaddd", ND_PHADDD },
-    { "__builtin_ia32_phaddsw", ND_PHADDSW },
+    { "__builtin_ia32_phaddsw", ND_PHADDSW },    
+    { "__builtin_ia32_phsubw128", ND_PHSUBW128 },    
+    { "__builtin_ia32_phsubd128", ND_PHSUBD128 },    
+    { "__builtin_ia32_phsubsw128", ND_PHSUBSW128 },    
+    { "__builtin_ia32_phsubw", ND_PHSUBW },    
+    { "__builtin_ia32_phsubd", ND_PHSUBD },    
+    { "__builtin_ia32_phsubsw", ND_PHSUBSW },  
+    { "__builtin_ia32_pmaddubsw128", ND_PMADDUBSW128 }, 
+    { "__builtin_ia32_pmaddubsw", ND_PMADDUBSW }, 
+    { "__builtin_ia32_pmulhrsw128", ND_PMULHRSW128 }, 
+    { "__builtin_ia32_pmulhrsw", ND_PMULHRSW },
+    { "__builtin_ia32_pshufb128", ND_PSHUFB128 },
+    { "__builtin_ia32_pshufb", ND_PSHUFB  },
+    { "__builtin_ia32_psignb128", ND_PSIGNB128 },
+    { "__builtin_ia32_psignw128", ND_PSIGNW128 },
+    { "__builtin_ia32_psignd128", ND_PSIGND128 },
+    { "__builtin_ia32_psignb", ND_PSIGNB },
+    { "__builtin_ia32_psignw", ND_PSIGNW },
+    { "__builtin_ia32_psignd", ND_PSIGND },
+    { "__builtin_ia32_pabsb128", ND_PABSB128 },
+    { "__builtin_ia32_pabsw128", ND_PABSW128 },
+    { "__builtin_ia32_pabsd128", ND_PABSD128 },
+    { "__builtin_ia32_pabsb", ND_PABSB },
+    { "__builtin_ia32_pabsw", ND_PABSW },
+    { "__builtin_ia32_pabsd", ND_PABSD },
+    { "__builtin_ia32_ptestz128", ND_PTESTZ128 },
+    { "__builtin_ia32_ptestc128", ND_PTESTC128 },
+    { "__builtin_ia32_ptestnzc128", ND_PTESTNZC128 },
+
 };
 
 
