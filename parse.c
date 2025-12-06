@@ -181,6 +181,7 @@ static bool check_old_style(Token **rest, Token *tok);
 static Node *ParseAtomic2(NodeKind kind, Token *tok, Token **rest);
 static Node *ParseAtomic3(NodeKind kind, Token *tok, Token **rest);
 static Node *ParseAtomicCompareExchangeN(NodeKind kind, Token *tok, Token **rest);
+static Node *ParseSyncBoolCAS(NodeKind kind, Token *tok, Token **rest);
 
 //for builtin functions
 static Node *parse_memcpy(Token *tok, Token **rest);
@@ -6462,24 +6463,39 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "__builtin_atomic_store_n") || equal(tok, "__atomic_store_n")) {
     return ParseAtomic3(ND_STORE_N, tok, rest);
   }
-  if (equal(tok, "__builtin_atomic_fetch_add")) {
+  if (equal(tok, "__builtin_atomic_fetch_add") || equal(tok, "__atomic_fetch_add")) {
     return ParseAtomic3(ND_FETCHADD, tok, rest);
   }
-  if (equal(tok, "__builtin_atomic_fetch_sub")) {
+  if (equal(tok, "__builtin_atomic_fetch_sub") || equal(tok, "__atomic_fetch_sub")) {
     return ParseAtomic3(ND_FETCHSUB, tok, rest);
   }
-  if (equal(tok, "__builtin_atomic_fetch_xor")) {
+  if (equal(tok, "__builtin_atomic_fetch_xor") || equal(tok, "__atomic_fetch_xor")) {
     return ParseAtomic3(ND_FETCHXOR, tok, rest);
   }
-  if (equal(tok, "__builtin_atomic_fetch_and") ) {
+  if (equal(tok, "__builtin_atomic_fetch_and") || equal(tok, "__atomic_fetch_and")) {
     return ParseAtomic3(ND_FETCHAND, tok, rest);
   }
-  if (equal(tok, "__builtin_atomic_fetch_or") ) {
+  if (equal(tok, "__builtin_atomic_fetch_or")  || equal(tok, "__atomic_fetch_or")) {
     return ParseAtomic3(ND_FETCHOR, tok, rest);
   }
   if (equal(tok, "__builtin_atomic_test_and_set")) {
     return ParseAtomic2(ND_TESTANDSETA, tok, rest);
   }
+  if (equal(tok, "__sync_fetch_and_nand")  || equal(tok, "__atomic_fetch_nand")) {
+    return ParseAtomic3(ND_FETCHNAND, tok, rest);
+  }
+  if (equal(tok, "__sync_add_and_fetch")) {
+      return ParseAtomic3(ND_ADD_AND_FETCH, tok, rest);
+  }
+
+  if (equal(tok, "__sync_sub_and_fetch")) {
+      return ParseAtomic3(ND_SUB_AND_FETCH, tok, rest);
+  }
+  if (equal(tok, "__sync_bool_compare_and_swap")) {
+      return ParseSyncBoolCAS(ND_BOOL_CAS, tok, rest);
+  }
+
+
   if (equal(tok, "__builtin_atomic_clear")) {
     return ParseAtomic2(ND_CLEAR, tok, rest);
   }
@@ -8516,3 +8532,21 @@ static void promote_scalar_to_vector(Node *node) {
         node->rhs->is_scalar_promoted = true;
     }
 }
+
+static Node *ParseSyncBoolCAS(NodeKind kind, Token *tok, Token **rest) {
+    Node *node = new_node(kind, tok);
+    SET_CTX(ctx);
+    tok = skip(tok->next, "(", ctx);
+    node->cas_ptr = assign(&tok, tok);
+    add_type(node->cas_ptr);
+    tok = skip(tok, ",", ctx);
+    node->cas_expected = assign(&tok, tok);
+    add_type(node->cas_expected);
+    tok = skip(tok, ",", ctx);
+    node->cas_desired = assign(&tok, tok);
+    add_type(node->cas_desired);
+    *rest = skip(tok, ")", ctx);
+    node->ty = ty_bool;
+    return node;
+}
+

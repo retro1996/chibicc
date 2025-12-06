@@ -2799,6 +2799,157 @@ static void gen_sse_testnzc(Node *node) {
     println("  movzx %%al, %%eax");     
 }
 
+static void gen_cas(Node *node)   {
+  gen_expr(node->cas_addr);
+  push_tmp();
+  gen_expr(node->cas_new);
+  push_tmp();
+  gen_expr(node->cas_old);
+  println("  mov %%rax, %%r8");
+  if (!node->cas_old->ty->base)
+    error("%s %d: in gen_expr : ND_CAS node base type is null!", CODEGEN_C, __LINE__); 
+  load(node->cas_old->ty->base);
+  pop_tmp("%rdx"); // new
+  pop_tmp("%rdi"); // addr
+
+  int sz = node->cas_addr->ty->base->size;
+  println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz));
+  println("  sete %%cl");
+  println("  je 1f");
+  println("  mov %s, (%%r8)", reg_ax(sz));
+  println("1:");
+  println("  movzbl %%cl, %%eax");
+  return;
+  }
+
+static void gen_bool_cas(Node *node) {
+  gen_expr(node->cas_ptr);      
+  push_tmp();
+  gen_expr(node->cas_expected);  
+  push_tmp();
+  gen_expr(node->cas_desired);   
+  push_tmp();
+  pop_tmp("%rdx");
+  pop_tmp("%rax");
+  pop_tmp("%rdi");
+  int sz = node->cas_ptr->ty->base->size;
+  println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz)); 
+  println("  sete %%al");       
+  println("  movzbl %%al, %%eax"); 
+}
+
+
+static void  gen_add_and_fetch(Node *node) {
+  gen_expr(node->lhs);
+  push_tmp();
+  gen_expr(node->rhs);
+  pop_tmp("%rdi");  
+  int sz = node->lhs->ty->base->size;
+  println("  mov %%rax, %%rcx");           
+  println("  lock xadd %s, (%%rdi)", reg_ax(sz));
+  println("  add %%rcx, %%rax");
+ }
+
+
+static void gen_sub_and_fetch(Node *node) {
+  gen_expr(node->lhs);    
+  push_tmp();
+  gen_expr(node->rhs);    
+  push_tmp();
+  pop_tmp("%rax");        
+  pop_tmp("%rdi");        
+  int sz = node->lhs->ty->base->size;
+  println("  mov %s, %s", reg_ax(sz), reg_cx(sz));               
+  println("  neg %s", reg_ax(sz));               
+  println("  lock xadd %s, (%%rdi)", reg_ax(sz));
+  println("  sub %s, %s", reg_cx(sz), reg_ax(sz));      
+}
+
+
+static void gen_fetchnand(Node *node) {
+  gen_expr(node->lhs);
+  push_tmp();
+  gen_expr(node->rhs);
+  push_tmp();
+  pop_tmp("%rsi");   // rhs value (mask)
+  pop_tmp("%rdi");   // address
+  int sz = node->lhs->ty->base->size;
+  int c = count();
+  println(".L.fetchnand.loop_%d:", c);
+  switch (sz) {
+  case 1:
+    println("  movzbl (%%rdi), %%eax");
+    break;
+  case 2:
+    println("  movzwl (%%rdi), %%eax");
+    break;
+  case 4:
+    println("  movl (%%rdi), %%eax");
+    break;
+  case 8:
+    println("  movq (%%rdi), %%rax");
+    break;
+  default:
+    error("%s: %s:%d: error: in get_fetchnand: unsupported atomic size %d", CODEGEN_C, __FILE__, __LINE__, sz);    
+  }
+
+  println("  mov %%rax, %%rdx");
+  println("  and %%rsi, %%rdx");
+  println("  not %%rdx");       
+
+  println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz));  
+  println("  jnz .L.fetchnand.loop_%d", c);
+}
+
+
+static void gen_cas_n(Node *node)   {  
+  gen_expr(node->cas_addr);
+  push_tmp();
+  gen_expr(node->cas_new);  
+  push_tmp();
+  gen_expr(node->cas_old); 
+  /*
+    * For __sync_val_compare_and_swap we must return the original
+    * value that was stored at *addr.  The `cmpxchg` instruction
+    * leaves that original memory value in RAX.  Do not overwrite
+    * RAX after the instruction; instead normalize the low bits for
+    * small integer types so the upper bits don't contain garbage.
+    */
+
+  pop_tmp("%rdx"); /* new */
+  pop_tmp("%rdi"); /* addr */
+  int sz = node->cas_addr->ty->base->size;
+
+  /* cmpxchg uses RAX (old) and RDX (new), compares with (RDI) */
+  println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz));
+
+  /* Normalize RAX for small return types (bool/char/short) */
+  {
+    Type *bt = node->cas_old->ty;
+
+    switch (bt->kind) {
+    case TY_BOOL:
+      println("  movzx %%al, %%eax");
+      break;
+    case TY_CHAR:
+      if (bt->is_unsigned)
+        println("  movzbl %%al, %%eax");
+      else
+        println("  movsbl %%al, %%eax");
+      break;
+    case TY_SHORT:
+      if (bt->is_unsigned)
+        println("  movzwl %%ax, %%eax");
+      else
+        println("  movswl %%ax, %%eax");
+      break;
+    default:
+      break;
+    }
+  }
+
+  return;
+}
 
 static void gen_single_binop(const char *insn) {
   println("  %s", insn);
@@ -3218,52 +3369,12 @@ static void gen_expr(Node *node)
   case ND_LABEL_VAL:
     println("  lea %s(%%rip), %%rax", node->unique_label);
     return;
-  case ND_CAS:
-  {
-    gen_expr(node->cas_addr);
-    push_tmp();
-    gen_expr(node->cas_new);
-    push_tmp();
-    gen_expr(node->cas_old);
-    println("  mov %%rax, %%r8");
-    if (!node->cas_old->ty->base)
-      error("%s %d: in gen_expr : ND_CAS node base type is null!", CODEGEN_C, __LINE__); 
-    load(node->cas_old->ty->base);
-    pop_tmp("%rdx"); // new
-    pop_tmp("%rdi"); // addr
-
-    int sz = node->cas_addr->ty->base->size;
-    println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz));
-    println("  sete %%cl");
-    println("  je 1f");
-    println("  mov %s, (%%r8)", reg_ax(sz));
-    println("1:");
-    println("  movzbl %%cl, %%eax");
-    return;
-  }
-  case ND_CAS_N: {
-    gen_expr(node->cas_addr);
-    push_tmp();
-    gen_expr(node->cas_new);  
-    push_tmp();
-    gen_expr(node->cas_old); 
-
-    // Move the old value to r8 to preserve it
-    println("  mov %%rax, %%r8"); 
-
-    pop_tmp("%rdx"); 
-    pop_tmp("%rdi"); 
-    int sz = node->cas_addr->ty->base->size;
-
-    // Perform the atomic compare-and-swap operation
-    println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz)); 
-
-    // After cmpxchg, rax contains the old value (before the swap)
-    // Restore the preserved old value to rax
-    println("  mov %%r8, %%rax"); 
-
-    return;
-  }
+  case ND_CAS: gen_cas(node); return;
+  case ND_CAS_N: gen_cas_n(node); return;
+  case ND_FETCHNAND: gen_fetchnand(node); return;
+  case ND_ADD_AND_FETCH: gen_add_and_fetch(node); return;
+  case ND_SUB_AND_FETCH: gen_sub_and_fetch(node); return;
+  case ND_BOOL_CAS: gen_bool_cas(node); return;
   case ND_SYNC: {
     println("  mfence"); // x86-64 instruction for full memory barrier
     return;

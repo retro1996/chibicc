@@ -1,29 +1,32 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <pthread.h>
 #include <sys/wait.h>
 
-int global_var = 42;
+__thread int tls_counter = 7;
+
+void *thread_func(void *arg) {
+    tls_counter++;
+    return NULL;
+}
 
 int main() {
-    printf("Parent PID: %d, global_var=%d\n", getpid(), global_var);
+    pthread_t t;
+    pthread_create(&t, NULL, thread_func, NULL);
+    pthread_join(t, NULL);
+
+    printf("Before fork: pid=%d, tls=%d\n", getpid(), tls_counter);
 
     pid_t pid = fork();
 
-    if (pid < 0) {
-        perror("fork failed");
-        return 1;
-    }
-
     if (pid == 0) {
         // Child process
-        global_var += 100;
-        printf("Child PID: %d, global_var=%d\n", getpid(), global_var);
+        printf("Child: pid=%d, tls=%d\n", getpid(), tls_counter);
         exit(0);
     } else {
-        // Parent process
         wait(NULL);
-        printf("Parent PID: %d after child exit, global_var=%d\n", getpid(), global_var);
+        printf("Parent: pid=%d, tls=%d\n", getpid(), tls_counter);
     }
 
     return 0;

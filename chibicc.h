@@ -820,6 +820,10 @@ typedef enum
   ND_CRC32SI,
   ND_CRC32DI,
   ND_PSHUFD,
+  ND_FETCHNAND,       
+  ND_ADD_AND_FETCH,   
+  ND_SUB_AND_FETCH,   
+  ND_BOOL_CAS,        
 } NodeKind;
 
 // AST node type
