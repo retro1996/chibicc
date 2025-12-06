@@ -1901,6 +1901,13 @@ static void gen_vec_init_binop(Node *node, const char *insn) {
   } 
 }
 
+static void gen_pshufd(Node *node) {
+  gen_expr(node->lhs);
+  int imm = node->rhs->val;
+  println("  pshufd $%d, %%xmm0, %%xmm0", imm);
+}
+
+
 static void gen_shuf_binop(Node *node, const char *insn) {
   gen_expr(node->rhs);
   println("  movups %%xmm0, %%xmm1");      
@@ -2518,6 +2525,46 @@ static void gen_movnt_binop(Node *node, const char *insn) {
   println("  %s %%xmm0, (%%rax)", insn);
 }
 
+static void gen_crc32qi(Node *node) {
+  gen_expr(node->lhs);       // accumulator in %rax
+  println("  movl %%eax, %%ecx");
+  gen_expr(node->rhs);       // byte input in %rax
+  println("  movb %%al, %%dl");
+
+  println("  crc32b %%dl, %%ecx");
+  println("  movl %%ecx, %%eax");
+}
+
+static void gen_crc32di(Node *node) {
+  gen_expr(node->lhs);            // accumulator -> %rax
+  println("  movq %%rax, %%rcx");      // destination must be 64-bit
+  gen_expr(node->rhs);            // uint64 -> %rax
+  println("  movq %%rax, %%rdx");
+  println("  crc32q %%rdx, %%rcx");
+  println("  movq %%rcx, %%rax");      // return 64-bit value
+}
+
+
+static void gen_crc32hi(Node *node) {
+  gen_expr(node->lhs);           // accumulator -> %rax
+  println("  movl %%eax, %%ecx");
+  gen_expr(node->rhs);           // input -> %rax
+  println("  movw %%ax, %%dx");       // 16-bit input
+  println("  crc32w %%dx, %%ecx");
+  println("  movl %%ecx, %%eax");
+}
+
+
+static void gen_crc32si(Node *node) {
+  gen_expr(node->lhs);           // accumulator -> %rax
+  println("  movl %%eax, %%ecx");
+  gen_expr(node->rhs);           // uint32 -> %rax
+  println("  movl %%eax, %%edx");
+  println("  crc32l %%edx, %%ecx");
+  println("  movl %%ecx, %%eax");
+}
+
+
 
 // Helper to emit MMX two-operand instruction
 static void gen_sse_binop1(Node *node, const char *insn, bool rhs_is_imm) {
@@ -2612,6 +2659,14 @@ static void gen_sse_binop12(Node *node, const char *insn) {
   println("  movups %%xmm0, %%xmm1");   
   println("  %s  %%xmm0, %%xmm1", insn);  
 }
+
+
+static void gen_sse_binop13(Node *node, const char *insn, const char *reg) {
+  gen_expr(node->lhs);
+  println("  movq (%%rax), %%xmm0");
+  println("  %s (%%%s), %%xmm0", insn, reg);  
+}
+
 
 static void gen_lddqu(Node *node) {
     gen_addr(node->lhs);       
@@ -3815,7 +3870,28 @@ static void gen_expr(Node *node)
   case ND_PMINSD128: gen_sse_binop3(node, "pminsd", false); return; 
   case ND_PMAXSD128: gen_sse_binop3(node, "pmaxsd", false); return;     
   case ND_PMINUD128: gen_sse_binop3(node, "pminud", false); return; 
-  case ND_PMAXUD128: gen_sse_binop3(node, "pmaxud", false); return;     
+  case ND_PMAXUD128: gen_sse_binop3(node, "pmaxud", false); return;    
+  case ND_PMULDQ128: gen_sse_binop3(node, "pmuldq", false); return;     
+  case ND_PHMINPOSUW128: gen_sse_binop2(node, "phminposuw", "xmm0", false);  return; 
+  case ND_PMOVSXBD128: gen_sse_binop2(node, "pmovsxbd", "xmm0", false);  return; 
+  case ND_PMOVSXWD128: gen_sse_binop2(node, "pmovsxwd", "xmm0", false);  return;
+  case ND_PMOVSXBQ128: gen_sse_binop2(node, "pmovsxbq", "xmm0", false);  return;
+  case ND_PMOVSXDQ128: gen_sse_binop2(node, "pmovsxdq", "xmm0", false);  return;
+  case ND_PMOVSXWQ128: gen_sse_binop2(node, "pmovsxwq", "xmm0", false);  return;
+  case ND_PMOVSXBW128: gen_sse_binop2(node, "pmovsxbw", "xmm0", false);  return;
+  case ND_PMOVZXBD128: gen_sse_binop2(node, "pmovzxbd", "xmm0", false);  return; 
+  case ND_PMOVZXWD128: gen_sse_binop2(node, "pmovzxwd", "xmm0", false);  return;
+  case ND_PMOVZXBQ128: gen_sse_binop2(node, "pmovzxbq", "xmm0", false);  return;
+  case ND_PMOVZXDQ128: gen_sse_binop2(node, "pmovzxdq", "xmm0", false);  return;
+  case ND_PMOVZXWQ128: gen_sse_binop2(node, "pmovzxwq", "xmm0", false);  return;
+  case ND_PMOVZXBW128: gen_sse_binop2(node, "pmovzxbw", "xmm0", false);  return;
+  case ND_PACKUSDW128: gen_sse_binop3(node, "packusdw", false); return; 
+  case ND_MOVNTDQA: gen_sse_binop13(node, "movntdqa", "rax"); return;
+  case ND_CRC32QI: gen_crc32qi(node); return;
+  case ND_CRC32HI: gen_crc32hi(node); return;
+  case ND_CRC32SI: gen_crc32si(node); return;
+  case ND_CRC32DI: gen_crc32di(node); return;
+  case ND_PSHUFD: gen_pshufd(node); return;
 }
   
 if (is_vector(node->lhs->ty) || (node->rhs && is_vector(node->rhs->ty))) {

@@ -72,6 +72,8 @@ or
         -A print Abstract Syntax Tree in a log file in /tmp/chibicc.log
         -msse3 enabling sse3 support 
         -msse4 enabling sse4 support 
+        -msse4.1 enabling sse4.1 support 
+        -mcrc32 enabling crc32 instruction support
         -nostdlib  Do not use the standard system startup files or libraries when linking 
         -nostdinc Do not use the standard system header files when compiling 
         -std=c99 generates an error on implicit function declaration (without -std only a warning is emitted)
@@ -489,29 +491,11 @@ cpython: git clone https://github.com/python/cpython.git
         
         CC=chibicc ./configure  --host=x86_64-pc-linux-gnu ac_cv_have_lchflags=no ac_cv_have_chflags=no
         make && make test
-        failure with :
-        do_fork_exec () at ./Modules/_posixsubprocess.c:911
-        #1 0x0000767b99afefdf in subprocess_fork_exec_impl () at ./Modules/_posixsubprocess.c:1256
-        #2 0x0000767b99afd98d in subprocess_fork_exec () at ./Modules/clinic/_posixsubprocess.c.h:148
-        #3 0x00000000006de02f in cfunction_vectorcall_FASTCALL () at Objects/methodobject.c:449
-        #4 0x00000000005b53d1 in _PyObject_VectorcallTstate () at ./Include/internal/pycore_call.h:169
-        #5 0x00000000005b8424 in PyObject_Vectorcall () at Objects/call.c:327
-        #6 0x00000000009988ce in _PyEval_EvalFrameDefault () at Python/generated_cases.c.h:1620
-        #7 0x00000000009888dc in _PyEval_EvalFrame () at ./Include/internal/pycore_ceval.h:121
-        #8 0x0000000000988857 in _PyEval_Vector () at Python/ceval.c:1982
-        #9 0x00000000005b3b8e in _PyFunction_Vectorcall () at Objects/call.c:413
-        #10 0x00000000005b6638 in _PyObject_VectorcallDictTstate () at Objects/call.c:146
-        #11 0x00000000005b68da in _PyObject_Call_Prepend () at Objects/call.c:504
-        #12 0x000000000079c6dd in call_method () at Objects/typeobject.c:3060
-        #13 0x0000000000776ab5 in slot_tp_init () at Objects/typeobject.c:10791
-        #14 0x000000000079e913 in type_call () at Objects/typeobject.c:2444
-        #15 0x00000000005b630f in _PyObject_Call () at Objects/call.c:361
-        #16 0x00000000005b90c8 in PyObject_Call () at Objects/call.c:373
-        #17 0x00000000009a03fd in _PyEval_EvalFrameDefault () at Python/generated_cases.c.h:2616
-        #18 0x00000000009888dc in _PyEval_EvalFrame () at ./Include/internal/pycore_ceval.h:121
-        #19 0x0000000000988857 in _PyEval_Vector () at Python/ceval.c:1982
-        #20 0x00000000005b3b8e in _PyFunction_Vectorcall () at Objects/call.c:413
-        => chibicc doesn't manage well vfork due to their push/pop systems!
+        failure with : 
+        [ERROR] _elementtree failed to import: .../cpython/build/lib.linux-x86_64-3.15/pyexpat.cpython-315-x86_64-linux-gnu.so: undefined symbol: pyexpat_SetStartElementHandler
+        [ERROR] _hmac failed to import: .../cpython/build/lib.linux-x86_64-3.15/_hmac.cpython-315-x86_64-linux-gnu.so: undefined symbol: hmacmodule_free
+        [ERROR] pyexpat failed to import: .../cpython/build/lib.linux-x86_64-3.15/pyexpat.cpython-315-x86_64-linux-gnu.so: undefined symbol: pyexpat_SetStartElementHandler
+
 
 postgres: https://github.com/postgres/postgres.git  (in case of bad network use git clone --filter=blob:none --depth=1 https://github.com/postgres/postgres.git --branch master)
 
@@ -587,7 +571,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23.2    Managing -Werror (reporting from @fuhsnn/slimcc). Adding decay array/vla to pointer in ND_COND, ND_COMMA. Merging pull request from @Superstart64 removing hard-coding on includes and Makefile. Managing builtin_memcpy and builtin_memset. Fixing issue on some bitfield operations (bitfield2 testcase). Ignoring -pedantic-errors and all warnings that starts with -W. Adding llrint in math.h. Ignoring gnu attribute \__noescape\__ and \__common\__.  Ignoring some arguments found during ruby compile. Reporting fix from @fuhsnn/slimcc da9d04c077357ac39f80acf2b9d6b5a47cd50cfc to fix setjmp issue. Adding some missing builtin_ia32_xxx from pmmintrin.h. Fixing issue with vfork. Adding other builtin_ia32_phxxx from tmmintrin.h.m and immintrin.h. Adding lots of missing builtin from smmintrin.h. Fixing old release notes typo.
+1.0.23.2    Managing -Werror (reporting from @fuhsnn/slimcc). Adding decay array/vla to pointer in ND_COND, ND_COMMA. Merging pull request from @Superstart64 removing hard-coding on includes and Makefile. Managing builtin_memcpy and builtin_memset. Fixing issue on some bitfield operations (bitfield2 testcase). Ignoring -pedantic-errors and all warnings that starts with -W. Adding llrint in math.h. Ignoring gnu attribute \__noescape\__ and \__common\__.  Ignoring some arguments found during ruby compile. Reporting fix from @fuhsnn/slimcc da9d04c077357ac39f80acf2b9d6b5a47cd50cfc to fix setjmp issue. Adding some missing builtin_ia32_xxx from pmmintrin.h. Fixing issue with vfork. Adding other builtin_ia32_phxxx from tmmintrin.h.m and immintrin.h. Adding lots of missing builtin from smmintrin.h. Fixing old release notes typo. Adding -mcrc32 in managed argument. 
 
 
 ## old release notes

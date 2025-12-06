@@ -5804,6 +5804,13 @@ static Node *primary(Token **rest, Token *tok)
     equal(tok, "__builtin_ia32_pabsb128") || equal(tok, "__builtin_ia32_pabsw128") || 
     equal(tok, "__builtin_ia32_pabsd128") || equal(tok, "__builtin_ia32_pabsb") || 
     equal(tok, "__builtin_ia32_pabsw") || equal(tok, "__builtin_ia32_pabsd") ||
+    equal(tok, "__builtin_ia32_phminposuw128") || equal(tok, "__builtin_ia32_pmovsxbd128") ||
+    equal(tok, "__builtin_ia32_pmovsxwd128") || equal(tok, "__builtin_ia32_pmovsxbq128") || 
+    equal(tok, "__builtin_ia32_pmovsxdq128") || equal(tok, "__builtin_ia32_pmovsxwq128") ||
+    equal(tok, "__builtin_ia32_pmovsxbw128") || equal(tok, "__builtin_ia32_pmovzxbd128") ||
+    equal(tok, "__builtin_ia32_pmovzxwd128") || equal(tok, "__builtin_ia32_pmovzxbq128") || 
+    equal(tok, "__builtin_ia32_pmovzxdq128") || equal(tok, "__builtin_ia32_pmovzxwq128") ||
+    equal(tok, "__builtin_ia32_pmovzxbw128") || equal(tok, "__builtin_ia32_movntdqa") ||
     equal(tok, "__builtin_ia32_rsqrtss")) {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -7688,6 +7695,27 @@ char *nodekind2str(NodeKind kind)
   case ND_PMAXSD128: return "PMAXSD128";  
   case ND_PMINUD128: return "PMINUD128";
   case ND_PMAXUD128: return "PMAXUD128";
+  case ND_PMULDQ128: return "PMULDQ128";
+  case ND_PHMINPOSUW128: return "PHMINPOSUW128";
+  case ND_PMOVSXBD128: return "PMOVSXBD128";
+  case ND_PMOVSXWD128: return "PMOVSXWD128";
+  case ND_PMOVSXBQ128: return "PMOVSXBQ128";
+  case ND_PMOVSXDQ128: return "PMOVSXDQ128";
+  case ND_PMOVSXWQ128: return "PMOVSXWQ128";
+  case ND_PMOVSXBW128: return "PMOVSXBW128";
+  case ND_PMOVZXBD128: return "PMOVZXBD128";
+  case ND_PMOVZXWD128: return "PMOVZXWD128";
+  case ND_PMOVZXBQ128: return "PMOVZXBQ128";
+  case ND_PMOVZXDQ128: return "PMOVZXDQ128";
+  case ND_PMOVZXWQ128: return "PMOVZXWQ128";
+  case ND_PMOVZXBW128: return "PMOVZXBW128";
+  case ND_PACKUSDW128: return "PACKUSDW128";
+  case ND_MOVNTDQA: return "MOVNTDQA";
+  case ND_CRC32QI: return "CRC32QI";
+  case ND_CRC32HI: return "CRC32HI";
+  case ND_CRC32SI: return "CRC32SI";
+  case ND_CRC32DI: return "CRC32DI";
+  case ND_PSHUFD: return "PSHUFD";
   default: return "UNREACHABLE"; 
   }
 }
@@ -8377,6 +8405,27 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_pmaxsd128", ND_PMAXSD128 },
     { "__builtin_ia32_pminud128", ND_PMINUD128 },
     { "__builtin_ia32_pmaxud128", ND_PMAXUD128 },
+    { "__builtin_ia32_pmuldq128", ND_PMULDQ128 },
+    { "__builtin_ia32_phminposuw128", ND_PHMINPOSUW128 },
+    { "__builtin_ia32_pmovsxbd128", ND_PMOVSXBD128 },
+    { "__builtin_ia32_pmovsxwd128", ND_PMOVSXWD128 },
+    { "__builtin_ia32_pmovsxbq128", ND_PMOVSXBQ128 },
+    { "__builtin_ia32_pmovsxdq128", ND_PMOVSXDQ128 },
+    { "__builtin_ia32_pmovsxwq128", ND_PMOVSXWQ128 },
+    { "__builtin_ia32_pmovsxbw128", ND_PMOVSXBW128 },
+    { "__builtin_ia32_pmovzxbd128", ND_PMOVZXBD128 },
+    { "__builtin_ia32_pmovzxwd128", ND_PMOVZXWD128 },
+    { "__builtin_ia32_pmovzxbq128", ND_PMOVZXBQ128 },
+    { "__builtin_ia32_pmovzxdq128", ND_PMOVZXDQ128 },
+    { "__builtin_ia32_pmovzxwq128", ND_PMOVZXWQ128 },
+    { "__builtin_ia32_pmovzxbw128", ND_PMOVZXBW128 },    
+    { "__builtin_ia32_packusdw128", ND_PACKUSDW128 },  
+    { "__builtin_ia32_movntdqa", ND_MOVNTDQA },    
+    { "__builtin_ia32_crc32qi", ND_CRC32QI },    
+    { "__builtin_ia32_crc32hi", ND_CRC32HI },    
+    { "__builtin_ia32_crc32si", ND_CRC32SI },    
+    { "__builtin_ia32_crc32di", ND_CRC32DI },
+    { "__builtin_ia32_pshufd", ND_PSHUFD },
 };
 
 

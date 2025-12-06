@@ -116,6 +116,8 @@ this " PRODUCT " contains only some differences for now like new parameters\n"
 -A print Abstract Syntax Tree in a log file in /tmp/chibicc.log \n \
 -msse3 enabling sse3 support \n\
 -msse4 enabling sse4 support \n \
+-msse4.1 enabling sse4.1 support \n \
+-mcrc32 enabling crc32 instruction support \n \
 -nostdlib  Do not use the standard system startup files or libraries when linking \n \
 -nostdinc Do not use the standard system header files when compiling \n \
 -std=c99 generates an error on implicit function declaration (without -std only a warning is emitted) \n \
@@ -796,7 +798,28 @@ typedef enum
   ND_PMINSD128,
   ND_PMAXSD128,
   ND_PMINUD128,
-  ND_PMAXUD128,  
+  ND_PMAXUD128,
+  ND_PMULDQ128,  
+  ND_PHMINPOSUW128,
+  ND_PMOVSXBD128, 
+  ND_PMOVSXWD128,
+  ND_PMOVSXBQ128,
+  ND_PMOVSXDQ128,
+  ND_PMOVSXWQ128,
+  ND_PMOVSXBW128,
+  ND_PMOVZXBD128,
+  ND_PMOVZXWD128,
+  ND_PMOVZXBQ128,
+  ND_PMOVZXBW128,
+  ND_PMOVZXDQ128,
+  ND_PMOVZXWQ128,
+  ND_PACKUSDW128,
+  ND_MOVNTDQA,
+  ND_CRC32QI,
+  ND_CRC32HI,
+  ND_CRC32SI,
+  ND_CRC32DI,
+  ND_PSHUFD,
 } NodeKind;
 
 // AST node type
@@ -1176,6 +1199,7 @@ extern bool opt_sse2;
 extern bool opt_sse3;
 extern bool opt_sse4;
 extern bool opt_mmx;
+extern bool opt_crc32;
 extern bool opt_g;
 extern FILE *open_file(char *path);
 extern FILE *ofile;

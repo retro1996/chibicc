@@ -904,6 +904,7 @@ void add_type(Node *node)
   case ND_PAVGW128:
   case ND_PMAXUW128:
   case ND_PMINUW128:
+  case ND_PHMINPOSUW128:
     node->ty = vector_of(ty_ushort, 8);
     return;
   case ND_PUNPCKHWD128:
@@ -926,7 +927,10 @@ void add_type(Node *node)
   case ND_PMADDUBSW128:
   case ND_PMULHRSW128:
   case ND_PSIGNW128:
-  case ND_PABSW128:
+  case ND_PABSW128:  
+  case ND_PMOVSXBW128:
+  case ND_PMOVZXBW128:  
+  case ND_PACKUSDW128:
     node->ty = vector_of(ty_short, 8);
     return;
   case ND_PUNPCKHDQ128:
@@ -943,6 +947,11 @@ void add_type(Node *node)
   case ND_PANDN128:
   case ND_PHADDD128:
   case ND_PHSUBD128:
+  case ND_PMOVSXBD128:
+  case ND_PMOVSXWD128:
+  case ND_PMOVZXBD128:
+  case ND_PMOVZXWD128:
+  case ND_PSHUFD:
     node->ty = vector_of(ty_int, 4);
     return;
   case ND_PUNPCKLQDQ128:
@@ -951,6 +960,7 @@ void add_type(Node *node)
   case ND_PSLLQ128:
   case ND_PSRLQ128:
   case ND_PSADBW128:
+  case ND_PMOVSXBQ128:  
     node->ty = vector_of(ty_long, 2);
     return;    
   case ND_ADDSD:
@@ -1060,13 +1070,28 @@ void add_type(Node *node)
   case ND_PTESTZ128:
   case ND_PTESTC128:
   case ND_PTESTNZC128:
+  case ND_CRC32QI:
+  case ND_CRC32HI:
+  case ND_CRC32SI:
     node->ty = ty_int;
+    return;
+  case ND_CRC32DI:
+    node->ty = ty_long;
     return;
   case ND_PHADDD:
   case ND_PHSUBD:
   case ND_PSIGND:
   case ND_PABSD:
     node->ty = vector_of(ty_int, 2);
+    return;
+  case ND_PMULDQ128:
+  case ND_PMOVSXWQ128:
+  case ND_PMOVSXDQ128:
+  case ND_PMOVZXBQ128:
+  case ND_PMOVZXDQ128:
+  case ND_PMOVZXWQ128:
+  case ND_MOVNTDQA:
+    node->ty = vector_of(ty_llong, 2);
     return;
   default:
     node->ty = ty_void_ptr;
