@@ -1,5 +1,5 @@
 
-#include <stdio.h>
+#include "test.h"
 
 typedef struct { int dummy; } PyObject;
 

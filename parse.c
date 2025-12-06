@@ -1912,6 +1912,64 @@ static void vector_initializer1(Token **rest, Token *tok, Initializer *init) {
   *rest = skip(tok, "}", ctx);
 }
 
+
+
+// Recursively traverse a Node and mark all function references as address-used
+static void mark_function_addresses_used(Node *node) {
+  if (!node)
+    return;
+
+  switch (node->kind) {
+  case ND_VAR:
+    if (node->var && node->var->is_function)
+      node->var->is_address_used = true;
+    break;
+  case ND_CAST:
+    mark_function_addresses_used(node->lhs);
+    break;
+  case ND_ADDR:
+  case ND_DEREF:
+  case ND_MEMBER:
+  case ND_POS:
+  case ND_NEG:
+  case ND_NOT:
+  case ND_BITNOT:
+    mark_function_addresses_used(node->lhs);
+    break;
+  case ND_ADD:
+  case ND_SUB:
+  case ND_MUL:
+  case ND_DIV:
+  case ND_MOD:
+  case ND_BITAND:
+  case ND_BITOR:
+  case ND_BITXOR:
+  case ND_SHL:
+  case ND_SHR:
+  case ND_EQ:
+  case ND_NE:
+  case ND_LT:
+  case ND_LE:
+  case ND_LOGAND:
+  case ND_LOGOR:
+  case ND_ASSIGN:
+    mark_function_addresses_used(node->lhs);
+    mark_function_addresses_used(node->rhs);
+    break;
+  case ND_COND:
+    mark_function_addresses_used(node->cond);
+    mark_function_addresses_used(node->then);
+    mark_function_addresses_used(node->els);
+    break;
+  case ND_COMMA:
+    mark_function_addresses_used(node->lhs);
+    mark_function_addresses_used(node->rhs);
+    break;
+  default:
+    break;
+  }
+}
+
 // initializer = string-initializer | array-initializer
 //             | struct-initializer | union-initializer
 //             | assign
@@ -2012,10 +2070,9 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
 
   init->expr = assign(rest, tok);
   add_type(init->expr);
-  if (init->expr->kind == ND_VAR &&
-      init->expr->var && init->expr->var->is_function) {
-      init->expr->var->is_address_used = true;
-  }
+  // Recursively mark all function references in this expression as address-used
+  mark_function_addresses_used(init->expr);
+  
 }
 
 static Type *copy_struct_type(Type *ty)
