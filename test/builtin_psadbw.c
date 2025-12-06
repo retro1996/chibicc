@@ -3,7 +3,6 @@ typedef char  v8qi __attribute__((vector_size(8)));
 typedef unsigned long   v1du __attribute__((vector_size(8)));
 
 
-#include <stdio.h>
 
 int main() {
     v8qi a = {10, 20, 30, 40, 50, 60, 70, 80};

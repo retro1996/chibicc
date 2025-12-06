@@ -1,7 +1,6 @@
 #include "test.h"
 typedef long long v1di __attribute__((vector_size(8)));
 
-#include <stdio.h>
 
 int main() {
     v1di a = {0x123456789abcdef0LL};

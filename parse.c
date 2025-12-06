@@ -5819,7 +5819,9 @@ static Node *primary(Token **rest, Token *tok)
 
   }
    
-  if (equal(tok, "__builtin_shuffle"))
+  if (equal(tok, "__builtin_shuffle") || equal(tok, "__builtin_ia32_pblendvb128") || 
+      equal(tok, "__builtin_ia32_blendvpd") ||
+      equal(tok, "__builtin_ia32_blendvps"))
   {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -7675,6 +7677,17 @@ char *nodekind2str(NodeKind kind)
   case ND_PTESTZ128: return "PTESTZ128";
   case ND_PTESTC128: return "PTESTC128";
   case ND_PTESTNZC128: return "PTESTNZC128";
+  case ND_PBLENDVB128: return "PBLENDVB128";
+  case ND_BLENDVPS: return "BLENDVPS";
+  case ND_BLENDVPD: return "BLENDVPD";
+  case ND_PMINSB128: return "PMINSB128";
+  case ND_PMAXSB128: return "PMAXSB128";
+  case ND_PMINUW128: return "PMINUW128";
+  case ND_PMAXUW128: return "PMAXUW128";
+  case ND_PMINSD128: return "PMINSD128";
+  case ND_PMAXSD128: return "PMAXSD128";  
+  case ND_PMINUD128: return "PMINUD128";
+  case ND_PMAXUD128: return "PMAXUD128";
   default: return "UNREACHABLE"; 
   }
 }
@@ -8353,7 +8366,17 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_ptestz128", ND_PTESTZ128 },
     { "__builtin_ia32_ptestc128", ND_PTESTC128 },
     { "__builtin_ia32_ptestnzc128", ND_PTESTNZC128 },
-
+    { "__builtin_ia32_pblendvb128", ND_PBLENDVB128 },
+    { "__builtin_ia32_blendvps", ND_BLENDVPS },
+    { "__builtin_ia32_blendvpd", ND_BLENDVPD },
+    { "__builtin_ia32_pminsb128", ND_PMINSB128 },
+    { "__builtin_ia32_pmaxsb128", ND_PMAXSB128 },
+    { "__builtin_ia32_pminuw128", ND_PMINUW128 },
+    { "__builtin_ia32_pmaxuw128", ND_PMAXUW128 },
+    { "__builtin_ia32_pminsd128", ND_PMINSD128 },
+    { "__builtin_ia32_pmaxsd128", ND_PMAXSD128 },
+    { "__builtin_ia32_pminud128", ND_PMINUD128 },
+    { "__builtin_ia32_pmaxud128", ND_PMAXUD128 },
 };
 
 

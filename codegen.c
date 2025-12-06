@@ -2618,6 +2618,31 @@ static void gen_lddqu(Node *node) {
     println("  lddqu (%%rax), %%xmm0");
 }
 
+static void gen_sse_pblendvb128(Node *node) {
+  assert(node->builtin_nargs == 3);  
+  gen_expr(node->builtin_args[0]); 
+  println("  movups %%xmm0, %%xmm1"); 
+  gen_expr(node->builtin_args[1]);      
+  println("  movups %%xmm0, %%xmm2"); 
+  gen_expr(node->builtin_args[2]); 
+  println("  pblendvb %%xmm2, %%xmm1"); 
+  println("  movups %%xmm1, %%xmm0");
+}
+
+static void gen_sse_blendvpx(Node *node, const char *insn) {
+  assert(node->builtin_nargs == 3);  
+  gen_expr(node->builtin_args[0]); 
+  println("  movups (%%rax), %%xmm1"); 
+  gen_expr(node->builtin_args[1]);      
+  println("  movups (%%rax), %%xmm2"); 
+  gen_expr(node->builtin_args[2]); 
+  println("  movups (%%rax), %%xmm0"); 
+  println("  %s %%xmm0, %%xmm2, %%xmm1", insn); 
+  println("  movups %%xmm1, %%xmm0");
+}
+
+
+
 static void gen_cvt_mmx_binop(Node *node, const char *insn) {
   gen_addr(node->lhs);   
   println("  movups (%%rax), %%xmm0"); 
@@ -3780,6 +3805,17 @@ static void gen_expr(Node *node)
   case ND_PTESTZ128: gen_sse_testz(node); return;
   case ND_PTESTC128: gen_sse_testc(node); return;
   case ND_PTESTNZC128: gen_sse_testnzc(node); return;
+  case ND_PBLENDVB128: gen_sse_pblendvb128(node); return;
+  case ND_BLENDVPS: gen_sse_blendvpx(node, "blendvps"); return;
+  case ND_BLENDVPD: gen_sse_blendvpx(node, "blendvpd"); return;
+  case ND_PMINSB128: gen_sse_binop3(node, "pminsb", false); return; 
+  case ND_PMAXSB128: gen_sse_binop3(node, "pmaxsb", false); return; 
+  case ND_PMINUW128: gen_sse_binop3(node, "pminuw", false); return; 
+  case ND_PMAXUW128: gen_sse_binop3(node, "pmaxuw", false); return;   
+  case ND_PMINSD128: gen_sse_binop3(node, "pminsd", false); return; 
+  case ND_PMAXSD128: gen_sse_binop3(node, "pmaxsd", false); return;     
+  case ND_PMINUD128: gen_sse_binop3(node, "pminud", false); return; 
+  case ND_PMAXUD128: gen_sse_binop3(node, "pmaxud", false); return;     
 }
   
 if (is_vector(node->lhs->ty) || (node->rhs && is_vector(node->rhs->ty))) {

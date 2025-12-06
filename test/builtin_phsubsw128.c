@@ -1,5 +1,4 @@
 #include "test.h"
-#include <stdio.h>
 
 typedef short  v8hi __attribute__((vector_size(16)));
 typedef int    v4si __attribute__((vector_size(16)));

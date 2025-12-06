@@ -6,7 +6,7 @@ v4si test_truncate(v2df a) {
     return __builtin_ia32_cvttpd2dq(a);
 }
 
-#include <stdio.h>
+
 
 int main(void) {
     v2df input = { 3.9, -2.7 };   // will truncate to {3, -2}

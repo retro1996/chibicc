@@ -1,5 +1,5 @@
 #include "test.h"
-#include <stdio.h>
+
 
 typedef signed char v8qi __attribute__((vector_size(8)));
 

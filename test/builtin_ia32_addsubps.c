@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include <xmmintrin.h>   
 #include <pmmintrin.h>   
 #include <stdint.h>

@@ -1,5 +1,5 @@
 #include "test.h"
-#include <stdio.h>
+
 
 typedef int v4si __attribute__((vector_size(16)));
 

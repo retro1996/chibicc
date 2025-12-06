@@ -1,5 +1,5 @@
 #include "test.h"
-#include <stdio.h>
+
 
 typedef char v16qi __attribute__((vector_size(16)));
 
