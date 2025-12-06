@@ -2013,8 +2013,7 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
   init->expr = assign(rest, tok);
   add_type(init->expr);
   if (init->expr->kind == ND_VAR &&
-      init->expr->var && init->expr->var->is_function &&
-      init->ty->kind == TY_PTR) {
+      init->expr->var && init->expr->var->is_function) {
       init->expr->var->is_address_used = true;
   }
 }
@@ -7241,7 +7240,7 @@ Obj *parse(Token *tok)
   }
 
   for (Obj *var = globals; var; var = var->next)
-    if (var->is_root)
+    if (var->is_root || var->is_address_used)
       mark_live(var);
 
   // Remove redundant tentative definitions.

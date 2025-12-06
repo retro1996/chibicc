@@ -4,7 +4,7 @@ PREFIX=/usr/local
 GCC_VERSION!=gcc -dumpversion
 CC=gcc
 CFLAGS =-std=c11 -g -fno-common -Wall -Wno-switch -DPREFIX=\"$(PREFIX)\" -DGCC_VERSION=\"$(GCC_VERSION)\"
-CFLAGS_DIAG=-dotfile -std=c11 
+CFLAGS_DIAG= -std=c11 
 OBJECT=chibicc
 OBJECTLIB=libchibicc
 SRCS=$(wildcard *.c)
@@ -57,9 +57,9 @@ test-stage2: $(TESTS:test/%=stage2/test/%)
 	for i in $^; do echo $$i; ./$$i || exit 1; echo; done
 	test/driver.sh ./stage2/$(OBJECT)
 
-projects-all: projects projects-oth git
+projects-all: projects projects-oth lxc vlc git memcached cpython openssl
 
-projects-oth: openssl vim nmap curl 
+projects-oth: vim nmap curl 
 
 projects: zlib util-linux nginx
 
@@ -74,7 +74,7 @@ nmap:
 	cd ../nmap && make clean && CC=chibicc  CFLAGS="-fPIC -std=c11" LIBS="-ldbus-1 -latomic" ./configure --with-dbus && make && make check
 
 openssl:
-	cd ../openssl && make clean && CC=chibicc CFLAGS="-std=c11" ./configure && make 
+	cd ../openssl && make clean && CC=chibicc CFLAGS="-std=c11" ./Configure && make 
 
 util-linux:
 	cd ../util-linux && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make && make check-programs && cd tests && ./run.sh
