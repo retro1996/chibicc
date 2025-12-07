@@ -3107,9 +3107,6 @@ static void gen_expr(Node *node)
     if (node->lhs->kind == ND_MEMBER && node->lhs->member->is_bitfield)
     {
       println("  mov %%rax, %%r8");
-
-      // If the lhs is a bitfield, we need to read the current value
-      // from memory and merge it with a new value.
       Member *mem = node->lhs->member;
       println("  mov %%rax, %%rdi");
       if (mem->bit_width >= 32)
@@ -3121,13 +3118,12 @@ static void gen_expr(Node *node)
       {
         println("  and $%ld, %%rdi", (1L << mem->bit_width) - 1);
       }
-      // println("  and $%ld, %%rdi", (1L << mem->bit_width) - 1);
-      println("  shl $%d, %%rdi", mem->bit_offset);
 
-      //println("  mov (%%rsp), %%rax");
+      println("  shl $%d, %%rdi", mem->bit_offset);
       println("  mov %d(%%rbp), %%rax", tmp_offset);
       load(mem->ty);
 
+        
       long mask = ((1L << mem->bit_width) - 1) << mem->bit_offset;
       println("  mov $%ld, %%r9", ~mask);
       println("  and %%r9, %%rax");
@@ -3136,19 +3132,16 @@ static void gen_expr(Node *node)
       println("  mov %%r8, %%rax");
       if (mem->ty->kind == TY_BOOL)
         return;
+
       long mask2 = (1L << mem->bit_width) - 1;
       println("  mov $%ld, %%r9", mask2);
       println("  and %%r9, %%rax");       
       int shift = 64 - mem->bit_width - mem->bit_offset;
       println("  shl $%d, %%rax", shift);
-      if (mem->ty->is_unsigned)
-        println("  shr $%d, %%rax", shift);
-      else
-        println("  sar $%d, %%rax", shift);
-      return;
-      //return;
-    }
+      println("  sar $%d, %%rax", shift);
 
+      return;
+    }
     store(node->ty);
     return;
   case ND_STMT_EXPR:
@@ -5180,4 +5173,3 @@ static void emit_destructors(void) {
   }
   println("  .text");
 }
-
