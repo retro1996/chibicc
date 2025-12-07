@@ -506,16 +506,12 @@ void add_type(Node *node)
   case ND_COND:
     //======ISS-154 trying to fix deferencing pointer issue when we have a macro that can return a pointer or null  (self) ? NULL
     //printf("======%d %d %s\n", node->then->ty->kind, node->els->ty->kind,  node->tok->loc);
-    if (node->then->ty->kind == TY_VOID && node->els->ty->kind == TY_VOID) {
+    if (node->then->ty->kind == TY_VOID && node->els->ty->kind == TY_VOID)
+    {
       node->ty = ty_void;
-    } else if (node->then->ty && is_array(node->then->ty) && node->els->ty && is_integer(node->els->ty)) {
-      node->then->ty = pointer_to(node->then->ty->base);
-      node->ty = node->then->ty;
-    } else if (node->els->ty && is_array(node->els->ty) && node->then->ty && is_integer(node->then->ty)) {
-      node->els->ty = pointer_to(node->els->ty->base);
-      node->ty = node->els->ty;
     }
-    else {
+    else
+    {
       usual_arith_conv(&node->then, &node->els);
       node->ty = node->then->ty;
     }

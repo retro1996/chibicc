@@ -962,6 +962,8 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-fno-fast-math") ||
         !strcmp(argv[i], "-fno-strict-overflow") ||
         !strcmp(argv[i], "-fexcess-precision=standard") ||
+        !strcmp(argv[i], "-Wno-shadow") ||
+        !strcmp(argv[i], "-Wno-unreachable-code") ||
         startswith(argv[i], "-W")     
         )
       continue;
