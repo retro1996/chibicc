@@ -87,7 +87,7 @@ vim:
 
 lxc:
 	cd ../lxc && rm -rf build && CC=gcc \
-	meson setup build && cd build && sudo cp /usr/bin/gcc /usr/bin/gcc_backup \
+	meson setup build && cd build && sudo cp /usr/bin/gcc /usr/bin/gcc_backup  && \
 	sudo cp /usr/local/bin/chibicc /usr/bin/gcc && meson compile && sudo cp /usr/bin/gcc_backup /usr/bin/gcc
 
 vlc:

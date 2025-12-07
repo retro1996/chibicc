@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include "test.h"
 #include <stdint.h>
 #include <stddef.h>
 
@@ -29,6 +29,9 @@ int main() {
     printf("sizeof(ONEXIT) = %zu\n", sizeof(struct ONEXIT));
     printf("offset function = %zu\n", offsetof(struct ONEXIT, function));
     printf("offset arg      = %zu\n", offsetof(struct ONEXIT, arg));
+    ASSERT(16, sizeof(struct ONEXIT));
+    ASSERT(0, offsetof(struct ONEXIT, function));
+    ASSERT(8, offsetof(struct ONEXIT, arg));
 
     // Call the callback to see the stored value
     onexit.function(0, onexit.arg);

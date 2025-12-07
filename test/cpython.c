@@ -1,9 +1,9 @@
 #include <stdlib.h>
 #include <stdbool.h>
-#include <stdio.h>
+#include "test.h"
 #include <stdint.h>
 #include <stddef.h>
-#include <assert.h>
+
 
 #define NB_SMALL_SIZE_CLASSES 32
 #define OBMALLOC_USED_POOLS_SIZE (2 * ((NB_SMALL_SIZE_CLASSES + 7) / 8) * 8)
@@ -69,5 +69,6 @@ int main(void) {
 
     printf("Raw allocated blocks: %zu\n", state->mgmt.raw_allocated_blocks);
 
+    ASSERT(10, state->mgmt.raw_allocated_blocks);
     return 0;
 }
