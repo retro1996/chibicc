@@ -427,11 +427,11 @@ vim: https://github.com/vim/vim.git
     CC=chibicc CFLAGS="-fPIC" ./configure
     make
     make test    
-    == SUMMARY ==
-    Test run on 2023 Sep 23 14:15:31
-    OK: 10
+    == SUMMARY SYNTAX TESTS ==
+    Test run on 2025 Dec 10 18:09:21
+    OK: 192
     FAILED: 0: []
-    skipped: 0    
+    skipped: 0 
 
 
 libwepb: https://github.com/webmproject/libwebp.git
@@ -492,9 +492,13 @@ cpython: git clone https://github.com/python/cpython.git
         CC=chibicc ./configure  --host=x86_64-pc-linux-gnu ac_cv_have_lchflags=no ac_cv_have_chflags=no
         make && make test
         failure with : 
-        [ERROR] _elementtree failed to import: .../cpython/build/lib.linux-x86_64-3.15/pyexpat.cpython-315-x86_64-linux-gnu.so: undefined symbol: pyexpat_SetStartElementHandler
-        [ERROR] _hmac failed to import: .../cpython/build/lib.linux-x86_64-3.15/_hmac.cpython-315-x86_64-linux-gnu.so: undefined symbol: hmacmodule_free
-        [ERROR] pyexpat failed to import: .../cpython/build/lib.linux-x86_64-3.15/pyexpat.cpython-315-x86_64-linux-gnu.so: undefined symbol: pyexpat_SetStartElementHandler
+        ./python -E ./Tools/build/generate-build-details.py cat pybuilddir.txt/build-details.json
+        ./python -E -m test --fast-ci -u-gui --timeout=
+        ./python -u -W error -bb -E -m test --fast-ci -u-gui --timeout= --dont-add-python-opts
+        == CPython 3.15.0a0 (heads/main:fd8f42d3d10, Dec 6 2025, 20:15:20) [GCC 1.0.23.2]
+        Fatal Python error: PyOS_AfterFork_Child: the function must be called with the GIL held, after Python initialization and before Python finalization, but the GIL is released (the current Python thread state is NULL)
+        Python runtime state: initialized
+
 
 
 postgres: https://github.com/postgres/postgres.git  (in case of bad network use git clone --filter=blob:none --depth=1 https://github.com/postgres/postgres.git --branch master)
@@ -530,8 +534,8 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     postgres execution : ko
     git 2 tests failed
     memcached test stuck at t/binary-extstore.t ......... 5947/?
-    vim: compile OK, tests KO on test_channel.vim.
-    cpython : compile OK, segfault at test execution due to vfork not managed well.
+    vim: compile OK, tests OK except one test on  test_channel.vim (Test_error_callback_terminal).
+    cpython : compile OK, test execution failed due to fork/vfork probably.
 
 ## projects compiled successfully with chibicc
 
