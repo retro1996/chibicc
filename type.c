@@ -69,7 +69,7 @@ bool is_flonum(Type *ty)
 
 
 bool is_array(Type *ty) {
-  return ty->kind == TY_ARRAY || ty->kind == TY_VLA;
+  return ty && (ty->kind == TY_ARRAY || ty->kind == TY_VLA);
 }
 
 bool is_bitfield(Node *node) {
@@ -305,6 +305,17 @@ Type *struct_type(void)
   return new_type(TY_STRUCT, 0, 1);
 }
 
+Type *array_to_pointer(Type *ty) {
+  if (ty->base && ty->kind != TY_PTR)
+    return pointer_to(ty->base);
+  return ty;
+}
+
+bool is_nullptr(Node *n) {
+    return n->kind == ND_NUM && n->val == 0;
+}
+
+
 static Type *get_common_type(Node **lhs, Node **rhs)
 {
   Type *ty1 = (*lhs)->ty;
@@ -322,6 +333,10 @@ static Type *get_common_type(Node **lhs, Node **rhs)
     return pointer_to(ty1->base);
   }
 
+  if (ty1->base && is_nullptr(*rhs))
+    return array_to_pointer(ty1);
+  if (ty2->base && is_nullptr(*lhs))
+    return array_to_pointer(ty2);
 
   if (ty1->kind == TY_FUNC)
     return pointer_to(ty1);
@@ -414,7 +429,6 @@ bool is_pointer(Type *ty) {
   return ty && ty->kind == TY_PTR;
 }
 
-
 void add_type(Node *node)
 {
   if (!node || node->ty)
@@ -504,11 +518,14 @@ void add_type(Node *node)
     node->ty = node->var->ty;
     return;
   case ND_COND:
-    //======ISS-154 trying to fix deferencing pointer issue when we have a macro that can return a pointer or null  (self) ? NULL
-    //printf("======%d %d %s\n", node->then->ty->kind, node->els->ty->kind,  node->tok->loc);
-    if (node->then->ty->kind == TY_VOID && node->els->ty->kind == TY_VOID)
+    Type *lt = node->then->ty;
+    Type *rt = node->els->ty;
+    if (lt->kind == TY_VOID && rt->kind == TY_VOID)
     {
       node->ty = ty_void;
+    }
+    else if (!is_numeric(node->then->ty) && is_compatible(node->then->ty, node->els->ty)) {
+      node->ty = array_to_pointer(node->then->ty);
     }
     else
     {
@@ -517,10 +534,7 @@ void add_type(Node *node)
     }
     return;
   case ND_COMMA:
-    if (node->rhs->ty && is_array(node->rhs->ty))
-      node->ty = pointer_to(node->rhs->ty->base);
-    else 
-      node->ty = node->rhs->ty;
+    node->ty = node->rhs->ty;
     return;
   case ND_MEMBER:
     node->ty = node->member->ty;

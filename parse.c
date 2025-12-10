@@ -5677,6 +5677,9 @@ static Node *primary(Token **rest, Token *tok)
       Node *node = unary(rest, tok->next);
       add_type(node);
 
+      //gcc compatible rule is to decay an array with comma operator and not compound literal
+      if (node->kind == ND_COMMA && node->rhs && is_array(node->rhs->ty) && node->rhs->var && !node->rhs->var->is_compound_lit)
+        node->ty = pointer_to(node->ty->base);
 
       // Check if the type is incomplete
         if ((node->ty->kind == TY_UNION || node->ty->kind == TY_STRUCT) && node->ty->size < 0)
@@ -5709,13 +5712,8 @@ static Node *primary(Token **rest, Token *tok)
         if (mem->ty->kind == TY_ARRAY)
           return new_ulong((node->ty->size - mem->ty->size), tok);
       }
-      
-      if (node->ty->kind == TY_PTR) {
-        return new_ulong(8, tok); 
-      }
 
       return new_ulong(node->ty->size, start);   
-
     }
   }
 
@@ -7177,25 +7175,25 @@ static char *prefix_builtin(const char *name) {
     return buf;
 }
 
-static Obj *declare0(char *name, Type *ret) {
-  if (!opt_fbuiltin) new_gvar(name, func_type(ret));
-  return new_gvar(prefix_builtin(name), func_type(ret));
-}
+// static Obj *declare0(char *name, Type *ret) {
+//   if (!opt_fbuiltin) new_gvar(name, func_type(ret));
+//   return new_gvar(prefix_builtin(name), func_type(ret));
+// }
 
-static Obj *declare1(char *name, Type *ret, Type *p1) {
-  Type *ty = func_type(ret);
-  ty->params = copy_type(p1);
-  if (!opt_fbuiltin) new_gvar(name, ty);
-  return new_gvar(prefix_builtin(name), ty);
-}
+// static Obj *declare1(char *name, Type *ret, Type *p1) {
+//   Type *ty = func_type(ret);
+//   ty->params = copy_type(p1);
+//   if (!opt_fbuiltin) new_gvar(name, ty);
+//   return new_gvar(prefix_builtin(name), ty);
+// }
 
-static Obj *declare2(char *name, Type *ret, Type *p1, Type *p2) {
-  Type *ty = func_type(ret);
-  ty->params = copy_type(p1);
-  ty->params->next = copy_type(p2);
-  if (!opt_fbuiltin) new_gvar(name, ty);
-  return new_gvar(prefix_builtin(name), ty);
-}
+// static Obj *declare2(char *name, Type *ret, Type *p1, Type *p2) {
+//   Type *ty = func_type(ret);
+//   ty->params = copy_type(p1);
+//   ty->params->next = copy_type(p2);
+//   if (!opt_fbuiltin) new_gvar(name, ty);
+//   return new_gvar(prefix_builtin(name), ty);
+// }
 
 static Obj *declare3(char *s, Type *r, Type *a, Type *b, Type *c) {
   Type *ty = func_type(r);
@@ -7216,7 +7214,7 @@ static void declare_builtin_functions(void)
   Obj *builtin = new_gvar("__builtin_alloca", ty);
   builtin->is_definition = false;
   Type *pvoid = pointer_to(ty_void);
-  Type *pchar = pointer_to(ty_char);
+  //Type *pchar = pointer_to(ty_char);
   declare3("memcpy", pvoid, pvoid, pvoid, ty_ulong);
   declare3("memset", pvoid, pvoid, ty_int, ty_ulong);
 }
