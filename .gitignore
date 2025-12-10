@@ -4,7 +4,7 @@
 **/*.s
 **/a.out
 **/*.exe
-.vscode/
+.vscode
 /tmp*
 /thirdparty
 /chibicc
@@ -12,3 +12,7 @@
 /stage2
 /build
 /cmake-build-debug
+.venv/
+pyproject.toml
+uv.lock
+**/*.py

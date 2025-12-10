@@ -31,6 +31,7 @@ static void emit_constructors(void);
 static void emit_destructors(void); 
 
 
+
 static int last_loc_line = 0;
 
 typedef struct CtorFunc {
@@ -44,6 +45,12 @@ static int constructor_cnt = 0;
 static CtorFunc *destructors[256];
 static int destructor_cnt = 0;
 
+struct {
+  int *data;
+  int capacity;
+  int depth;
+  int bottom;
+} static tmp_stack;
 
 __attribute__((format(printf, 1, 2))) static void println(char *fmt, ...)
 {
@@ -54,10 +61,51 @@ __attribute__((format(printf, 1, 2))) static void println(char *fmt, ...)
   fprintf(output_file, "\n");
 }
 
+
 static int count(void)
 {
   static int i = 1;
   return i++;
+}
+
+static int push_tmpstack(void) {
+  if (tmp_stack.depth == tmp_stack.capacity) {
+    tmp_stack.capacity += 4;
+    tmp_stack.data = realloc(tmp_stack.data, sizeof(int) * tmp_stack.capacity);
+  }
+
+  tmp_stack.bottom += 8;
+  int offset = -tmp_stack.bottom;
+
+  tmp_stack.data[tmp_stack.depth] = offset;
+  tmp_stack.depth++;
+  return offset;
+}
+
+static int pop_tmpstack(void) {
+  tmp_stack.depth--;
+  return tmp_stack.data[tmp_stack.depth];
+}
+
+static int push_tmp(void) {
+  int offset = push_tmpstack();
+  println("  mov %%rax, %d(%%rbp)", offset);
+  return offset;
+}
+
+static void pop_tmp(char *arg) {
+  int offset = pop_tmpstack();
+  println("  mov %d(%%rbp), %s", offset, arg);
+}
+
+static void push_tmpf(void) {
+  int offset = push_tmpstack();
+  println("  movsd %%xmm0, %d(%%rbp)", offset);
+}
+
+static void pop_tmpf(int reg) {
+  int offset = pop_tmpstack();
+  println("  movsd %d(%%rbp), %%xmm%d", offset, reg);
 }
 
 static void push(void)
@@ -110,6 +158,20 @@ void popx(char *a, char *b) {
   println("  pop %s", b);
   depth--;
   depth--;  
+}
+
+static void pushx_tmp(void) {
+  int off_rdx = push_tmpstack(); 
+  println("  mov %%rdx, %d(%%rbp)", off_rdx);
+  int off_rax = push_tmpstack();  
+  println("  mov %%rax, %d(%%rbp)", off_rax);
+}
+
+static void popx_tmp(char *a, char *b) {
+  int off_rax = pop_tmpstack();   
+  println("  mov %d(%%rbp), %s", off_rax, a);
+  int off_rdx = pop_tmpstack();   
+  println("  mov %d(%%rbp), %s", off_rdx, b);
 }
 
 static void push_xmm(int x) {
@@ -613,7 +675,7 @@ static void store(Type *ty)
 {
   if (!ty)
     error("%s %d: in store : ty is null!", CODEGEN_C, __LINE__);
-  pop("%rdi");
+  pop_tmp("%rdi");
 
 
   switch (ty->kind)
@@ -1313,27 +1375,61 @@ static void builtin_alloca(Node *node)
 //from cosmopolitan
 static void HandleAtomicArithmetic(Node *node, const char *op) {
   gen_expr(node->lhs);
-  push();
+  push_tmp();
   gen_expr(node->rhs);
-  pop("%r9");
-  println("\tmov\t%s,%s", reg_ax(node->ty->size), reg_si(node->ty->size));
-  println("\tmov\t(%%r9),%s", reg_ax(node->ty->size));
-  println("1:\tmov\t%s,%s", reg_ax(node->ty->size), reg_dx(node->ty->size));
-  println("\tmov\t%s,%s", reg_ax(node->ty->size), reg_di(node->ty->size));
-  println("\t%s\t%s,%s", op, reg_si(node->ty->size), reg_dx(node->ty->size));
-  println("\tlock cmpxchg\t%s,(%%r9)", reg_dx(node->ty->size));
-  println("\tjnz\t1b");
-  println("\tmov\t%s,%s", reg_di(node->ty->size), reg_ax(node->ty->size));
+  pop_tmp("%r9");
+  println("  mov %s, %s", reg_ax(node->ty->size), reg_si(node->ty->size));
+  println("  mov (%%r9), %s", reg_ax(node->ty->size));
+  println("1:  mov %s, %s", reg_ax(node->ty->size), reg_dx(node->ty->size));
+  println("  mov %s, %s", reg_ax(node->ty->size), reg_di(node->ty->size));
+  println("  %s %s, %s", op, reg_si(node->ty->size), reg_dx(node->ty->size));
+  println("  lock cmpxchg %s, (%%r9)", reg_dx(node->ty->size));
+  println("  jnz 1b");
+  println("  mov %s, %s", reg_di(node->ty->size), reg_ax(node->ty->size));
 }
+
+static void gen_memset(Node *node) {
+  if (opt_fbuiltin) {    
+    gen_expr(node->builtin_dest);
+    push_tmp();
+    gen_expr(node->builtin_val);
+    push_tmp();
+    gen_expr(node->builtin_size);
+    push_tmp();
+    pop_tmp("%rcx");  
+    pop_tmp("%rsi");  
+    pop_tmp("%rdi");  
+    println("  mov %%sil, %%al");  
+    println("  rep stosb");  
+  }     
+}
+
+static void gen_memcpy(Node *node) {
+  if (opt_fbuiltin) {    
+    gen_expr(node->builtin_dest);   
+    push_tmp();                         
+    gen_expr(node->builtin_src);    
+    push_tmp();                         
+    gen_expr(node->builtin_size);   
+    println("  mov %%rax, %%rcx");  
+    pop_tmp("%rsi");                    
+    pop_tmp("%rdi");                   
+    println("  cld");
+    println("  rep movsb");
+    println("  mov %%rdi, %%rax");
+    return;
+  }
+}
+
 
 static void gen_int128_op(Node *node) {
     if (node->rhs) {
       gen_expr(node->rhs);
-      pushx();
+      pushx_tmp();
     }
     gen_expr(node->lhs);
     if (node->rhs)
-      popx("%rdi", "%rsi");
+      popx_tmp("%rdi", "%rsi");
 
   switch (node->kind) {
     case ND_ADD:
@@ -1760,9 +1856,9 @@ static void gen_cmpxchgn(Node *node) {
 }
 
 
-static void gen_builtin(Node *node, const char *insn) {
+static void gen_builtin(Node *node, const char *insn, const char *reg) {
     gen_expr(node->builtin_val); 
-    println("  %s %%rax, %%rax", insn); 
+    println("  %s %%%s, %%%s", insn, reg, reg); 
 }
 
 static void gen_vec_init_v2si(Node *node) {
@@ -1804,6 +1900,13 @@ static void gen_vec_init_binop(Node *node, const char *insn) {
     }
   } 
 }
+
+static void gen_pshufd(Node *node) {
+  gen_expr(node->lhs);
+  int imm = node->rhs->val;
+  println("  pshufd $%d, %%xmm0, %%xmm0", imm);
+}
+
 
 static void gen_shuf_binop(Node *node, const char *insn) {
   gen_expr(node->rhs);
@@ -2000,39 +2103,138 @@ static void gen_alloc(Node *node) {
 
 static void gen_release(Node *node) {
   gen_expr(node->lhs);
-  push();
-  pop("%rdi");
+  push_tmp();
+  pop_tmp("%rdi");
   println("  xor %%eax, %%eax");
   println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
 }
 
+static void gen_mul_overflow(Node *node) {
+  int c = count(); 
+  Type *ty = node->lhs->ty;  
+  if (ty->base)
+    ty = ty->base;
+  int size = ty->size;
+  gen_expr(node->lhs);
+  push_tmp();
+  gen_expr(node->rhs);
+  push_tmp();
+  gen_expr(node->builtin_dest);
+  push_tmp();
+  pop_tmp("%rdx"); 
+  pop_tmp("%rsi"); 
+  pop_tmp("%rdi"); 
+  if (size == 1) {
+    // For 8-bit values (char)
+    println("  movzbl %%di, %%eax");  
+    println("  movzbl %%si, %%ebx");  
+    println("  imul %%ebx, %%eax");  
+    println("  jo .L.overflowm%d", c);  
+    println("  mov %%al, (%%rdx)");    
+    println("  mov $0, %%al");       
+    println("  jmp .L.donem%d", c);   
+  } else if (size == 2) {
+    // For 16-bit values (short)
+    println("  movzwl %%di, %%eax");  
+    println("  movzwl %%si, %%ebx");  
+    println("  imul %%ebx, %%eax");  
+    println("  jo .L.overflowm%d", c);
+    println("  mov %%ax, (%%rdx)");    
+    println("  mov $0, %%ax");       
+    println("  jmp .L.donem%d", c);   
+  } else if (size == 4) {
+    // For 32-bit values (int)
+    println("  mov %%edi, %%eax");   
+    println("  imul %%esi, %%eax");   
+    println("  jo .L.overflowm%d", c);  
+    println("  mov %%eax, (%%rdx)");   
+    println("  mov $0, %%eax");       
+    println("  jmp .L.donem%d", c);   
+  } else if (size == 8) {
+    // For 64-bit values (long long)
+    println("  mov %%rdi, %%rax");    
+    println("  imul %%rsi, %%rax");   
+    println("  jo .L.overflowm%d", c);  
+    println("  mov %%rax, (%%rdx)"); 
+    println("  mov $0, %%rax");       
+    println("  jmp .L.donem%d", c);  
+  }
+  println(".L.overflowm%d:", c);
+  println("  mov %%al, (%%rdx)");      
+  println("  mov $1, %%rax");           
+  println(".L.donem%d:", c);
+}
+
+
+static void gen_sub_overflow(Node *node) {
+    int c = count(); 
+    Type *ty = node->builtin_dest->ty;  
+    if (ty->base)
+      ty = ty->base;
+    gen_expr(node->lhs);
+    push_tmp();
+    gen_expr(node->rhs);
+    push_tmp();
+    gen_expr(node->builtin_dest);
+    push_tmp();
+    pop_tmp("%rdx");  
+    pop_tmp("%rsi");  
+    pop_tmp("%rdi"); 
+
+    if (ty->size == 1) {
+        println("  mov %%dil, %%al");
+        println("  sub %%sil, %%al");
+        println("  mov %%al, (%%rdx)");
+    } else if (ty->size == 2) {
+        println("  mov %%di, %%ax");
+        println("  sub %%si, %%ax");
+        println("  mov %%ax, (%%rdx)");
+    } else if (ty->size == 4) {
+        println("  mov %%edi, %%eax");
+        println("  sub %%esi, %%eax");
+        println("  mov %%eax, (%%rdx)");
+    } else {
+        println("  mov %%rdi, %%rax");
+        println("  sub %%rsi, %%rax");
+        println("  mov %%rax, (%%rdx)");
+    }
+    println("  seto %%al");         
+    println("  movzx %%al, %%eax");  
+    println("  cmp $0, %%eax");
+    println("  jne .Loverflows%d", c);
+    println("  mov $0, %%eax");
+    println("  jmp .Lends%d", c);
+    println(".Loverflows%d:", c);
+    println("  mov $1, %%eax");
+    println(".Lends%d:", c);
+}
 
 static void gen_subfetch(Node *node) {
   gen_expr(node->lhs);
-  push();
+  push_tmp();
   gen_expr(node->rhs);
-  pop("%rdi");
-  push();
+  pop_tmp("%rdi");
+  push_tmp();
   println("  neg %s", reg_ax(node->ty->size));
   println("  xadd %s, (%%rdi)", reg_ax(node->ty->size));
-  pop("%rdi");
+  pop_tmp("%rdi");
   println("  sub %s, %s", reg_di(node->ty->size), reg_ax(node->ty->size));
 }
 
 static void gen_fetchadd(Node *node) {
   gen_expr(node->lhs);
-  push();
+  push_tmp();
   gen_expr(node->rhs);
-  pop("%rdi");
+  pop_tmp("%rdi");
   println("  xadd %s, (%%rdi)", reg_ax(node->ty->size));
 }
 
 
 static void gen_fetchsub(Node *node) {
   gen_expr(node->lhs);
-  push();
+  push_tmp();
   gen_expr(node->rhs);
-  pop("%rdi");
+  pop_tmp("%rdi");
   println("  neg %s", reg_ax(node->ty->size));
   println("  xadd %s, (%%rdi)", reg_ax(node->ty->size));
 }
@@ -2071,15 +2273,15 @@ static void gen_add_overflow(Node *node) {
     ty = ty->base;
 
   gen_expr(node->lhs);
-  push();
+  push_tmp();
   gen_expr(node->rhs);
-  push();
+  push_tmp();
   gen_expr(node->builtin_dest);
-  push();
+  push_tmp();
 
-  pop("%rdx");  
-  pop("%rsi");  
-  pop("%rdi"); 
+  pop_tmp("%rdx");  
+  pop_tmp("%rsi");  
+  pop_tmp("%rdi"); 
 
   if (ty->size == 1) {
       println("  mov %%dil, %%al");
@@ -2123,16 +2325,16 @@ static void gen_umul_overflow(Node *node) {
 
     // Generate expressions
     gen_expr(node->lhs);
-    push();
+    push_tmp();
     gen_expr(node->rhs);
-    push();
+    push_tmp();
     gen_expr(node->builtin_dest);
-    push();
+    push_tmp();
 
     // Pop arguments
-    pop("%rdx");  // result pointer (can be NULL)
-    pop("%rsi");  // rhs
-    pop("%rdi");  // lhs
+    pop_tmp("%rdx");  // result pointer (can be NULL)
+    pop_tmp("%rsi");  // rhs
+    pop_tmp("%rdi");  // lhs
     println("  mov %%rdx, %%rcx");
     // Multiply
     if (size == 1) {
@@ -2189,15 +2391,15 @@ static void gen_uadd_overflow(Node *node) {
       ty = ty->base;
 
   gen_expr(node->lhs);
-  push();
+  push_tmp();
   gen_expr(node->rhs);
-  push();
+  push_tmp();
   gen_expr(node->builtin_dest);
-  push();
+  push_tmp();
 
-  pop("%rdx");  
-  pop("%rsi");  
-  pop("%rdi"); 
+  pop_tmp("%rdx");  
+  pop_tmp("%rsi");  
+  pop_tmp("%rdi"); 
 
   if (ty->size == 1) {
       println("  mov %%dil, %%al");
@@ -2267,6 +2469,28 @@ static void gen_parity(Node *node) {
   }
 }
 
+static void gen_mwait(Node *node) {
+  gen_expr(node->builtin_args[0]); 
+  push_tmp();
+  pop_tmp("%rax");
+  gen_expr(node->builtin_args[1]); 
+  push_tmp();
+  pop_tmp("%rcx");
+  println("mwait");
+}
+
+static void gen_monitor(Node *node) {
+  gen_expr(node->builtin_args[0]); 
+  push_tmp();
+  pop_tmp("%rax");
+  gen_expr(node->builtin_args[1]); 
+  push_tmp();
+  pop_tmp("%rcx");
+  gen_expr(node->builtin_args[2]); 
+  push_tmp();
+  pop_tmp("%rdx");
+  println("monitor");
+}
 
 static void gen_movq128(Node *node) {
   gen_expr(node->lhs); 
@@ -2300,6 +2524,46 @@ static void gen_movnt_binop(Node *node, const char *insn) {
   gen_expr(node->lhs);
   println("  %s %%xmm0, (%%rax)", insn);
 }
+
+static void gen_crc32qi(Node *node) {
+  gen_expr(node->lhs);       // accumulator in %rax
+  println("  movl %%eax, %%ecx");
+  gen_expr(node->rhs);       // byte input in %rax
+  println("  movb %%al, %%dl");
+
+  println("  crc32b %%dl, %%ecx");
+  println("  movl %%ecx, %%eax");
+}
+
+static void gen_crc32di(Node *node) {
+  gen_expr(node->lhs);            // accumulator -> %rax
+  println("  movq %%rax, %%rcx");      // destination must be 64-bit
+  gen_expr(node->rhs);            // uint64 -> %rax
+  println("  movq %%rax, %%rdx");
+  println("  crc32q %%rdx, %%rcx");
+  println("  movq %%rcx, %%rax");      // return 64-bit value
+}
+
+
+static void gen_crc32hi(Node *node) {
+  gen_expr(node->lhs);           // accumulator -> %rax
+  println("  movl %%eax, %%ecx");
+  gen_expr(node->rhs);           // input -> %rax
+  println("  movw %%ax, %%dx");       // 16-bit input
+  println("  crc32w %%dx, %%ecx");
+  println("  movl %%ecx, %%eax");
+}
+
+
+static void gen_crc32si(Node *node) {
+  gen_expr(node->lhs);           // accumulator -> %rax
+  println("  movl %%eax, %%ecx");
+  gen_expr(node->rhs);           // uint32 -> %rax
+  println("  movl %%eax, %%edx");
+  println("  crc32l %%edx, %%ecx");
+  println("  movl %%ecx, %%eax");
+}
+
 
 
 // Helper to emit MMX two-operand instruction
@@ -2356,7 +2620,7 @@ static void gen_sse_binop6(Node *node, const char *insn, const char *insn2) {
 
 static void gen_sse_binop7(Node *node, const char *insn) {
   gen_expr(node->lhs);
-  println("  movdqa %%xmm0, %%xmm1");  
+  println("  movups %%xmm0, %%xmm1");  
   gen_expr(node->rhs);
   println("  %s %%xmm0, %%xmm1", insn);  
   println("  movdqa %%xmm1, %%xmm0");  
@@ -2389,6 +2653,50 @@ static void gen_sse_binop11(Node *node, const char *insn, const char *reg) {
   gen_expr(node->rhs);  
   println("  %s %%%s, %%xmm0", insn, reg);  
 }
+
+static void gen_sse_binop12(Node *node, const char *insn) {
+  gen_expr(node->lhs); 
+  println("  movups %%xmm0, %%xmm1");   
+  println("  %s  %%xmm0, %%xmm1", insn);  
+}
+
+
+static void gen_sse_binop13(Node *node, const char *insn, const char *reg) {
+  gen_expr(node->lhs);
+  println("  movq (%%rax), %%xmm0");
+  println("  %s (%%%s), %%xmm0", insn, reg);  
+}
+
+
+static void gen_lddqu(Node *node) {
+    gen_addr(node->lhs);       
+    println("  lddqu (%%rax), %%xmm0");
+}
+
+static void gen_sse_pblendvb128(Node *node) {
+  assert(node->builtin_nargs == 3);  
+  gen_expr(node->builtin_args[0]); 
+  println("  movups %%xmm0, %%xmm1"); 
+  gen_expr(node->builtin_args[1]);      
+  println("  movups %%xmm0, %%xmm2"); 
+  gen_expr(node->builtin_args[2]); 
+  println("  pblendvb %%xmm2, %%xmm1"); 
+  println("  movups %%xmm1, %%xmm0");
+}
+
+static void gen_sse_blendvpx(Node *node, const char *insn) {
+  assert(node->builtin_nargs == 3);  
+  gen_expr(node->builtin_args[0]); 
+  println("  movups (%%rax), %%xmm1"); 
+  gen_expr(node->builtin_args[1]);      
+  println("  movups (%%rax), %%xmm2"); 
+  gen_expr(node->builtin_args[2]); 
+  println("  movups (%%rax), %%xmm0"); 
+  println("  %s %%xmm0, %%xmm2, %%xmm1", insn); 
+  println("  movups %%xmm1, %%xmm0");
+}
+
+
 
 static void gen_cvt_mmx_binop(Node *node, const char *insn) {
   gen_addr(node->lhs);   
@@ -2447,6 +2755,200 @@ static void gen_mmx_binop(Node *node, const char *insn, bool rhs_is_imm) {
   println("  movq %%mm0, %%rax");
   println("  movq %%rax, %%xmm0");
   println("  emms");
+}
+
+static void gen_mmx_binop1(Node *node, const char *insn) {
+  gen_expr(node->lhs);    
+  println("  movq (%%rax), %%mm0");
+  println("  %s %%mm0, %%mm0", insn);
+  println("  movq %%mm0, %%rax");
+  println("  movq %%rax, %%xmm0");
+  println("  emms");
+}
+
+static void gen_sse_testz(Node *node) {
+    gen_expr(node->lhs);   // %xmm0 = M
+    println("  movups %%xmm0, %%xmm1");
+    gen_expr(node->rhs);   // %xmm0 = V
+    // ptest performs V & M
+    println("  ptest %%xmm0, %%xmm1");  // sets ZF and CF
+    println("  setz %%al");             // AL = 1 if ZF=1
+    println("  movzx %%al, %%eax");     // zero-extend to EAX
+}
+
+static void gen_sse_testc(Node *node) {
+    gen_expr(node->lhs);              // %xmm0 = M
+    println("  movups %%xmm0, %%xmm1"); // copy M to xmm1
+    gen_expr(node->rhs);              // %xmm0 = V
+    // ptest xmm1, xmm0 → sets ZF/CF
+    println("  ptest %%xmm0, %%xmm1"); // CF = ((V & M) != M)
+    // set result based on CF
+    println("  setc %%al");            // AL = 1 if CF=1
+    println("  movzx %%al, %%eax");    // zero-extend to EAX
+}
+
+static void gen_sse_testnzc(Node *node) {              
+    gen_expr(node->rhs);   
+    println("  movups %%xmm0, %%xmm1"); 
+    gen_expr(node->lhs);             
+    println("  ptest %%xmm1, %%xmm0");  
+    // ptestnzc returns 1 if ZF==0 AND CF==0 (not zero and not carry)
+    println("  setnz %%al");            // al = 1 if ZF==0
+    println("  setnc %%cl");            // cl = 1 if CF==0
+    println("  and %%cl, %%al");        // al = al & cl
+    println("  movzx %%al, %%eax");     
+}
+
+static void gen_cas(Node *node)   {
+  gen_expr(node->cas_addr);
+  push_tmp();
+  gen_expr(node->cas_new);
+  push_tmp();
+  gen_expr(node->cas_old);
+  println("  mov %%rax, %%r8");
+  if (!node->cas_old->ty->base)
+    error("%s %d: in gen_expr : ND_CAS node base type is null!", CODEGEN_C, __LINE__); 
+  load(node->cas_old->ty->base);
+  pop_tmp("%rdx"); // new
+  pop_tmp("%rdi"); // addr
+
+  int sz = node->cas_addr->ty->base->size;
+  println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz));
+  println("  sete %%cl");
+  println("  je 1f");
+  println("  mov %s, (%%r8)", reg_ax(sz));
+  println("1:");
+  println("  movzbl %%cl, %%eax");
+  return;
+  }
+
+static void gen_bool_cas(Node *node) {
+  gen_expr(node->cas_ptr);      
+  push_tmp();
+  gen_expr(node->cas_expected);  
+  push_tmp();
+  gen_expr(node->cas_desired);   
+  push_tmp();
+  pop_tmp("%rdx");
+  pop_tmp("%rax");
+  pop_tmp("%rdi");
+  int sz = node->cas_ptr->ty->base->size;
+  println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz)); 
+  println("  sete %%al");       
+  println("  movzbl %%al, %%eax"); 
+}
+
+
+static void  gen_add_and_fetch(Node *node) {
+  gen_expr(node->lhs);
+  push_tmp();
+  gen_expr(node->rhs);
+  pop_tmp("%rdi");  
+  int sz = node->lhs->ty->base->size;
+  println("  mov %%rax, %%rcx");           
+  println("  lock xadd %s, (%%rdi)", reg_ax(sz));
+  println("  add %%rcx, %%rax");
+ }
+
+
+static void gen_sub_and_fetch(Node *node) {
+  gen_expr(node->lhs);    
+  push_tmp();
+  gen_expr(node->rhs);    
+  push_tmp();
+  pop_tmp("%rax");        
+  pop_tmp("%rdi");        
+  int sz = node->lhs->ty->base->size;
+  println("  mov %s, %s", reg_ax(sz), reg_cx(sz));               
+  println("  neg %s", reg_ax(sz));               
+  println("  lock xadd %s, (%%rdi)", reg_ax(sz));
+  println("  sub %s, %s", reg_cx(sz), reg_ax(sz));      
+}
+
+
+static void gen_fetchnand(Node *node) {
+  gen_expr(node->lhs);
+  push_tmp();
+  gen_expr(node->rhs);
+  push_tmp();
+  pop_tmp("%rsi");   // rhs value (mask)
+  pop_tmp("%rdi");   // address
+  int sz = node->lhs->ty->base->size;
+  int c = count();
+  println(".L.fetchnand.loop_%d:", c);
+  switch (sz) {
+  case 1:
+    println("  movzbl (%%rdi), %%eax");
+    break;
+  case 2:
+    println("  movzwl (%%rdi), %%eax");
+    break;
+  case 4:
+    println("  movl (%%rdi), %%eax");
+    break;
+  case 8:
+    println("  movq (%%rdi), %%rax");
+    break;
+  default:
+    error("%s: %s:%d: error: in get_fetchnand: unsupported atomic size %d", CODEGEN_C, __FILE__, __LINE__, sz);    
+  }
+
+  println("  mov %%rax, %%rdx");
+  println("  and %%rsi, %%rdx");
+  println("  not %%rdx");       
+
+  println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz));  
+  println("  jnz .L.fetchnand.loop_%d", c);
+}
+
+
+static void gen_cas_n(Node *node)   {  
+  gen_expr(node->cas_addr);
+  push_tmp();
+  gen_expr(node->cas_new);  
+  push_tmp();
+  gen_expr(node->cas_old); 
+  /*
+    * For __sync_val_compare_and_swap we must return the original
+    * value that was stored at *addr.  The `cmpxchg` instruction
+    * leaves that original memory value in RAX.  Do not overwrite
+    * RAX after the instruction; instead normalize the low bits for
+    * small integer types so the upper bits don't contain garbage.
+    */
+
+  pop_tmp("%rdx"); /* new */
+  pop_tmp("%rdi"); /* addr */
+  int sz = node->cas_addr->ty->base->size;
+
+  /* cmpxchg uses RAX (old) and RDX (new), compares with (RDI) */
+  println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz));
+
+  /* Normalize RAX for small return types (bool/char/short) */
+  {
+    Type *bt = node->cas_old->ty;
+
+    switch (bt->kind) {
+    case TY_BOOL:
+      println("  movzx %%al, %%eax");
+      break;
+    case TY_CHAR:
+      if (bt->is_unsigned)
+        println("  movzbl %%al, %%eax");
+      else
+        println("  movsbl %%al, %%eax");
+      break;
+    case TY_SHORT:
+      if (bt->is_unsigned)
+        println("  movzwl %%ax, %%eax");
+      else
+        println("  movswl %%ax, %%eax");
+      break;
+    default:
+      break;
+    }
+  }
+
+  return;
 }
 
 static void gen_single_binop(const char *insn) {
@@ -2600,14 +3102,11 @@ static void gen_expr(Node *node)
     return;
   case ND_ASSIGN:    
     gen_addr(node->lhs);
-    push();
+    int tmp_offset = push_tmp();
     gen_expr(node->rhs);
     if (node->lhs->kind == ND_MEMBER && node->lhs->member->is_bitfield)
     {
       println("  mov %%rax, %%r8");
-
-      // If the lhs is a bitfield, we need to read the current value
-      // from memory and merge it with a new value.
       Member *mem = node->lhs->member;
       println("  mov %%rax, %%rdi");
       if (mem->bit_width >= 32)
@@ -2619,21 +3118,30 @@ static void gen_expr(Node *node)
       {
         println("  and $%ld, %%rdi", (1L << mem->bit_width) - 1);
       }
-      // println("  and $%ld, %%rdi", (1L << mem->bit_width) - 1);
-      println("  shl $%d, %%rdi", mem->bit_offset);
 
-      println("  mov (%%rsp), %%rax");
+      println("  shl $%d, %%rdi", mem->bit_offset);
+      println("  mov %d(%%rbp), %%rax", tmp_offset);
       load(mem->ty);
 
+        
       long mask = ((1L << mem->bit_width) - 1) << mem->bit_offset;
       println("  mov $%ld, %%r9", ~mask);
       println("  and %%r9, %%rax");
       println("  or %%rdi, %%rax");
-      store(mem->ty);
+      store(node->ty);
       println("  mov %%r8, %%rax");
+      if (mem->ty->kind == TY_BOOL)
+        return;
+
+      long mask2 = (1L << mem->bit_width) - 1;
+      println("  mov $%ld, %%r9", mask2);
+      println("  and %%r9, %%rax");       
+      int shift = 64 - mem->bit_width - mem->bit_offset;
+      println("  shl $%d, %%rax", shift);
+      println("  sar $%d, %%rax", shift);
+
       return;
     }
-
     store(node->ty);
     return;
   case ND_STMT_EXPR:
@@ -2854,110 +3362,18 @@ static void gen_expr(Node *node)
   case ND_LABEL_VAL:
     println("  lea %s(%%rip), %%rax", node->unique_label);
     return;
-  case ND_CAS:
-  {
-    gen_expr(node->cas_addr);
-    push();
-    gen_expr(node->cas_new);
-    push();
-    gen_expr(node->cas_old);
-    println("  mov %%rax, %%r8");
-    if (!node->cas_old->ty->base)
-      error("%s %d: in gen_expr : ND_CAS node base type is null!", CODEGEN_C, __LINE__); 
-    load(node->cas_old->ty->base);
-    pop("%rdx"); // new
-    pop("%rdi"); // addr
-
-    int sz = node->cas_addr->ty->base->size;
-    println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz));
-    println("  sete %%cl");
-    println("  je 1f");
-    println("  mov %s, (%%r8)", reg_ax(sz));
-    println("1:");
-    println("  movzbl %%cl, %%eax");
-    return;
-  }
-  case ND_CAS_N: {
-    gen_expr(node->cas_addr);
-    push();
-    gen_expr(node->cas_new);  
-    push();
-    gen_expr(node->cas_old); 
-
-    // Move the old value to r8 to preserve it
-    println("  mov %%rax, %%r8"); 
-
-    pop("%rdx"); 
-    pop("%rdi"); 
-    int sz = node->cas_addr->ty->base->size;
-
-    // Perform the atomic compare-and-swap operation
-    println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz)); 
-
-    // After cmpxchg, rax contains the old value (before the swap)
-    // Restore the preserved old value to rax
-    println("  mov %%r8, %%rax"); 
-
-    return;
-  }
+  case ND_CAS: gen_cas(node); return;
+  case ND_CAS_N: gen_cas_n(node); return;
+  case ND_FETCHNAND: gen_fetchnand(node); return;
+  case ND_ADD_AND_FETCH: gen_add_and_fetch(node); return;
+  case ND_SUB_AND_FETCH: gen_sub_and_fetch(node); return;
+  case ND_BOOL_CAS: gen_bool_cas(node); return;
   case ND_SYNC: {
     println("  mfence"); // x86-64 instruction for full memory barrier
     return;
   }
-  case ND_BUILTIN_MEMCPY: {
-    if (opt_fbuiltin) {
-      gen_expr(node->builtin_dest);
-      push();
-      println("  mov %%rax, %%rdi"); 
-      gen_expr(node->builtin_src);
-      push();
-      println("  mov %%rax, %%rsi");
-      gen_expr(node->builtin_size);
-      push();
-      println("  mov %%rax, %%rcx"); 
-      println("  rep movsb");
-      pop("%rcx");
-      pop("%rsi");
-      pop("%rdi");
-    }
-    else {
-    gen_expr(node->builtin_dest); 
-    push();
-    
-    gen_expr(node->builtin_src);  
-    push();
-    
-    gen_expr(node->builtin_size); 
-    push();
-
-    println("  call memcpy");
-
-    // Restore the stack
-    pop("%rdx"); // size
-    pop("%rsi"); // source
-    pop("%rdi"); // destination
-    
-    }
-    return;   
-  }
-
-  case ND_BUILTIN_MEMSET: {
-    gen_expr(node->builtin_dest);
-    push();
-    gen_expr(node->builtin_val);
-    push();
-    gen_expr(node->builtin_size);
-    push();
-
-    pop("%rcx");  // size
-    pop("%rsi");  // value
-    pop("%rdi");  // destination
-
-    println("  mov %%sil, %%al");  
-    println("  rep stosb");       
-
-    return;
-  }
+  case ND_BUILTIN_MEMCPY: gen_memcpy(node); return;
+  case ND_BUILTIN_MEMSET: gen_memset(node); return;
   case ND_BUILTIN_CLZ: {
     gen_expr(node->builtin_val); 
     println("  bsr %%eax, %%eax"); 
@@ -2972,19 +3388,9 @@ static void gen_expr(Node *node)
 
     return;
   }
-  case ND_BUILTIN_CTZ: {
-    gen_expr(node->builtin_val); 
-    println("  bsf %%eax, %%eax"); 
-    return;
-  }
+  case ND_BUILTIN_CTZ: gen_builtin(node, "bsf", "eax"); return;
   case ND_BUILTIN_CTZLL:
-  case ND_BUILTIN_CTZL: gen_builtin(node, "bsf"); return;
-  // {
-  //   gen_expr(node->builtin_val); 
-  //   println("  bsf %%rax, %%rax"); 
-  //   return;
-  // }
-
+  case ND_BUILTIN_CTZL: gen_builtin(node, "bsf", "rax"); return;
   case ND_BUILTIN_BSWAP16: {
       gen_expr(node->builtin_val);  
       println("  mov %%ax, %%dx");  
@@ -3050,12 +3456,12 @@ static void gen_expr(Node *node)
   }
   case ND_POPCOUNTL:
   case ND_POPCOUNTLL:
-  case ND_POPCOUNT: gen_builtin(node, "popcnt"); return;
+  case ND_POPCOUNT: gen_builtin(node, "popcnt", "rax"); return;
   case ND_EXPECT: {
     gen_expr(node->lhs); 
-    push(); 
+    push_tmp(); 
     gen_expr(node->rhs); 
-    pop("%rdi"); 
+    pop_tmp("%rdi"); 
     println("  cmp %%rax, %%rdi");
     println("  mov %%rdi, %%rax");
     return;
@@ -3082,119 +3488,8 @@ static void gen_expr(Node *node)
   case ND_UADDLL_OVERFLOW:
   case ND_UADD_OVERFLOW: gen_uadd_overflow(node); return;
   case ND_BUILTIN_ADD_OVERFLOW: gen_add_overflow(node); return;
-  case ND_BUILTIN_SUB_OVERFLOW: {
-    int c = count(); 
-    Type *ty = node->builtin_dest->ty;  
-    if (ty->base)
-      ty = ty->base;
-
-    gen_expr(node->lhs);
-    push();
-    gen_expr(node->rhs);
-    push();
-    gen_expr(node->builtin_dest);
-    push();
-
-    pop("%rdx");  
-    pop("%rsi");  
-    pop("%rdi"); 
-
-    if (ty->size == 1) {
-        println("  mov %%dil, %%al");
-        println("  sub %%sil, %%al");
-        println("  mov %%al, (%%rdx)");
-    } else if (ty->size == 2) {
-        println("  mov %%di, %%ax");
-        println("  sub %%si, %%ax");
-        println("  mov %%ax, (%%rdx)");
-    } else if (ty->size == 4) {
-        println("  mov %%edi, %%eax");
-        println("  sub %%esi, %%eax");
-        println("  mov %%eax, (%%rdx)");
-    } else {
-        println("  mov %%rdi, %%rax");
-        println("  sub %%rsi, %%rax");
-        println("  mov %%rax, (%%rdx)");
-    }
-
-    // Check for overflow
-    println("  seto %%al");          // Set AL if overflow occurred
-    println("  movzx %%al, %%eax");  // Zero-extend AL to EAX
-
-    // Return 0 if no overflow, 1 if overflow
-    println("  cmp $0, %%eax");
-    println("  jne .Loverflows%d", c);
-    println("  mov $0, %%eax");
-    println("  jmp .Lends%d", c);
-    println(".Loverflows%d:", c);
-    println("  mov $1, %%eax");
-    println(".Lends%d:", c);
-    return;
-  }
-  case ND_BUILTIN_MUL_OVERFLOW: {
-    int c = count();  // Unique label counter
-    Type *ty = node->lhs->ty;  // Get the type of the operands
-    if (ty->base)
-      ty = ty->base;
-    int size = ty->size;
-    // Evaluate left-hand side and right-hand side expressions
-    gen_expr(node->lhs);
-    push();
-    gen_expr(node->rhs);
-    push();
-    gen_expr(node->builtin_dest);
-    push();
-
-    // Load values into registers and perform multiplication
-    pop("%rdx");  // Load address of result variable
-    pop("%rsi");  // Load rhs
-    pop("%rdi");  // Load lhs
-
-    // Determine the suffix and size for the operations
-    if (size == 1) {
-        // For 8-bit values (char)
-        println("  movzbl %%di, %%eax");  // Zero-extend to 32-bit
-        println("  movzbl %%si, %%ebx");  // Zero-extend to 32-bit
-        println("  imul %%ebx, %%eax");   // Perform 32-bit multiplication
-        println("  jo .L.overflowm%d", c);  // Jump if overflow
-        println("  mov %%al, (%%rdx)");    // Store result (8-bit)
-        println("  mov $0, %%al");       
-        println("  jmp .L.donem%d", c);    // Jump to done
-    } else if (size == 2) {
-        // For 16-bit values (short)
-        println("  movzwl %%di, %%eax");  // Zero-extend to 32-bit
-        println("  movzwl %%si, %%ebx");  // Zero-extend to 32-bit
-        println("  imul %%ebx, %%eax");   // Perform 32-bit multiplication
-        println("  jo .L.overflowm%d", c);  // Jump if overflow
-        println("  mov %%ax, (%%rdx)");    // Store result (16-bit)
-        println("  mov $0, %%ax");       
-        println("  jmp .L.donem%d", c);    // Jump to done
-    } else if (size == 4) {
-        // For 32-bit values (int)
-        println("  mov %%edi, %%eax");    // Move to 32-bit
-        println("  imul %%esi, %%eax");   // Perform 32-bit multiplication
-        println("  jo .L.overflowm%d", c);  // Jump if overflow
-        println("  mov %%eax, (%%rdx)");    // Store result (32-bit)
-        println("  mov $0, %%eax");       
-        println("  jmp .L.donem%d", c);    // Jump to done
-    } else if (size == 8) {
-        // For 64-bit values (long long)
-        println("  mov %%rdi, %%rax");    // Move to 64-bit
-        println("  imul %%rsi, %%rax");   // Perform 64-bit multiplication
-        println("  jo .L.overflowm%d", c);  // Jump if overflow
-        println("  mov %%rax, (%%rdx)");    // Store result (64-bit)
-        println("  mov $0, %%rax");       
-        println("  jmp .L.donem%d", c);    // Jump to done
-    }
-
-    // Overflow handling
-    println(".L.overflowm%d:", c);
-    println("  mov %%al, (%%rdx)");        // Store result
-    println("  mov $1, %%rax");            // Set return value to 1 (overflow detected)
-    println(".L.donem%d:", c);
-
-    return;
-  }
+  case ND_BUILTIN_SUB_OVERFLOW: gen_sub_overflow(node); return;
+  case ND_BUILTIN_MUL_OVERFLOW: gen_mul_overflow(node); return;
   case ND_UNREACHABLE:
     println("  // __builtin_unreachable: no code generation needed");
     return;
@@ -3219,9 +3514,9 @@ static void gen_expr(Node *node)
   case ND_EXCH:
   {
     gen_expr(node->lhs);
-    push();
+    push_tmp();
     gen_expr(node->rhs);
-    pop("%rdi");
+    pop_tmp("%rdi");
 
     int sz = node->lhs->ty->base->size;
     println("  xchg %s, (%%rdi)", reg_ax(sz));
@@ -3230,9 +3525,9 @@ static void gen_expr(Node *node)
   case ND_EXCH_N:
   case ND_TESTANDSET: {
     gen_expr(node->lhs);
-    push();
+    push_tmp();
     gen_expr(node->rhs);
-    pop("%rdi");
+    pop_tmp("%rdi");
     println("  xchg %s, (%%rdi)", reg_ax(node->ty->size));
     return;
   }
@@ -3240,18 +3535,18 @@ static void gen_expr(Node *node)
   case ND_CMPEXCH_N: gen_cmpxchgn(node); return;
   case ND_TESTANDSETA: {
     gen_expr(node->lhs);
-    push();
+    push_tmp();
     println("  mov $1, %%eax");
-    pop("%rdi");
+    pop_tmp("%rdi");
     println("  xchg %s, (%%rdi)", reg_ax(node->ty->size));
     return;
   }
   case ND_LOAD: {
     gen_expr(node->rhs);
-    push();
+    push_tmp();
     gen_expr(node->lhs);
     println("  mov (%%rax), %s", reg_ax(node->ty->size));
-    pop("%rdi");
+    pop_tmp("%rdi");
     println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
     return;
   }
@@ -3265,9 +3560,9 @@ static void gen_expr(Node *node)
   }
   case ND_STORE: {
     gen_expr(node->lhs);
-    push();
+    push_tmp();
     gen_expr(node->rhs);
-    pop("%rdi");
+    pop_tmp("%rdi");
     println("  mov (%%rax),%s", reg_ax(node->ty->size));
     println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
     if (node->memorder) {
@@ -3277,9 +3572,9 @@ static void gen_expr(Node *node)
   }
   case ND_STORE_N:
     gen_expr(node->lhs);
-    push();
+    push_tmp();
     gen_expr(node->rhs);
-    pop("%rdi");
+    pop_tmp("%rdi");
     println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
     if (node->memorder) {
       println("  mfence");
@@ -3473,6 +3768,12 @@ static void gen_expr(Node *node)
   case ND_CMPNGEPS:  gen_sse_binop3(node, "cmpps $1,", false);  return;
   case ND_CMPORDPS: gen_sse_binop3(node, "cmpordps", false);  return;  
   case ND_CMPUNORDPS: gen_sse_binop3(node, "cmpunordps", false);  return;  
+  case ND_PHADDW128: gen_sse_binop3(node, "phaddw", false);  return; 
+  case ND_PHADDD128: gen_sse_binop3(node, "phaddd", false);  return; 
+  case ND_PHADDSW128: gen_sse_binop3(node, "phaddsw", false);  return;
+  case ND_PHADDW: gen_mmx_binop(node, "phaddw", false); return;
+  case ND_PHADDD: gen_mmx_binop(node, "phaddd", false);  return;
+  case ND_PHADDSW: gen_mmx_binop(node, "phaddsw", false);  return;
   case ND_COMIEQ: gen_sse_binop4(node, "comiss", "sete");  return;  
   case ND_COMILT: gen_sse_binop4(node, "comiss", "setb");  return;  
   case ND_COMILE: gen_sse_binop4(node, "comiss", "setbe");  return;  
@@ -3612,8 +3913,26 @@ static void gen_expr(Node *node)
   case ND_PMAXUB128:gen_sse_binop3(node, "pmaxub", false); return; 
   case ND_PMINSW128:gen_sse_binop3(node, "pminsw", false); return; 
   case ND_PMINUB128:gen_sse_binop3(node, "pminub", false); return; 
+  case ND_PHSUBW128:gen_sse_binop3(node, "phsubw", false); return;
+  case ND_PHSUBD128:gen_sse_binop3(node, "phsubd", false); return;
+  case ND_PHSUBSW128: gen_sse_binop3(node, "phsubsw", false); return;
+  case ND_PMADDUBSW128: gen_sse_binop3(node, "pmaddubsw", false); return;
+  case ND_PMULHRSW128: gen_sse_binop3(node, "pmulhrsw", false); return;
   case ND_PMOVMSKB128: gen_sse_binop2(node, "pmovmskb", "eax", false);  return;   
   case ND_PMULHUW128: gen_sse_binop9(node, "pmulhuw"); return; 
+  case ND_PSHUFB128: gen_sse_binop3(node, "pshufb", false); return;
+  case ND_PSIGNB128: gen_sse_binop3(node, "psignb", false); return;
+  case ND_PSIGNW128: gen_sse_binop3(node, "psignw", false); return;
+  case ND_PSIGND128: gen_sse_binop3(node, "psignd", false); return;  
+  case ND_PHSUBW: gen_mmx_binop(node, "phsubw", false); return;
+  case ND_PHSUBD: gen_mmx_binop(node, "phsubd", false); return;
+  case ND_PHSUBSW: gen_mmx_binop(node, "phsubsw", false); return;
+  case ND_PMADDUBSW: gen_mmx_binop(node, "pmaddubsw", false); return;
+  case ND_PMULHRSW: gen_mmx_binop(node, "pmulhrsw", false); return;
+  case ND_PSHUFB: gen_mmx_binop(node, "pshufb", false); return;
+  case ND_PSIGNB: gen_mmx_binop(node, "psignb", false); return;
+  case ND_PSIGNW: gen_mmx_binop(node, "psignw", false); return;
+  case ND_PSIGND: gen_mmx_binop(node, "psignd", false); return;
   case ND_MASKMOVDQU: gen_maskmovdqu(node); return;
   case ND_PAVGB128:gen_sse_binop3(node, "pavgb", false); return; 
   case ND_PAVGW128:gen_sse_binop3(node, "pavgw", false); return; 
@@ -3625,6 +3944,58 @@ static void gen_expr(Node *node)
   case ND_PARITYL:
   case ND_PARITYLL:
   case ND_PARITY: gen_parity(node); return;
+  case ND_MWAIT: gen_mwait(node); return;
+  case ND_MONITOR: gen_monitor(node); return;
+  case ND_ADDSUBPS: gen_sse_binop3(node, "addsubps", false);  return;
+  case ND_HADDPS: gen_sse_binop3(node, "haddps", false);  return;
+  case ND_HSUBPS: gen_sse_binop3(node, "hsubps", false);  return;
+  case ND_MOVSHDUP: gen_sse_binop12(node, "movshdup");  return;
+  case ND_MOVSLDUP: gen_sse_binop12(node, "movsldup");  return;
+  case ND_ADDSUBPD: gen_sse_binop3(node, "addsubpd", false);  return;
+  case ND_HADDPD: gen_sse_binop3(node, "haddpd", false);  return;
+  case ND_HSUBPD: gen_sse_binop3(node, "hsubpd", false);  return;  
+  case ND_LDDQU: gen_lddqu(node); return;
+  case ND_PABSB128: gen_sse_binop2(node, "pabsb", "xmm0", false); return;
+  case ND_PABSW128: gen_sse_binop2(node, "pabsw", "xmm0", false); return;
+  case ND_PABSD128: gen_sse_binop2(node, "pabsd", "xmm0", false); return;
+  case ND_PABSB: gen_mmx_binop1(node, "pabsb"); return;
+  case ND_PABSW: gen_mmx_binop1(node, "pabsw"); return;
+  case ND_PABSD: gen_mmx_binop1(node, "pabsd"); return;
+  case ND_PTESTZ128: gen_sse_testz(node); return;
+  case ND_PTESTC128: gen_sse_testc(node); return;
+  case ND_PTESTNZC128: gen_sse_testnzc(node); return;
+  case ND_PBLENDVB128: gen_sse_pblendvb128(node); return;
+  case ND_BLENDVPS: gen_sse_blendvpx(node, "blendvps"); return;
+  case ND_BLENDVPD: gen_sse_blendvpx(node, "blendvpd"); return;
+  case ND_PMINSB128: gen_sse_binop3(node, "pminsb", false); return; 
+  case ND_PMAXSB128: gen_sse_binop3(node, "pmaxsb", false); return; 
+  case ND_PMINUW128: gen_sse_binop3(node, "pminuw", false); return; 
+  case ND_PMAXUW128: gen_sse_binop3(node, "pmaxuw", false); return;   
+  case ND_PMINSD128: gen_sse_binop3(node, "pminsd", false); return; 
+  case ND_PMAXSD128: gen_sse_binop3(node, "pmaxsd", false); return;     
+  case ND_PMINUD128: gen_sse_binop3(node, "pminud", false); return; 
+  case ND_PMAXUD128: gen_sse_binop3(node, "pmaxud", false); return;    
+  case ND_PMULDQ128: gen_sse_binop3(node, "pmuldq", false); return;     
+  case ND_PHMINPOSUW128: gen_sse_binop2(node, "phminposuw", "xmm0", false);  return; 
+  case ND_PMOVSXBD128: gen_sse_binop2(node, "pmovsxbd", "xmm0", false);  return; 
+  case ND_PMOVSXWD128: gen_sse_binop2(node, "pmovsxwd", "xmm0", false);  return;
+  case ND_PMOVSXBQ128: gen_sse_binop2(node, "pmovsxbq", "xmm0", false);  return;
+  case ND_PMOVSXDQ128: gen_sse_binop2(node, "pmovsxdq", "xmm0", false);  return;
+  case ND_PMOVSXWQ128: gen_sse_binop2(node, "pmovsxwq", "xmm0", false);  return;
+  case ND_PMOVSXBW128: gen_sse_binop2(node, "pmovsxbw", "xmm0", false);  return;
+  case ND_PMOVZXBD128: gen_sse_binop2(node, "pmovzxbd", "xmm0", false);  return; 
+  case ND_PMOVZXWD128: gen_sse_binop2(node, "pmovzxwd", "xmm0", false);  return;
+  case ND_PMOVZXBQ128: gen_sse_binop2(node, "pmovzxbq", "xmm0", false);  return;
+  case ND_PMOVZXDQ128: gen_sse_binop2(node, "pmovzxdq", "xmm0", false);  return;
+  case ND_PMOVZXWQ128: gen_sse_binop2(node, "pmovzxwq", "xmm0", false);  return;
+  case ND_PMOVZXBW128: gen_sse_binop2(node, "pmovzxbw", "xmm0", false);  return;
+  case ND_PACKUSDW128: gen_sse_binop3(node, "packusdw", false); return; 
+  case ND_MOVNTDQA: gen_sse_binop13(node, "movntdqa", "rax"); return;
+  case ND_CRC32QI: gen_crc32qi(node); return;
+  case ND_CRC32HI: gen_crc32hi(node); return;
+  case ND_CRC32SI: gen_crc32si(node); return;
+  case ND_CRC32DI: gen_crc32di(node); return;
+  case ND_PSHUFD: gen_pshufd(node); return;
 }
   
 if (is_vector(node->lhs->ty) || (node->rhs && is_vector(node->rhs->ty))) {
@@ -3643,9 +4014,9 @@ switch (node->lhs->ty->kind)
   case TY_DOUBLE:
   {
     gen_expr(node->rhs);
-    pushf();
+    push_tmpf();
     gen_expr(node->lhs);
-    popf(1);
+    pop_tmpf(1);
 
     char *sz = (node->lhs->ty->kind == TY_FLOAT) ? "ss" : "sd";
 
@@ -3742,9 +4113,9 @@ switch (node->lhs->ty->kind)
 
   if (!is_int128(node->rhs->ty)) {
     gen_expr(node->rhs);
-    push();
+    push_tmp();
     gen_expr(node->lhs);
-    pop("%rdi");
+    pop_tmp("%rdi");
   }
 
   char *ax, *di, *dx;
@@ -4010,7 +4381,7 @@ static void emit_data(Obj *prog)
   {
     //issue 35 about array not initialized completely.
     if (var->ty->size != 0)
-      println("  .zero %d", abs(var->ty->size));
+      println("  .zero %ld", labs(var->ty->size));
     if (var->alias_name)
       println("  .set \"%s\", %s", var->name, var->alias_name);
     if (var->is_weak)
@@ -4035,7 +4406,7 @@ static void emit_data(Obj *prog)
       //from @fuhsnn incomplete array assuming to have one element
       if (var->ty->kind == TY_ARRAY && var->ty->size < 0)
         var->ty->size = var->ty->base->size;
-      println("  .comm %s, %d, %d", var->name, var->ty->size, align);
+      println("  .comm %s, %ld, %d", var->name, var->ty->size, align);
       continue;
     }
     
@@ -4054,9 +4425,10 @@ static void emit_data(Obj *prog)
 
             
       println("  .type %s, @object", var->name);
-      println("  .size %s, %d", var->name, abs(var->ty->size));
+      println("  .size %s, %ld", var->name, labs(var->ty->size));
       if (align > 1) println("  .align %d", align);
       println("%s:", var->name);
+
 
       Relocation *rel = var->rel;
       int unit_size = (var->ty->kind == TY_ARRAY) ? var->ty->base->size : var->ty->size;
@@ -4098,7 +4470,9 @@ static void emit_data(Obj *prog)
 
         }
       }
-      println("  .size %s, %d", var->name, var->ty->size);
+
+
+      println("  .size %s, %ld", var->name, var->ty->size);
       continue;
     }
 
@@ -4113,7 +4487,7 @@ static void emit_data(Obj *prog)
     if (align > 1) println("  .align %d", align);
     println("%s:", var->name);
     if (var->ty->size != 0)
-      println("  .zero %d", abs(var->ty->size));
+      println("  .zero %ld", labs(var->ty->size));
   }
 }
 
@@ -4243,14 +4617,40 @@ static void emit_text(Obj *prog)
     println("  .type %s, @function", fn->name);
     println("%s:", fn->name);
 
-    
     current_fn = fn;
+    tmp_stack.bottom = fn->stack_size;
 
+    println("  .cfi_startproc");
     // Prologue
-    println("  push %%rbp");
-    println("  mov %%rsp, %%rbp");
-    println("  sub $%d, %%rsp", fn->stack_size);
-    println("  mov %%rsp, %d(%%rbp)", fn->alloca_bottom->offset);
+    // Check if function calls vfork - if so, avoid creating a frame
+    // (vfork is "returns_twice", meaning the child process shares the parent's stack,
+    // so stack-based temporaries would be unsafe)
+    long reserved_pos = ftell(output_file);
+    if (!fn->vfork_used) {
+      println("  push %%rbp");
+      println("  .cfi_def_cfa_offset 16");
+      println("  .cfi_offset %%rbp, -16");    
+      println("  mov %%rsp, %%rbp");
+      println("  .cfi_def_cfa_register %%rbp");  
+    
+      //println("  sub $%d, %%rsp", fn->stack_size);
+      reserved_pos = ftell(output_file);
+      println("                           ");
+      // Save RSP for alloca/VLA support if needed
+      if (fn->alloca_bottom && fn->alloca_bottom->offset)
+        println("  mov %%rsp, %d(%%rbp)", fn->alloca_bottom->offset);
+    }
+    //issue with postgres and local variables not initialized!
+    for (Obj *var = fn->locals; var; var = var->next) {     
+        if (!var->init && !var->is_param &&
+            (var->ty->kind == TY_STRUCT ||
+            var->ty->kind == TY_UNION ||
+            var->ty->kind == TY_ARRAY ||
+            is_vector(var->ty))) {
+            gen_mem_zero(var->offset, var->ty->size);
+        }
+    }
+
 
     // Save arg registers if function is variadic
     if (fn->va_area)
@@ -4385,6 +4785,12 @@ static void emit_text(Obj *prog)
     // Emit code
     gen_stmt(fn->body);
     assert(depth == 0);
+    assert(tmp_stack.depth == 0);
+    long cur_pos = ftell(output_file);
+    fseek(output_file, reserved_pos, SEEK_SET);
+    if (!fn->vfork_used)
+      println("  sub $%d, %%rsp", align_to(tmp_stack.bottom, 16));
+    fseek(output_file, cur_pos, SEEK_SET);
 
     // [https://www.sigbus.info/n1570#5.1.2.2.3p1] The C spec defines
     // a special rule for the main function. Reaching the end of the
@@ -4396,14 +4802,20 @@ static void emit_text(Obj *prog)
 
     // Epilogue
     println(".L.return.%s:", fn->name);
-    println("  mov %%rbp, %%rsp");
-    println("  pop %%rbp");
+    if (!fn->vfork_used) {
+      println("  mov %%rbp, %%rsp");
+      println("  pop %%rbp");
+      println("  .cfi_def_cfa %%rsp, 8");
+    }
     println("  ret");
+    println("  .cfi_endproc");
     println("  .size %s, .-%s", fn->name, fn->name);
   }
   emit_constructors(); 
   emit_destructors(); 
+  
 }
+
 
 void codegen(Obj *prog, FILE *out)
 {
@@ -4416,7 +4828,6 @@ void codegen(Obj *prog, FILE *out)
   assign_lvar_offsets(prog);
   emit_data(prog);
   emit_text(prog);
-  
   println("  .section  .note.GNU-stack,\"\",@progbits");
   //print offset for each variable
   if (isDebug)
@@ -4470,7 +4881,7 @@ void assign_lvar_offsets(Obj *prog)
     // Assign offsets to pass-by-stack parameters.
     for (Obj *var = fn->params; var; var = var->next)
     {
-
+      var->is_param = true;
       if (var->offset) {
         continue;
       }

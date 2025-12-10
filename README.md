@@ -72,12 +72,15 @@ or
         -A print Abstract Syntax Tree in a log file in /tmp/chibicc.log
         -msse3 enabling sse3 support 
         -msse4 enabling sse4 support 
+        -msse4.1 enabling sse4.1 support 
+        -mcrc32 enabling crc32 instruction support
         -nostdlib  Do not use the standard system startup files or libraries when linking 
         -nostdinc Do not use the standard system header files when compiling 
         -std=c99 generates an error on implicit function declaration (without -std only a warning is emitted)
         -std=c11 generates an error on implicit function declaration (without -std only a warning is emitted)
         -mmmx to allow mmx instructions and builtin functions linked to mmx like __builtin_packuswb... 
         -print-search-dirs prints minimal information on install dir.
+        -Werror any warning is sent as an error and stops the compile
         chibicc [ -o <path> ] <file>
 
 ## compile
@@ -222,8 +225,13 @@ List of options ignored :
     "-P"
     "-Wall"
     "-Wextra"
+    "-Wpedantic"
     "-Wno-switch"
+    "-Wno-clobbered"
+    "-Wduplicated-cond" 
     "-Wno-unused-variable"    
+    "-Wno-unused-parameter"
+    "-Wno-sign-compare"
     "-Wno-format-y2k"
     "-Wno-uninitialized"
     "-Wmissing-prototypes"
@@ -249,6 +257,7 @@ List of options ignored :
     "-fsigned-char"
     "-Bsymbolic"
     "-pedantic"
+    "-pedantic-errors"
     "-nostdinc"
     "-mno-red-zone"
     "-fvisibility=default"
@@ -289,7 +298,11 @@ List of options ignored :
     "-static-libstdc++"
     "-static-libgcc"
     "-pipe"   
+    "-Wno-missing-declarations"
     "-mindirect-branch-register"
+    "-fno-fast-math"
+    "-fno-strict-overflow"
+    "-fexcess-precision=standard"
 
 ## Dockerfile and devcontainer
 
@@ -390,7 +403,7 @@ util-linux : https://github.com/util-linux/util-linux.git
 
 nginx: https://github.com/nginx/nginx.git 
 
-    CC=chibicc CFLAGS=-fPIC ./auto/configure
+    CC=chibicc CFLAGS=-fPIC ./auto/configure --with-http_ssl_module
     make
     
 
@@ -414,11 +427,11 @@ vim: https://github.com/vim/vim.git
     CC=chibicc CFLAGS="-fPIC" ./configure
     make
     make test    
-    == SUMMARY ==
-    Test run on 2023 Sep 23 14:15:31
-    OK: 10
+    == SUMMARY SYNTAX TESTS ==
+    Test run on 2025 Dec 10 18:09:21
+    OK: 192
     FAILED: 0: []
-    skipped: 0    
+    skipped: 0 
 
 
 libwepb: https://github.com/webmproject/libwebp.git
@@ -456,10 +469,6 @@ vlc : https://github.com/videolan/vlc.git
     ./bootstrap
     CC=chibicc CFLAGS="-fPIC -std=c11"  ./configure --disable-lua --disable-xcb --disable-qt --disable-alsa --disable-sse --host x86_64-linux-gnu 
     make all
-    failed during linkage : with undefined references to missing dependency in their Makefile.
-    Adding the missing librtp_plugin_la-sdp.o solves this issue. Changes done in modules/Makefile :
-    libg64rtp_plugin_la_OBJECTS = $(am_libg64rtp_plugin_la_OBJECTS) access/rtp/.libs/librtp_plugin_la-sdp.o
-    after that make all succeeds!
 
 
 
@@ -482,29 +491,15 @@ cpython: git clone https://github.com/python/cpython.git
         
         CC=chibicc ./configure  --host=x86_64-pc-linux-gnu ac_cv_have_lchflags=no ac_cv_have_chflags=no
         make && make test
-        failure with :
-        do_fork_exec () at ./Modules/_posixsubprocess.c:911
-        #1 0x0000767b99afefdf in subprocess_fork_exec_impl () at ./Modules/_posixsubprocess.c:1256
-        #2 0x0000767b99afd98d in subprocess_fork_exec () at ./Modules/clinic/_posixsubprocess.c.h:148
-        #3 0x00000000006de02f in cfunction_vectorcall_FASTCALL () at Objects/methodobject.c:449
-        #4 0x00000000005b53d1 in _PyObject_VectorcallTstate () at ./Include/internal/pycore_call.h:169
-        #5 0x00000000005b8424 in PyObject_Vectorcall () at Objects/call.c:327
-        #6 0x00000000009988ce in _PyEval_EvalFrameDefault () at Python/generated_cases.c.h:1620
-        #7 0x00000000009888dc in _PyEval_EvalFrame () at ./Include/internal/pycore_ceval.h:121
-        #8 0x0000000000988857 in _PyEval_Vector () at Python/ceval.c:1982
-        #9 0x00000000005b3b8e in _PyFunction_Vectorcall () at Objects/call.c:413
-        #10 0x00000000005b6638 in _PyObject_VectorcallDictTstate () at Objects/call.c:146
-        #11 0x00000000005b68da in _PyObject_Call_Prepend () at Objects/call.c:504
-        #12 0x000000000079c6dd in call_method () at Objects/typeobject.c:3060
-        #13 0x0000000000776ab5 in slot_tp_init () at Objects/typeobject.c:10791
-        #14 0x000000000079e913 in type_call () at Objects/typeobject.c:2444
-        #15 0x00000000005b630f in _PyObject_Call () at Objects/call.c:361
-        #16 0x00000000005b90c8 in PyObject_Call () at Objects/call.c:373
-        #17 0x00000000009a03fd in _PyEval_EvalFrameDefault () at Python/generated_cases.c.h:2616
-        #18 0x00000000009888dc in _PyEval_EvalFrame () at ./Include/internal/pycore_ceval.h:121
-        #19 0x0000000000988857 in _PyEval_Vector () at Python/ceval.c:1982
-        #20 0x00000000005b3b8e in _PyFunction_Vectorcall () at Objects/call.c:413
-        => chibicc doesn't manage well vfork due to their push/pop systems!
+        failure with : 
+        ./python -E ./Tools/build/generate-build-details.py cat pybuilddir.txt/build-details.json
+        ./python -E -m test --fast-ci -u-gui --timeout=
+        ./python -u -W error -bb -E -m test --fast-ci -u-gui --timeout= --dont-add-python-opts
+        == CPython 3.15.0a0 (heads/main:fd8f42d3d10, Dec 6 2025, 20:15:20) [GCC 1.0.23.2]
+        Fatal Python error: PyOS_AfterFork_Child: the function must be called with the GIL held, after Python initialization and before Python finalization, but the GIL is released (the current Python thread state is NULL)
+        Python runtime state: initialized
+
+
 
 postgres: https://github.com/postgres/postgres.git  (in case of bad network use git clone --filter=blob:none --depth=1 https://github.com/postgres/postgres.git --branch master)
 
@@ -525,6 +520,8 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
 
 - trying to compile other C projects from source to see what is missing or which bug we have with chibicc.
 - Trying to find the root cause of segmentation fault with postgres initdb command.
+- Need to change the system of push/pops to solve issue with postgres(stack corruption)/cpython(vfork) probably using virtual stack like @fuhsnn/slimcc.
+- manage builtin memcpy/memset when defining inside a source it causes duplicated symbol during linkage (due to the .set defined)
 
 
 ## issues and pull requests fixed
@@ -537,8 +534,8 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     postgres execution : ko
     git 2 tests failed
     memcached test stuck at t/binary-extstore.t ......... 5947/?
-    vim: compile OK, tests KO on test_channel.vim.
-    cpython : compile OK, segfault at test execution due to vfork not managed well.
+    vim: compile OK, tests OK except one test on  test_channel.vim (Test_error_callback_terminal).
+    cpython : compile OK, test execution failed due to fork/vfork probably.
 
 ## projects compiled successfully with chibicc
 
@@ -578,7 +575,8 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23.1    Removing old fix on issue166 that causes side effect. Adding ND_POS for unary +. Adding new type for long long TY_LLONG. Fixing umull_overflow. Fixing issue with weak not printed for extern global variables. Adding lots of functions declarations on math.h needed for some projects. Ignoring few arguments. Fixing issue166. Fixing issue with external TLS (from @fuhsnn). Fixing temp issue with __cpuid_count (extended assembly not managed well this case) by adding my own cpuid.h. Adding some atomic_xx_n functions missing. Removing fix on VLC undefined references that causes issue with util-linux and fixing static inline references when they are referenced by address.
+1.0.23.2    Managing -Werror (reporting from @fuhsnn/slimcc). Adding decay array/vla to pointer in ND_COND, ND_COMMA. Merging pull request from @Superstart64 removing hard-coding on includes and Makefile. Managing builtin_memcpy and builtin_memset. Fixing issue on some bitfield operations (bitfield2 testcase). Ignoring -pedantic-errors and all warnings that starts with -W. Adding llrint in math.h. Ignoring gnu attribute \__noescape\__ and \__common\__.  Ignoring some arguments found during ruby compile. Reporting fix from @fuhsnn/slimcc da9d04c077357ac39f80acf2b9d6b5a47cd50cfc to fix setjmp issue. Adding some missing builtin_ia32_xxx from pmmintrin.h. Fixing issue with vfork (ISS-196). Adding other builtin_ia32_phxxx from tmmintrin.h.m and immintrin.h. Adding lots of missing builtin from smmintrin.h. Fixing old release notes typo. Adding -mcrc32 in managed argument. Fixing issue with undefined reference when static function used as initializer for a struct's field (ISS-197). Adding some atomic functions missing. Reversing change commit 92f079c that causes issue with curl test 1452 and refixing issue ISS-199. Refixing issue ISS-200 vim test failed (due to commit 76786d4). 
+
 
 ## old release notes
 

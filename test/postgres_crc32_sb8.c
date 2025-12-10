@@ -5,9 +5,31 @@
 typedef uint32_t uint32;
 typedef uint8_t uint8;
 typedef uint32_t pg_crc32c;
+#define MOCK_AUTH_NONCE_LEN		32
+
+/* Simplified ControlFileData structure */
+typedef struct {
+    uint32_t pg_control_version;
+    uint32_t catalog_version_no;
+    uint32_t maxAlign;
+    uint32_t floatFormat;
+    uint32_t blcksz;
+    uint32_t relseg_size;
+    uint32_t xlog_blcksz;
+    uint32_t xlog_seg_size;
+    uint32_t nameDataLen;
+    uint32_t indexMaxKeys;
+    uint32_t toast_max_chunk_size;
+    uint32_t loblksize;
+    uint32_t float8ByVal;
+    uint8_t default_char_signedness;
+	char		mock_authentication_nonce[MOCK_AUTH_NONCE_LEN];
+    pg_crc32c crc;
+} ControlFileData;
+
 
 // Simulated CRC table (values don't matter for reproducing the bug)
-pg_crc32c pg_crc32c_table[8][256] = {
+static const pg_crc32c pg_crc32c_table[8][256] __attribute__((aligned(16))) = {
     	{
 		0x00000000, 0x03836BF2, 0xF7703BE1, 0xF4F35013,
 		0x1F979AC7, 0x1C14F135, 0xE8E7A126, 0xEB64CAD4,
@@ -592,13 +614,30 @@ pg_crc32c pg_comp_crc32c_sb8(pg_crc32c crc, const void *data, size_t len)
 }
 
 int main() {
-    uint8_t buf[13];  // deliberately not multiple of 8
-    for (int i = 0; i < 13; i++) buf[i] = i + 1;
+	ControlFileData cf;
+    /* Initialize some fields */
+    cf.pg_control_version = 1234;
+    cf.catalog_version_no = 5678;
+    cf.maxAlign = 16;
+    cf.floatFormat = 1;
+    cf.blcksz = 8192;
+    cf.relseg_size = 1024;
+    cf.xlog_blcksz = 8192;
+    cf.xlog_seg_size = 16 * 1024 * 1024;
+    cf.nameDataLen = 64;
+    cf.indexMaxKeys = 32;
+    cf.toast_max_chunk_size = 2048;
+    cf.loblksize = 8192;
+    cf.float8ByVal = 1;
+    cf.default_char_signedness = 1;
 
+
+    /* Compute CRC over the struct excluding the crc field */
     pg_crc32c crc = 0;
-    crc = pg_comp_crc32c_sb8(crc, buf, 13);
+    crc = pg_comp_crc32c_sb8(crc, (uint8_t*)&cf, sizeof(ControlFileData) - sizeof(cf.crc));
+    cf.crc = crc;
 
-    printf("CRC: %u\n", crc);
-    ASSERT(897250140, crc);
+    printf("ControlFileData CRC: %u\n", cf.crc);
+    ASSERT(3365522903, crc);
     return 0;
 }

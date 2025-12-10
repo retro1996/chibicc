@@ -5,8 +5,6 @@ typedef unsigned char v8qu __attribute__((vector_size(8)));
 
 
 
-#include <stdio.h>
-
 int main() {
     v8qi a = {10, 20, 30, 40, 50, 60, 70, 80};
     v8qi b = {5, 15, 25, 35, 45, 55, 65, 75};

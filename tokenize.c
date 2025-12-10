@@ -104,14 +104,21 @@ static void vwarning_at(char *filename, char *input, unsigned int line_no,
     end++;
 
   // Print out the line.
-  int indent = fprintf(stderr, "%s:%u: " PURPLE "warning:" RESET " ", filename, line_no);
+  int indent = 0;
+  if (!opt_werror)
+    indent = fprintf(stderr, "%s:%u: " PURPLE "warning:" RESET " ", filename, line_no);
+  else 
+    indent = fprintf(stderr, "%s:%u: " RED "warning:" RESET " ", filename, line_no);
   fprintf(stderr, "%.*s\n", (int)(end - line), line);
 
   // Show the error message.
   int pos = display_width(line, loc - line) + indent;
 
-  fprintf(stderr, "%*s", pos - (PURPLE_LEN + RESET_LEN), ""); // print pos spaces, adjusting for color codes
-  fprintf(stderr, PURPLE "^" RESET " "); // Print caret in purple
+  fprintf(stderr, "%*s", pos - (PURPLE_LEN + RESET_LEN), ""); 
+  if (!opt_werror)
+    fprintf(stderr, PURPLE "^" RESET " "); 
+  else 
+    fprintf(stderr, RED "^" RESET " "); 
   vfprintf(stderr, fmt, ap);
   fprintf(stderr, "\n");
 }
@@ -135,8 +142,10 @@ void warn_tok(Token *tok, char *fmt, ...)
 {
   va_list ap;
   va_start(ap, fmt);
-  vwarning_at(tok->file->name, tok->file->contents, tok->line_no, tok->loc, fmt, ap);
+  vwarning_at(tok->file->name, tok->file->contents, tok->line_no, tok->loc, fmt, ap);  
   va_end(ap);
+  if (opt_werror)
+    exit(1);
 }
 
 // Consumes the current token if it matches `op`.

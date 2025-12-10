@@ -9,7 +9,7 @@ double asin(double x);
 double acos(double x);
 double atan(double x);
 double atan2(double y, double x);
-
+int isunordered(double x, double y); 
 // Hyperbolic functions
 double sinh(double x);
 double cosh(double x);
@@ -93,6 +93,10 @@ extern long double fmodl(long double x, long double y);
 extern long long llroundl(long double x);
 extern long long llround(double x);
 extern long long llroundf(float x);
+extern long long llrintl(long double x);
+extern long long llrint(double x);
+extern long long llrintf(float x);
+
 
 extern float roundf(float x);
 extern double round(double x);

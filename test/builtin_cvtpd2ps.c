@@ -6,7 +6,7 @@ __v4sf test_cvtpd2ps(__v2df a) {
     return (__v4sf)__builtin_ia32_cvtpd2ps(a);
 }
 
-#include <stdio.h>
+
 int main() {
     __v2df a = { 1.5, -2.25 };
     __v4sf r = test_cvtpd2ps(a);

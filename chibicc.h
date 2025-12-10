@@ -47,8 +47,8 @@
 #endif
 
 #define PRODUCT "chibicc"
-#define VERSION "1.0.23.1"
-#define MAXLEN 501
+#define VERSION "1.0.23.2"
+#define MAXLEN 1001
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 #define MAX_BUILTIN_ARGS 8
 #define MAX_WEAK 20
@@ -116,12 +116,15 @@ this " PRODUCT " contains only some differences for now like new parameters\n"
 -A print Abstract Syntax Tree in a log file in /tmp/chibicc.log \n \
 -msse3 enabling sse3 support \n\
 -msse4 enabling sse4 support \n \
+-msse4.1 enabling sse4.1 support \n \
+-mcrc32 enabling crc32 instruction support \n \
 -nostdlib  Do not use the standard system startup files or libraries when linking \n \
 -nostdinc Do not use the standard system header files when compiling \n \
 -std=c99 generates an error on implicit function declaration (without -std only a warning is emitted) \n \
 -std=c11 generates an error on implicit function declaration (without -std only a warning is emitted) \n \
 -mmmx to allow mmx instructions and builtin functions linked to mmx like __builtin_packuswb... \n \
 -print-search-dirs prints minimal information on install dir. \n \
+-Werror any warning is sent as an error and stops the compile \n \
 chibicc [ -o <path> ] <file>\n"
 
 typedef struct Type Type;
@@ -314,6 +317,8 @@ struct Obj
   bool is_force_align_arg_pointer;
   bool is_no_caller_saved_registers;
   
+  // Function calls vfork returns twice unsafe with stack frames
+  bool vfork_used;
 
   Obj *params;
   Node *body;
@@ -335,6 +340,7 @@ struct Obj
   bool is_prototyped; // Whether the function is prototyped or not
   Initializer *init;
   bool is_address_used;
+  bool is_param;
 };
 
 // Global variable can be initialized either by a constant expression
@@ -738,6 +744,86 @@ typedef enum
   ND_UMULL_OVERFLOW,
   ND_UMULLL_OVERFLOW,
   ND_POS,
+  ND_MWAIT,
+  ND_MONITOR,
+  ND_ADDSUBPS,
+  ND_HADDPS,
+  ND_HSUBPS,
+  ND_MOVSHDUP,
+  ND_MOVSLDUP,
+  ND_ADDSUBPD,
+  ND_HADDPD,
+  ND_HSUBPD,
+  ND_LDDQU,
+  ND_PHADDW128,
+  ND_PHADDD128,
+  ND_PHADDSW128,
+  ND_PHADDW,
+  ND_PHADDD,
+  ND_PHADDSW,
+  ND_PHSUBW128,
+  ND_PHSUBD128,
+  ND_PHSUBSW128,
+  ND_PHSUBW,
+  ND_PHSUBD,
+  ND_PHSUBSW,
+  ND_PMADDUBSW128,
+  ND_PMADDUBSW,
+  ND_PMULHRSW128,
+  ND_PMULHRSW,
+  ND_PSHUFB128,
+  ND_PSHUFB,
+  ND_PSIGNB128,
+  ND_PSIGNW128,
+  ND_PSIGND128,
+  ND_PSIGNB,
+  ND_PSIGNW,
+  ND_PSIGND,
+  ND_PABSB128,
+  ND_PABSW128,
+  ND_PABSD128,
+  ND_PABSB,
+  ND_PABSW,
+  ND_PABSD,
+  ND_PTESTZ128,
+  ND_PTESTC128,
+  ND_PTESTNZC128,
+  ND_PBLENDVB128,
+  ND_BLENDVPS,
+  ND_BLENDVPD,
+  ND_PMINSB128,
+  ND_PMAXSB128,
+  ND_PMINUW128,
+  ND_PMAXUW128,
+  ND_PMINSD128,
+  ND_PMAXSD128,
+  ND_PMINUD128,
+  ND_PMAXUD128,
+  ND_PMULDQ128,  
+  ND_PHMINPOSUW128,
+  ND_PMOVSXBD128, 
+  ND_PMOVSXWD128,
+  ND_PMOVSXBQ128,
+  ND_PMOVSXDQ128,
+  ND_PMOVSXWQ128,
+  ND_PMOVSXBW128,
+  ND_PMOVZXBD128,
+  ND_PMOVZXWD128,
+  ND_PMOVZXBQ128,
+  ND_PMOVZXBW128,
+  ND_PMOVZXDQ128,
+  ND_PMOVZXWQ128,
+  ND_PACKUSDW128,
+  ND_MOVNTDQA,
+  ND_CRC32QI,
+  ND_CRC32HI,
+  ND_CRC32SI,
+  ND_CRC32DI,
+  ND_PSHUFD,
+  ND_FETCHNAND,       
+  ND_ADD_AND_FETCH,   
+  ND_SUB_AND_FETCH,   
+  ND_BOOL_CAS,        
 } NodeKind;
 
 // AST node type
@@ -878,7 +964,7 @@ typedef enum
 struct Type
 {
   TypeKind kind;
-  int size;          // sizeof() value
+  int64_t size;          // sizeof() value
   int align;         // alignment
   bool is_unsigned;  // unsigned or signed
   bool is_atomic;    // true if _Atomic
@@ -910,7 +996,7 @@ struct Type
   Token *name_pos;
 
   // Array
-  int array_len;
+  int64_t array_len;
   //from COSMOPOLITAN adding vector_size
   int vector_size;
 
@@ -992,8 +1078,8 @@ bool is_compatible(Type *t1, Type *t2);
 Type *copy_type(Type *ty);
 Type *pointer_to(Type *base);
 Type *func_type(Type *return_ty);
-Type *array_of(Type *base, int size);
-Type *vector_of(Type *base, int size);
+Type *array_of(Type *base, int64_t  size);
+Type *vector_of(Type *base, int64_t  size);
 Type *vla_of(Type *base, Node *expr);
 Type *enum_type(void);
 Type *struct_type(void);
@@ -1003,6 +1089,7 @@ bool is_array(Type *ty);
 Type *new_qualified_type(Type *ty);
 bool is_vector(Type *ty);
 bool is_int128(Type *ty);
+bool is_pointer(Type *ty);
 
 
 char *nodekind2str(NodeKind kind);
@@ -1116,15 +1203,19 @@ extern bool opt_sse2;
 extern bool opt_sse3;
 extern bool opt_sse4;
 extern bool opt_mmx;
+extern bool opt_crc32;
 extern bool opt_g;
 extern FILE *open_file(char *path);
 extern FILE *ofile;
 extern bool opt_c99;
 extern bool opt_c11;
 extern bool opt_c17;
+extern bool opt_c89;
+extern bool opt_c23;
 extern char *weak_symbols[MAX_WEAK]; 
 extern int weak_count;
 extern bool opt_implicit;
+extern bool opt_werror;
 
 //
 // extended_asm.c

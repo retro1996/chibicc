@@ -1,6 +1,10 @@
 #include "chibicc.h"
 #define MAIN_C "main.c"
 
+#ifndef PREFIX
+#define PREFIX "/usr/local"
+#endif
+
 typedef enum
 {
   FILE_NONE,
@@ -23,11 +27,15 @@ bool opt_sse2;
 bool opt_sse3;
 bool opt_sse4;
 bool opt_mmx;
+bool opt_crc32;
 bool opt_g;
 bool opt_c99;
 bool opt_c11;
 bool opt_c17;
+bool opt_c89;
+bool opt_c23;
 bool opt_implicit;
+bool opt_werror;
 
 static FileType opt_x;
 static StringArray opt_include;
@@ -111,11 +119,13 @@ static void print_string_array(StringArray *arr) {
 static void print_include_directories() {
     strarray_push(&include_paths,  "./include");
     // Add standard include paths.
-    strarray_push(&include_paths, "/usr/local/include/x86_64-linux-gnu/chibicc");
+    strarray_push(&include_paths, PREFIX "/include/x86_64-linux-gnu/chibicc");
     strarray_push(&include_paths, "/usr/include/x86_64-linux-gnu");
     strarray_push(&include_paths, "/usr/local/include");
     strarray_push(&include_paths, "/usr/include");
-    strarray_push(&include_paths, "/usr/lib/gcc/x86_64-linux-gnu/13/include");
+    #ifdef GCC_VERSION
+    strarray_push(&include_paths, "/usr/lib/gcc/x86_64-linux-gnu/" GCC_VERSION "/include");
+    #endif
     //strarray_push(&include_paths, "/usr/include/chibicc/include");
     #if defined(__APPLE__) && defined(__MACH__)
     strarray_push(&include_paths, "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include");
@@ -168,7 +178,7 @@ static void check_parms_length(char *arg)
 static bool take_arg(char *arg)
 {
   char *x[] = {
-      "-o", "-I", "-idirafter", "-include", "-x", "-MF", "-MT", "-MQ", "-Xlinker", "-cc1-input", "-cc1-output", "-fuse-ld", "-soname", "-rpath", "--version-script"};
+      "-o", "-I", "-idirafter", "-include", "-x", "-MF", "-MT", "-MQ", "-Xlinker", "-cc1-input", "-cc1-output", "-fuse-ld", "-soname", "-rpath", "--version-script", "-isystem"};
 
   for (int i = 0; i < sizeof(x) / sizeof(*x); i++)
   {
@@ -187,11 +197,13 @@ static void add_default_include_paths(char *argv0)
   strarray_push(&include_paths, format("%s/include", dirname(strdup(argv0))));
 
   // Add standard include paths.
-  strarray_push(&include_paths, "/usr/local/include/x86_64-linux-gnu/chibicc");
+  strarray_push(&include_paths, PREFIX "/include/x86_64-linux-gnu/chibicc");
   strarray_push(&include_paths, "/usr/include");
   strarray_push(&include_paths, "/usr/local/include");
   strarray_push(&include_paths, "/usr/include/x86_64-linux-gnu");
-  strarray_push(&include_paths, "/usr/lib/gcc/x86_64-linux-gnu/13/include");
+  #ifdef GCC_VERSION
+  strarray_push(&include_paths, "/usr/lib/gcc/x86_64-linux-gnu/" GCC_VERSION "/include");
+  #endif
   //strarray_push(&include_paths, "/usr/include/chibicc/include");
   #if defined(__APPLE__) && defined(__MACH__)
   strarray_push(&include_paths, "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include");
@@ -272,7 +284,7 @@ static void parse_args(int argc, char **argv)
       if (!argv[++i])
       {
         printf("parameter without value! the following parameters need to be followed by a value :\n");
-        printf("-o, -I, -idirafter, -include, -x, -MF, -MQ, -MT, -Xlinker, -cc1-input, -cc1-output, -fuse-ld, -soname, -rpath, --version-script \n");
+        printf("-o, -I, -idirafter, -include, -x, -MF, -MQ, -MT, -Xlinker, -cc1-input, -cc1-output, -fuse-ld, -soname, -rpath, --version-script, -isystem\n");
         usage(1);
       }
 
@@ -371,6 +383,11 @@ static void parse_args(int argc, char **argv)
 
     if (!strcmp(argv[i], "-mmmx")) {
       opt_mmx = true;
+      continue;
+    }    
+
+    if (!strcmp(argv[i], "-mcrc32")) {
+      opt_crc32 = true;
       continue;
     }    
 
@@ -793,12 +810,16 @@ static void parse_args(int argc, char **argv)
       continue;
     } 
 
-    //-Werror-implicit-function-declaration
-    //for printing AST
     if (!strcmp(argv[i], "-Werror-implicit-function-declaration")) {
       opt_implicit = true;
       continue;
     } 
+
+    if (!strcmp(argv[i], "-Werror")) {
+      opt_werror = true;
+      continue;
+    } 
+
 
 
     //other options -Axxx ignored
@@ -848,13 +869,31 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
+    if (!strcmp(argv[i], "-isystem")) {
+    char *path;
+    if (argv[i][8] != '\0') {
+        path = argv[i] + 8;
+    } else {
+        if (i+1 >= argc)            
+            error("%s : %s:%d: error: in parse_args expected argument after -isystem", MAIN_C, __FILE__, __LINE__);
+        path = argv[++i];
+    }
+    strarray_push(&include_paths, path);
+    continue;
+    }
+
     // These options are ignored for now.
     if (startsWith(argv[i], "-O") ||
         !strcmp(argv[i], "-P") || 
         !strcmp(argv[i], "-Wall") || 
         !strcmp(argv[i], "-Wextra") || 
+        !strcmp(argv[i], "-Wpedantic") || 
         !strcmp(argv[i], "-Wno-switch") || 
+        !strcmp(argv[i], "-Wno-clobbered") ||
+        !strcmp(argv[i], "-Wduplicated-cond") || 
         !strcmp(argv[i], "-Wno-unused-variable") ||
+        !strcmp(argv[i], "-Wno-unused-parameter") ||  
+        !strcmp(argv[i], "-Wno-sign-compare") ||
         !strcmp(argv[i], "-Wno-format-y2k") || 
         !strcmp(argv[i], "-Wmissing-prototypes") ||
         !strcmp(argv[i], "-Wno-uninitialized") ||        
@@ -880,6 +919,7 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-fsigned-char") ||
         !strcmp(argv[i], "-Bsymbolic") ||
         !strcmp(argv[i], "-pedantic") ||
+        !strcmp(argv[i], "-pedantic-errors") ||         
         !strcmp(argv[i], "-mno-red-zone") ||
         !strcmp(argv[i], "-fvisibility=default") ||
         !strcmp(argv[i], "-fvisibility=hidden") ||
@@ -916,21 +956,33 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-ffat-lto-objects")       ||       
         !strcmp(argv[i], "-static-libstdc++")       ||    
         !strcmp(argv[i], "-static-libgcc")       ||    
-        !strcmp(argv[i], "-pipe")       ||              
-        !strcmp(argv[i], "-mindirect-branch-register")         
+        !strcmp(argv[i], "-pipe")       ||     
+        !strcmp(argv[i], "-Wno-missing-declarations")       ||  
+        !strcmp(argv[i], "-mindirect-branch-register")    ||
+        !strcmp(argv[i], "-fno-fast-math") ||
+        !strcmp(argv[i], "-fno-strict-overflow") ||
+        !strcmp(argv[i], "-fexcess-precision=standard") ||
+        !strcmp(argv[i], "-Wno-shadow") ||
+        !strcmp(argv[i], "-Wno-unreachable-code") ||
+        startswith(argv[i], "-W")     
         )
       continue;
 
+      
     if (startsWith(argv[i], "-std"))
     {
       char *stdver = argv[i] + 5; 
 
       if (!strcmp(stdver, "c99") || !strcmp(stdver, "gnu99")) {
         opt_c99 = true;
+      } else if (!strcmp(stdver, "c89") || !strcmp(stdver, "gnu89")) {
+        opt_c89 = true;
       } else if (!strcmp(stdver, "c11") || !strcmp(stdver, "gnu11")) {
         opt_c11 = true;
       } else if (!strcmp(stdver, "c17") || !strcmp(stdver, "gnu17")) {
         opt_c17 = true;
+      } else if (!strcmp(stdver, "c23")) {
+        opt_c23 = true;
       } else {
         error("%s : %s:%d: error: in parse_args : unsupported -std option: %s", MAIN_C, __FILE__, __LINE__, stdver);
         exit(1);
@@ -1346,12 +1398,21 @@ static char *find_libpath(void)
 
 static char *find_gcc_libpath(void)
 {
+#ifdef GCC_VERSION
+  char *paths[] = {
+      "/usr/lib/gcc/x86_64-linux-gnu/" GCC_VERSION "/crtbegin.o",
+      "/usr/lib/gcc/x86_64-*/" GCC_VERSION "/crtbegin.o",
+      "/usr/lib/gcc/x86_64-pc-linux-gnu/" GCC_VERSION "/crtbegin.o", // For Gentoo
+      "/usr/lib/gcc/x86_64-redhat-linux/" GCC_VERSION "/crtbegin.o", // For Fedora
+  };
+#else
   char *paths[] = {
       "/usr/lib/gcc/x86_64-linux-gnu/*/crtbegin.o",
       "/usr/lib/gcc/x86_64-*/*/crtbegin.o",
       "/usr/lib/gcc/x86_64-pc-linux-gnu/*/crtbegin.o", // For Gentoo
       "/usr/lib/gcc/x86_64-redhat-linux/*/crtbegin.o", // For Fedora
   };
+#endif
 
   for (int i = 0; i < sizeof(paths) / sizeof(*paths); i++)
   {

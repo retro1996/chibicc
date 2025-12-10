@@ -1,5 +1,3 @@
-// test_packsswb128.c
-
 #include "test.h"
 
 typedef short __v8hi __attribute__((vector_size(16)));
