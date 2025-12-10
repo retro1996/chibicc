@@ -303,6 +303,8 @@ List of options ignored :
     "-fno-fast-math"
     "-fno-strict-overflow"
     "-fexcess-precision=standard"
+    "-Wno-shadow"
+    "-Wno-unreachable-code"
 
 ## Dockerfile and devcontainer
 
