@@ -882,6 +882,14 @@ static void parse_args(int argc, char **argv)
     continue;
     }
 
+    if (!strcmp(argv[i], "-Werror=invalid-command-line-argument")) {
+      error("%s : %s:%d: error: in parse_args : argument not accepted : -Werror=invalid-command-line-argument", MAIN_C, __FILE__, __LINE__); 
+    }
+
+    if (!strcmp(argv[i], "-Werror=unknown-warning-option")) {
+      error("%s : %s:%d: error: in parse_args : argument not accepted : -Werror=unknown-warning-option", MAIN_C, __FILE__, __LINE__); 
+    }
+
     // These options are ignored for now.
     if (startsWith(argv[i], "-O") ||
         !strcmp(argv[i], "-P") || 

@@ -519,9 +519,10 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
 ## TODO
 
 - trying to compile other C projects from source to see what is missing or which bug we have with chibicc.
-- Trying to find the root cause of segmentation fault with postgres initdb command.
-- Need to change the system of push/pops to solve issue with postgres(stack corruption)/cpython(vfork) probably using virtual stack like @fuhsnn/slimcc.
-- manage builtin memcpy/memset when defining inside a source it causes duplicated symbol during linkage (due to the .set defined)
+- trying to fix issue with cpython tests
+- trying to fix issue with postgres tests
+- trying to rewrite extended assembly to be more robust
+- trying to improve chibicc by reporting tests from slimcc to see what is missing/need to be fixed.
 
 
 ## issues and pull requests fixed
@@ -575,7 +576,8 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23.2    Managing -Werror (reporting from @fuhsnn/slimcc). Adding decay array/vla to pointer in ND_COND, ND_COMMA. Merging pull request from @Superstart64 removing hard-coding on includes and Makefile. Managing builtin_memcpy and builtin_memset. Fixing issue on some bitfield operations (bitfield2 testcase). Ignoring -pedantic-errors and all warnings that starts with -W. Adding llrint in math.h. Ignoring gnu attribute \__noescape\__ and \__common\__.  Ignoring some arguments found during ruby compile. Reporting fix from @fuhsnn/slimcc da9d04c077357ac39f80acf2b9d6b5a47cd50cfc to fix setjmp issue. Adding some missing builtin_ia32_xxx from pmmintrin.h. Fixing issue with vfork (ISS-196). Adding other builtin_ia32_phxxx from tmmintrin.h.m and immintrin.h. Adding lots of missing builtin from smmintrin.h. Fixing old release notes typo. Adding -mcrc32 in managed argument. Fixing issue with undefined reference when static function used as initializer for a struct's field (ISS-197). Adding some atomic functions missing. Reversing change commit 92f079c that causes issue with curl test 1452 and refixing issue ISS-199. Refixing issue ISS-200 vim test failed (due to commit 76786d4). 
+1.0.23.3    Forbiding two arguments that cause failure with g++ when compiling vlc (-Werror=invalid-command-line-argument and -Werror=unknown-warning-option)
+
 
 
 ## old release notes
