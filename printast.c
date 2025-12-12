@@ -91,15 +91,28 @@ static void PrintNode(FILE *, int, const char *, Node *);
 static void PrintType(FILE *, int, const char *, Type *);
 static void PrintAsm(FILE *f, int l, const char *s, char *a);
 
+
 static bool Visit(void *ptr) {
-  size_t i;
   intptr_t addr = (intptr_t)ptr;
-  for (i = 0; i < g_visited.i; ++i) {
+
+  for (size_t i = 0; i < g_visited.i; ++i) {
     if (addr == g_visited.p[i]) {
       return false;
     }
   }
- // APPEND(&g_visited.p, &g_visited.i, &g_visited.n, &addr);
+
+  if (g_visited.i == g_visited.n) {
+    size_t new_n = g_visited.n ? g_visited.n * 2 : 64;
+    intptr_t *new_p = realloc(g_visited.p, new_n * sizeof(intptr_t));
+    if (!new_p) {
+      return true;
+    }
+    g_visited.p = new_p;
+    g_visited.n = new_n;
+  }
+
+  /* Append */
+  g_visited.p[g_visited.i++] = addr;
   return true;
 }
 
@@ -123,14 +136,16 @@ static void PrintInt(FILE *f, int l, const char *s, long x) {
   PrintLine(f, l, "%s%ld", s, x);
 }
 
+
 static void PrintStr(FILE *f, int l, const char *s, const char *t) {
   if (!t || !*t) return;
-  PrintLine(f, l, "%s%`'s", s, t);
+  PrintLine(f, l, "%s%s", s, t);
 }
+
 
 static void PrintTokStr(FILE *f, int l, const char *s, Token *t) {
   if (!t) return;
-  PrintLine(f, l, "%s%`'.*s", s, t->len, t->loc);
+  PrintLine(f, l, "%s%.*s", s, (int)t->len, t->loc);
 }
 
 static void PrintMember(FILE *f, int l, const char *s, Member *m) {
@@ -200,8 +215,20 @@ if (!a) return;
 }
 
 static void PrintNode(FILE *f, int l, const char *s, Node *n) {
-  for (; n; n = n->next) {
+    for (; n; n = n->next) {
+    if (!Visit(n)) {
+      /* already printed this node; print a short marker and continue */
+      PrintLine(f, l, "%sNode # %p (already visited)", s, n);
+      continue;
+    }
+
+    const char *kindstr = "UNKNOWN";
+    if (n->kind >= 0 && n->kind < (int)(sizeof(kNodeKindStr)/sizeof(kNodeKindStr[0])))
+      kindstr = kNodeKindStr[n->kind];
+
+
     PrintLine(f, l, "%sNode { # %p", s, n);
+    PrintLine(f, l + 2, "kind: ND_%s", kindstr);
     PrintLine(f, l + 2, "kind: ND_%s", kNodeKindStr[n->kind]);
     PrintType(f, l + 2, "ty: ", n->ty);
     PrintNode(f, l + 2, "lhs: ", n->lhs);
@@ -289,7 +316,9 @@ static void PrintObj(FILE *f, int l, const char *s, Obj *o) {
   PrintLine(f, l, "}");
 }
 
+
 void print_ast(FILE *f, Obj *o) {
+  g_visited.i = 0;
   for (; o ; o = o->next) {
     PrintObj(f, 0, "", o);
   }
