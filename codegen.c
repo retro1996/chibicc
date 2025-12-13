@@ -4612,8 +4612,6 @@ static void emit_text(Obj *prog)
       println("  .section %s,\"ax\",@progbits", fn->section);
     else
       println("  .section .text,\"ax\",@progbits");
-    //println("  .text");
-    //println("\n  .section .text,\"ax\",@progbits");
     println("  .type %s, @function", fn->name);
     println("%s:", fn->name);
 

@@ -3962,6 +3962,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
   while (!equal(tok, "}"))
   {
     VarAttr attr = {};
+    tok = attribute_list(tok, &attr, thing_attributes);
     Type *basety = declspec(&tok, tok, &attr);
     bool first = true;
 
@@ -3983,7 +3984,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
     while (!consume(&tok, tok, ";"))
     {
       
-      tok = attribute_list(tok, ty, type_attributes);
+      tok = attribute_list(tok, &attr, thing_attributes);
       if (equal(tok, ";"))
         break;
       if (!first) {
@@ -4452,7 +4453,7 @@ static Token *type_attributes(Token *tok, void *arg)
     return tok;
   }
 
-  if (consume(&tok, tok, "__noescape__")) {
+  if (consume(&tok, tok, "__noescape__") || consume(&tok, tok, "noescape")) {
     return tok;
   }
 
@@ -4677,7 +4678,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
     return tok;
   }
 
-  if (consume(&tok, tok, "__noescape__")) {
+  if (consume(&tok, tok, "__noescape__") ||  consume(&tok, tok, "noescape")) {
     return tok;
   }
 
