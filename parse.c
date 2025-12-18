@@ -380,6 +380,10 @@ static void apply_cv_qualifier(Node *node, Type *ty2) {
   }
 }
 
+//force cast to bool commit slimcc 2e138bb
+Node *to_bool(Node *expr) {
+  return new_cast(expr, ty_bool);
+}
 
 static VarScope *push_scope(char *name)
 {
@@ -3469,14 +3473,16 @@ static Node *conditional(Token **rest, Token *tok)
     Obj *var = new_lvar("", cond->ty, NULL);
     Node *lhs = new_binary(ND_ASSIGN, new_var_node(var, tok), cond, tok);
     Node *rhs = new_node(ND_COND, tok);
-    rhs->cond = new_var_node(var, tok);
+    //commit 2e138bb from slimcc
+    rhs->cond = to_bool(new_var_node(var, tok));
     rhs->then = new_var_node(var, tok);
     rhs->els = conditional(rest, tok->next->next);
     return new_binary(ND_COMMA, lhs, rhs, tok);
   }
 
   Node *node = new_node(ND_COND, tok);
-  node->cond = cond;
+  //commit 2e138bb from slimcc
+  node->cond = to_bool(cond);
   node->then = expr(&tok, tok->next);
   SET_CTX(ctx);     
   tok = skip(tok, ":", ctx);
@@ -3491,7 +3497,8 @@ static Node *logor(Token **rest, Token *tok)
   while (equal(tok, "||"))
   {
     Token *start = tok;
-    node = new_binary(ND_LOGOR, node, logand(&tok, tok->next), start);
+    //commit 2e138bb from slimcc
+    node = new_binary(ND_LOGOR, to_bool(node), to_bool(logand(&tok, tok->next)), start);
   }
   *rest = tok;
   return node;
@@ -3504,7 +3511,8 @@ static Node *logand(Token **rest, Token *tok)
   while (equal(tok, "&&"))
   {
     Token *start = tok;
-    node = new_binary(ND_LOGAND, node, bitor (&tok, tok->next), start);
+    //commit 2e138bb from slimcc
+    node = new_binary(ND_LOGAND, to_bool(node), to_bool(bitor(&tok, tok->next)), start);
   }
   *rest = tok;
   return node;
@@ -3926,8 +3934,9 @@ static Node *unary(Token **rest, Token *tok)
   }
 
   if (equal(tok, "!"))
-    return new_unary(ND_NOT, cast(rest, tok->next), tok);
+    return new_unary(ND_NOT, to_bool(cast(rest, tok->next)), tok);
 
+  //commit slimcc 2e138bb  
   if (equal(tok, "~"))
     return new_unary(ND_BITNOT, cast(rest, tok->next), tok);
 
@@ -5313,6 +5322,7 @@ static Node *struct_ref(Node *node, Token *tok)
   return node;
 }
 
+
 // Convert A++ to `(typeof A)((A += 1) - 1)`
 static Node *new_inc_dec(Node *node, Token *tok, int addend)
 {
@@ -5321,6 +5331,7 @@ static Node *new_inc_dec(Node *node, Token *tok, int addend)
                           new_num(-addend, tok), tok, false),
                   node->ty);
 }
+
 
 // postfix = "(" type-name ")" "{" initializer-list "}" postfix-tail*
 //         = ident "(" func-args ")" postfix-tail*

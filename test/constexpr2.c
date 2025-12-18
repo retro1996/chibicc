@@ -8,7 +8,7 @@
 extern int extarr[55];
 int garr[11];
 static int sgarr[33];
-//_Bool str_lit_bool_init = "abc" ? "foo" && "bar" : 0;
+_Bool str_lit_bool_init = "abc" ? "foo" && "bar" : 0;
 
 void array_cast_to_bool(int j) {
   static int slarr[5];
@@ -17,7 +17,7 @@ void array_cast_to_bool(int j) {
 
   DASSERT((_Bool)extarr && (_Bool)garr && (_Bool)sgarr &&
   (_Bool)slarr && (_Bool)larr && (_Bool)vla);
-  // ASSERT(1, str_lit_bool_init);
+  ASSERT(1, str_lit_bool_init);
 }
 int extarr[55];
 
