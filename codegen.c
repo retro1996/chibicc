@@ -2865,6 +2865,28 @@ static void gen_sub_and_fetch(Node *node) {
   println("  sub %s, %s", reg_cx(sz), reg_ax(sz));      
 }
 
+static void gen_prefetch(Node *node) {
+  Node *ptr = node->builtin_args[0];
+  //Node *rw = node->builtin_args[1];
+  Node *locality = node->builtin_args[2];
+  gen_expr(ptr);   
+  int loc = 3; 
+    if (locality && locality->kind == ND_NUM) {
+        loc = locality->val;
+    }
+
+    const char *instr;
+    switch (loc) {
+        case 0: instr = "prefetchnta"; break;
+        case 1: instr = "prefetcht0"; break;
+        case 2: instr = "prefetcht1"; break;
+        case 3: instr = "prefetcht2"; break;
+        default: instr = "prefetcht0"; break;
+    }
+    
+    println("  %s (%%rax)", instr);
+
+}
 
 static void gen_fetchnand(Node *node) {
   gen_expr(node->lhs);
@@ -3996,6 +4018,7 @@ static void gen_expr(Node *node)
   case ND_CRC32SI: gen_crc32si(node); return;
   case ND_CRC32DI: gen_crc32di(node); return;
   case ND_PSHUFD: gen_pshufd(node); return;
+  case ND_PREFETCH: gen_prefetch(node); return;
 }
   
 if (is_vector(node->lhs->ty) || (node->rhs && is_vector(node->rhs->ty))) {

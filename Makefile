@@ -83,7 +83,8 @@ nginx:
 	cd ../nginx && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./auto/configure --with-http_ssl_module && make
 
 vim:
-	cd ../vim && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make && make test
+	cd ../vim && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make 
+	make test > build.log 2>&1
 
 lxc:
 	cd ../lxc && rm -rf build && CC=gcc \

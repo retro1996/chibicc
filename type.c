@@ -810,6 +810,7 @@ void add_type(Node *node)
   case ND_LFENCE:
   case ND_MFENCE:
   case ND_PAUSE:
+  case ND_PREFETCH:
   case ND_UNREACHABLE:
     node->ty = ty_void;
     return;

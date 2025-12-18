@@ -537,7 +537,7 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     postgres execution : ko
     git 2 tests failed
     memcached test stuck at t/binary-extstore.t ......... 5947/?
-    vim: compile OK, tests OK except one test on  test_channel.vim (Test_error_callback_terminal).
+    vim: compile OK, tests OK except two tests : on test_channel.vim (Test_error_callback_terminal) and on test_plugin_termdebug.vim (test_termdebug_basic).
     cpython : compile OK, test execution failed due to fork/vfork probably.
 
 ## projects compiled successfully with chibicc
@@ -578,7 +578,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23.3    Forbiding two arguments that cause failure with g++ when compiling vlc (-Werror=invalid-command-line-argument and -Werror=unknown-warning-option). Temporary fix for -A that causes infinite loop (ISS-194). Fixing attributes found in struct member. Updating GNUC from 2 to 3. Reporting commit 2e138bb from slimcc (cast to bool).
+1.0.23.3    Forbiding two arguments that cause failure with g++ when compiling vlc (-Werror=invalid-command-line-argument and -Werror=unknown-warning-option). Temporary fix for -A that causes infinite loop (ISS-194). Fixing attributes found in struct member. Updating GNUC from 2 to 3. Reporting commit 11d0bff from slimcc (new_inc_dec) and removing commit 2e138bb. Adding builtin_prefetch found with memcached (ISS-202).
 
 
 ## old release notes

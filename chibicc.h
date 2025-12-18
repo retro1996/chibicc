@@ -824,6 +824,7 @@ typedef enum
   ND_ADD_AND_FETCH,   
   ND_SUB_AND_FETCH,   
   ND_BOOL_CAS,        
+  ND_PREFETCH,
 } NodeKind;
 
 // AST node type

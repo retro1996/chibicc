@@ -3189,6 +3189,8 @@ static int64_t eval_rval(Node *node, char ***label)
     return eval2(node->lhs, label);
   case ND_MEMBER:
     return eval_rval(node->lhs, label) + node->member->offset;
+  case ND_ADDR:
+    return 1;
   }
 
   error_tok(node->tok, "%s %d: in eval2 : invalid initializer3", PARSE_C, __LINE__);
@@ -5323,13 +5325,60 @@ static Node *struct_ref(Node *node, Token *tok)
 }
 
 
+static void chain_expr(Node **lhs, Node *rhs) {
+  if (rhs)
+    *lhs = !*lhs ? rhs : new_binary(ND_COMMA, *lhs, rhs, rhs->tok);
+}
+
+
 // Convert A++ to `(typeof A)((A += 1) - 1)`
-static Node *new_inc_dec(Node *node, Token *tok, int addend)
-{
+// static Node *new_inc_dec(Node *node, Token *tok, int addend)
+// {
+//   add_type(node);
+//   return new_cast(new_add(to_assign(new_add(node, new_num(addend, tok), tok, false)),
+//                           new_num(-addend, tok), tok, false),
+//                   node->ty);
+// }
+static Node *new_inc_dec(Node *node, Token *tok, int addend) {
   add_type(node);
-  return new_cast(new_add(to_assign(new_add(node, new_num(addend, tok), tok, false)),
-                          new_num(-addend, tok), tok, false),
-                  node->ty);
+  enter_scope();
+
+  if (is_bitfield(node)) {
+    Obj *tmp = new_lvar("", node->ty, NULL);
+    Obj *ptr = new_lvar("", pointer_to(node->lhs->ty), NULL);
+
+    Node *expr = new_binary(ND_ASSIGN, new_var_node(ptr, tok),
+                             new_unary(ND_ADDR, node->lhs, tok), tok);
+
+    Node *memref1 = new_unary(ND_MEMBER,
+                              new_unary(ND_DEREF, new_var_node(ptr, tok), tok),
+                              tok);
+    memref1->member = node->member;
+
+    Node *memref2 = new_unary(ND_MEMBER,
+                              new_unary(ND_DEREF, new_var_node(ptr, tok), tok),
+                              tok);
+    memref2->member = node->member;
+
+    chain_expr(&expr, new_binary(ND_ASSIGN, new_var_node(tmp, tok), memref1, tok));
+    chain_expr(&expr, to_assign(new_add(memref2, new_num(addend, tok), tok, false)));
+    chain_expr(&expr, new_var_node(tmp, tok));
+    leave_scope();
+    return expr;
+  }
+
+  Obj *tmp = new_lvar("", node->ty, NULL);
+  Obj *ptr = new_lvar("", pointer_to(node->ty), NULL);
+
+  Node *expr = new_binary(ND_ASSIGN, new_var_node(ptr, tok),
+                          new_unary(ND_ADDR, node, tok), tok);
+  chain_expr(&expr, new_binary(ND_ASSIGN, new_var_node(tmp, tok),
+                               new_unary(ND_DEREF, new_var_node(ptr, tok), tok), tok));
+  chain_expr(&expr, to_assign(new_add(new_unary(ND_DEREF, new_var_node(ptr, tok), tok),
+                                      new_num(addend, tok), tok, false)));
+  chain_expr(&expr, new_var_node(tmp, tok));
+  leave_scope();
+  return expr;
 }
 
 
@@ -5971,7 +6020,7 @@ static Node *primary(Token **rest, Token *tok)
 
   
     
-  if (equal(tok, "__builtin_ia32_maskmovdqu"))
+  if (equal(tok, "__builtin_ia32_maskmovdqu") || equal(tok, "__builtin_prefetch"))
   {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -5994,8 +6043,6 @@ static Node *primary(Token **rest, Token *tok)
     return node;
     }
   }
-
-
     
 
   if (equal(tok, "__builtin_ia32_vec_init_v4hi"))
@@ -7798,6 +7845,7 @@ char *nodekind2str(NodeKind kind)
   case ND_CRC32SI: return "CRC32SI";
   case ND_CRC32DI: return "CRC32DI";
   case ND_PSHUFD: return "PSHUFD";
+  case ND_PREFETCH: return "PREFETCH";
   default: return "UNREACHABLE"; 
   }
 }
@@ -8508,6 +8556,7 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_crc32si", ND_CRC32SI },    
     { "__builtin_ia32_crc32di", ND_CRC32DI },
     { "__builtin_ia32_pshufd", ND_PSHUFD },
+    { "__builtin_prefetch", ND_PREFETCH },
 };
 
 
