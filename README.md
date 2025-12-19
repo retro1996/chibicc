@@ -578,7 +578,8 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23.3    Forbiding two arguments that cause failure with g++ when compiling vlc (-Werror=invalid-command-line-argument and -Werror=unknown-warning-option). Temporary fix for -A that causes infinite loop (ISS-194). Fixing attributes found in struct member. Updating GNUC from 2 to 3. Reporting commit 11d0bff from slimcc (new_inc_dec) and removing commit 2e138bb. Adding builtin_prefetch found with memcached (ISS-202).
+1.0.23.3    Forbiding two arguments that cause failure with g++ when compiling vlc (-Werror=invalid-command-line-argument and -Werror=unknown-warning-option). Temporary fix for -A that causes infinite loop (ISS-194). Fixing attributes found in struct member. Updating GNUC from 2 to 3. Reporting commit 11d0bff from slimcc (new_inc_dec) and removing commit 2e138bb. Adding builtin_prefetch found with memcached (ISS-202). Reporting partial commit 32dbd2b from slimcc(initializer2). Reporting commit 6478f56 from slimcc (Change eval_double to long double, fix narrowing cast).
+
 
 
 ## old release notes

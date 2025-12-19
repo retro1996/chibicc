@@ -143,7 +143,7 @@ static int64_t eval_rval(Node *node, char ***label);
 static bool is_const_expr(Node *node);
 static Node *assign(Token **rest, Token *tok);
 static Node *logor(Token **rest, Token *tok);
-static double eval_double(Node *node);
+static long double eval_double(Node *node);
 static Node *conditional(Token **rest, Token *tok);
 static Node *logand(Token **rest, Token *tok);
 static Node * bitor (Token * *rest, Token *tok);
@@ -2029,7 +2029,7 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
     // Handle that case first.
     Node *expr = assign(rest, tok);
     add_type(expr);
-    if (expr->ty->kind == TY_STRUCT) {
+    if (is_compatible(expr->ty, init->ty)) {
       init->expr = expr;
       return;
     }
@@ -2049,7 +2049,7 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
 
     Node *expr = assign(rest, tok);
     add_type(expr);
-    if (expr->ty->kind == TY_UNION) {
+    if (is_compatible(expr->ty, init->ty)) {
       init->expr = expr;
       return;
     }
@@ -3245,10 +3245,11 @@ static bool is_const_expr(Node *node)
 int64_t const_expr(Token **rest, Token *tok)
 {
   Node *node = conditional(rest, tok);
+  add_type(node);
   return eval(node);
 }
 
-static double eval_double(Node *node)
+static long double eval_double(Node *node)
 {
   add_type(node);
 
@@ -3279,10 +3280,13 @@ static double eval_double(Node *node)
     eval_double(node->lhs);
     return eval_double(node->rhs);
   case ND_CAST:
-    // if (is_flonum(node->lhs->ty))
-    //   return eval_double(node->lhs);
-    if (is_flonum(node->lhs->ty))
+    if (is_flonum(node->lhs->ty)) {
+      if (node->ty->size == 4)
+        return (float)eval_double(node->lhs);
+      if (node->ty->size == 8)
+        return (double)eval_double(node->lhs);
       return eval_double(node->lhs);
+    }
     if (node->lhs->ty->size == 8 && node->lhs->ty->is_unsigned)
       return (uint64_t)eval(node->lhs);
     return eval(node->lhs);
