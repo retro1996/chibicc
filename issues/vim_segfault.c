@@ -1,55 +1,44 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-typedef struct u_entry {
+typedef struct State {
     int val;
-    struct u_entry *next;
-} u_entry_T;
+    struct State *prev;
+} State;
 
-typedef struct u_header {
-    int seq;
-    u_entry_T *entries;
-    struct u_header *next;
-} u_header_T;
-
-// Recursive addition, like Vim
-void recursive_addstate(u_header_T **head, int seq, int depth) {
-    if (depth <= 0) return;
-
-    u_header_T *h = malloc(sizeof(*h));  // uninitialized memory
-    h->seq = seq;
-    h->entries = NULL;
-    h->next = *head;
-    *head = h;
-
-    // Add some entries
-    for (int i = 0; i < 3; i++) {
-        u_entry_T *e = malloc(sizeof(*e)); // uninitialized
-        e->val = seq * 10 + i;
-        e->next = h->entries;
-        h->entries = e;
+// Recursive function that mimics addstate() in Vim's regex engine
+void addstate(State **cur, int depth, int limit) {
+    if (depth > limit) {
+        return;
     }
 
-    recursive_addstate(head, seq + 1, depth - 1);
+    // Allocate state on heap to simulate Vim's match state
+    State *s = malloc(sizeof(State));
+    s->val = depth;
+    s->prev = *cur;
+    *cur = s;
+
+    // Recursive call
+    addstate(cur, depth + 1, limit);
 }
 
-// Traverse without safety checks
-void traverse(u_header_T *head) {
-    while (head) {
-        u_entry_T *e = head->entries;
-        while (e) {
-            printf("seq=%d val=%d\n", head->seq, e->val);
-            e = e->next;  // SEGFAULT here if memory is corrupt
-        }
-        head = head->next;
+// Traverse the list without freeing (to mimic crash potential)
+void traverse(State *s) {
+    while (s) {
+        // Dereference state
+        printf("state depth=%d\n", s->val);
+        s = s->prev;
     }
 }
 
 int main() {
-    u_header_T *undo_list = NULL;
+    State *cur = NULL;
 
-    recursive_addstate(&undo_list, 1, 50); // deeper recursion
-    traverse(undo_list);
+    // Simulate deep recursion like Vim regex pattern
+    //addstate(&cur, 1, 100000); // increase if no crash
+    addstate(&cur, 1, 87249); // it works fine with 87248 and crashes with 87249
+
+    traverse(cur);
 
     return 0;
 }

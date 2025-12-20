@@ -171,13 +171,14 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
     //we generate a nop operation for each memory border defined
     //if (strlen(template) == 0 || !strncmp(template, "rep; nop", 9)) {
     if (strlen(template) == 0) {        
-        while (!equal(tok->next, ")")) {
+        while (!equal(tok, ";")) {
             tok = tok->next;
         }
-        *rest = tok->next;
-        SET_CTX(ctx);
-        *rest = skip(tok->next, ")", ctx);
-        tok = *rest;
+        //*rest = tok->next;
+        // SET_CTX(ctx);
+        // *rest = skip(tok->next, ")", ctx);
+        //tok = *rest;
+        *rest = tok;
         asm_str = "\nnop;\n";
         return asm_str;
     }
