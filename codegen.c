@@ -986,26 +986,31 @@ static bool has_pointer(Type *ty) {
 //
 // This function returns true if `ty` has only floating-point
 // members in its byte range [lo, hi).
-static bool has_flonum(Type *ty, int lo, int hi, int offset)
-{
-  if (ty->kind == TY_STRUCT || ty->kind == TY_UNION)
-  {
+static bool has_flonum(Type *ty, int lo, int hi, int offset) {
+  if (ty->is_variadic && (ty->kind == TY_STRUCT || ty->kind == TY_UNION))
+    return false;
+    
+  if (ty->kind == TY_STRUCT || ty->kind == TY_UNION) {
     for (Member *mem = ty->members; mem; mem = mem->next)
       if (!has_flonum(mem->ty, lo, hi, offset + mem->offset))
         return false;
     return true;
   }
 
-  if (ty->kind == TY_ARRAY || ty->kind == TY_VECTOR)
-  {
+  if (ty->kind == TY_ARRAY || ty->kind == TY_VECTOR) {
     for (int i = 0; i < ty->array_len; i++)
-      if (!has_flonum(ty->base, lo, hi, offset + ty->base->size * i))
+      if (!has_flonum(ty->base, lo, hi,
+                       offset + ty->base->size * i))
         return false;
     return true;
   }
 
-  return offset < lo || hi <= offset || ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE ;
+  if (offset >= hi || offset + ty->size <= lo)
+    return true;
+
+  return ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE;
 }
+
 
 static bool has_flonum1(Type *ty)
 {
