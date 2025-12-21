@@ -312,6 +312,9 @@ List of options ignored :
     "-mtsxldtrk"
     "-muintr"
     "-mwbnoinvd"
+    "-mrdpid"
+    "-mfsgsbase"
+    "-mavx"
     "-Wno-unreachable-code"
 
 ## Dockerfile and devcontainer

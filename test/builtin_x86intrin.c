@@ -16,6 +16,29 @@ void f4(void) {
     __builtin_ia32_wbnoinvd();
     __builtin_ia32_xtest();    
     __builtin_ia32_wbinvd();
+    __builtin_ia32_vzeroall();
+    __builtin_ia32_vzeroupper();
+    
+}
+
+unsigned int f7(void) {
+    return __builtin_ia32_rdpid();
+}
+
+unsigned int f8(void) {
+    return __builtin_ia32_rdfsbase32();
+}
+
+unsigned long long f9(void) {
+    return __builtin_ia32_rdfsbase64();
+}
+
+unsigned int f10(void) {
+    return __builtin_ia32_rdgsbase32();
+}
+
+unsigned long long f11(void) {
+    return __builtin_ia32_rdgsbase64();
 }
 
 int f5(void) {

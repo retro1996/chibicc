@@ -2136,6 +2136,11 @@ static void gen_binop1(Node *node, const char *insn) {
   println("  %s %%rax", insn);
 }
 
+static void gen_binop2(Node *node, const char *insn) {
+  println("  %s %s", insn, reg_ax(node->ty->size));
+}
+
+
 static void gen_nothing(Node *node) {
   println("  mov $0, %%rax");
 }
@@ -4073,6 +4078,13 @@ static void gen_expr(Node *node)
   case ND_WBNOINVD: gen_singleop(node, "wbnoinvd"); return;
   case ND_XTEST: gen_singleop(node, "xtest"); return;
   case ND_WBINVD: gen_singleop(node, "wbinvd"); return;
+  case ND_RDPID: gen_binop1(node, "rdpid"); return;
+  case ND_RDFSBASE32: 
+  case ND_RDFSBASE64: gen_binop2(node, "rdfsbase"); return;
+  case ND_RDGSBASE32: 
+  case ND_RDGSBASE64: gen_binop2(node, "rdgsbase"); return;
+  case ND_VZEROALL: gen_singleop(node, "vzeroall"); return;
+  case ND_VZEROUPPER: gen_singleop(node, "vzeroupper"); return;
 }
   
 if (is_vector(node->lhs->ty) || (node->rhs && is_vector(node->rhs->ty))) {

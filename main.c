@@ -980,6 +980,9 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-mtsxldtrk") ||
         !strcmp(argv[i], "-muintr") ||
         !strcmp(argv[i], "-mwbnoinvd") ||
+        !strcmp(argv[i], "-mrdpid") ||
+        !strcmp(argv[i], "-mfsgsbase") ||
+        !strcmp(argv[i], "-mavx") ||
         startswith(argv[i], "-W")     
         )
       continue;

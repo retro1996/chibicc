@@ -4188,8 +4188,8 @@ static Token *type_attributes(Token *tok, void *arg)
     SET_CTX(ctx);          
     tok = skip(tok, "(", ctx);
     int vs = const_expr(&tok, tok);
-    if (vs != 2 && vs != 4 && vs != 8 && vs != 16) {
-        error_tok(tok, "%s %d: unsupported vector_size %d; only 2, 4, 8 and 16 are supported", PARSE_C, __LINE__, vs);
+    if (vs != 2 && vs != 4 && vs != 8 && vs != 16 && vs != 32 && vs != 64) {
+        error_tok(tok, "%s %d: unsupported vector_size %d; only 2, 4, 8, 16, 32 and 64 are supported", PARSE_C, __LINE__, vs);
     }
     if (vs != ty->vector_size) {
         //ty->size = vs;
@@ -5916,8 +5916,11 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_xresldtrk") || equal(tok, "__builtin_ia32_clui") ||
       equal(tok, "__builtin_ia32_stui") || equal(tok, "__builtin_ia32_testui") ||
       equal(tok, "__builtin_ia32_wbnoinvd") || equal(tok, "__builtin_ia32_xtest") ||
-      equal(tok, "__builtin_ia32_wbinvd") ||
+      equal(tok, "__builtin_ia32_wbinvd") || equal(tok, "__builtin_ia32_rdpid") ||
       equal(tok, "__builtin_ia32_slwpcb") || equal(tok, "__builtin_ia32_rdpkru") ||
+      equal(tok, "__builtin_ia32_rdfsbase32") || equal(tok, "__builtin_ia32_rdfsbase64") ||
+      equal(tok, "__builtin_ia32_rdgsbase32") || equal(tok, "__builtin_ia32_rdgsbase64") ||      
+      equal(tok, "__builtin_ia32_vzeroall") || equal(tok, "__builtin_ia32_vzeroupper") ||
       equal(tok, "__builtin_ia32_sfence") || equal(tok, "__builtin_ia32_pause") ||
       equal(tok, "__builtin_ia32_lfence") || equal(tok, "__builtin_ia32_mfence")) 
   {
@@ -7916,6 +7919,13 @@ char *nodekind2str(NodeKind kind)
   case ND_WBNOINVD: return "WBNOINVD";
   case ND_XTEST: return "XTEST";
   case ND_WBINVD: return "WBINVD";
+  case ND_RDPID: return "RDPID";
+  case ND_RDFSBASE32: return "RDFSBASE32";
+  case ND_RDFSBASE64: return "RDFSBASE64";
+  case ND_RDGSBASE32: return "RDGSBASE32";
+  case ND_RDGSBASE64: return "RDGSBASE64";
+  case ND_VZEROALL: return "VZEROALL";
+  case ND_VZEROUPPER: return "VZEROUPPER";
   default: return "UNREACHABLE"; 
   }
 }
@@ -8644,7 +8654,15 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_testui", ND_TESTUI },
     { "__builtin_ia32_wbnoinvd", ND_WBNOINVD },
     { "__builtin_ia32_xtest", ND_XTEST },
-    { "__builtin_ia32_wbinvd", ND_WBINVD }
+    { "__builtin_ia32_wbinvd", ND_WBINVD },
+    { "__builtin_ia32_rdpid", ND_RDPID },
+    { "__builtin_ia32_rdfsbase32", ND_RDFSBASE32 },
+    { "__builtin_ia32_rdfsbase64", ND_RDFSBASE64 },
+    { "__builtin_ia32_rdgsbase32", ND_RDGSBASE32 },
+    { "__builtin_ia32_rdgsbase64", ND_RDGSBASE64 },
+    { "__builtin_ia32_vzeroall", ND_VZEROALL },
+    { "__builtin_ia32_vzeroupper", ND_VZEROUPPER }
+    
 };
 
 

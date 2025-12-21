@@ -822,6 +822,8 @@ void add_type(Node *node)
   case ND_STUI:
   case ND_WBNOINVD:
   case ND_WBINVD:
+  case ND_VZEROALL:
+  case ND_VZEROUPPER:
   case ND_UNREACHABLE:
     node->ty = ty_void;
     return;
@@ -1100,6 +1102,9 @@ void add_type(Node *node)
     node->ty = ty_int;
     return;
   case ND_XBEGIN:
+  case ND_RDPID:
+  case ND_RDFSBASE32:
+  case ND_RDGSBASE32:
     node->ty = ty_uint;
     return;    
   case ND_CRC32DI:
@@ -1122,6 +1127,8 @@ void add_type(Node *node)
     return;
   case ND_READEFLAGS_U64:
   case ND_RDSSPQ:  
+  case ND_RDFSBASE64:
+  case ND_RDGSBASE64:
   case ND_RDTSC:
     node->ty = ty_ullong;
     return;

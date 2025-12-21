@@ -64,7 +64,7 @@ static const char kTypeKindStr[17][8] = {
 };
 
 
-static const char kNodeKindStr[460][21] = {
+static const char kNodeKindStr[467][21] = {
     "NULL_EXPR", "ADD", "SUB", "MUL", "DIV", "NEG", "MOD", "BITAND",  "BITOR", "BITXOR", "SHL", "SHR", "EQ", "NE",
     "LT", "LE", "ASSIGN", "COND", "COMMA", "MEMBER", "ADDR", "DEREF", "NOT", "BITNOT", "LOGAND", "LOGOR", "RETURN",
     "IF", "FOR", "DO", "SWITCH", "CASE", "BLOCK", "GOTO", "GOTO_EXPR", "LABEL", "LABEL_VAL",  "FUNCALL", "EXPR_STMT", "STMT_EXPR", "VAR", "VLA_PTR", "NUM", "CAST", "MEMZERO",
@@ -116,7 +116,8 @@ static const char kNodeKindStr[460][21] = {
     "PMOVZXWD128", "PMOVZXBQ128", "PMOVZXDQ128", "PMOVZXWQ128", "PMOVZXBW128", "PACKUSDW128", "MOVNTDQA", 
     "CRC32QI", "CRC32HI", "CRC32SI", "CRC32DI", "PSHUFD", "UNREACHABLE", "RDTSC", "READEFLAGS_U64", "RDSSPQ",
     "SAVEPREVSSP", "SETSSBSY", "SLWPCB", "RDPKRU", "XBEGIN", "XEND", "SERIALIZE", "XSUSLDTRK", "XRESLDTRK", "CLUI",
-    "STUI", "TESTUI", "WBNOINVD", "XTEST", "WBINVD"
+    "STUI", "TESTUI", "WBNOINVD", "XTEST", "WBINVD", "RDPID", "RDFSBASE32", "RDFSBASE64", "RDGSBASE32", "RDGSBASE64",
+    "VZEROALL", "VZEROUPPER"
 
 };
 
