@@ -972,6 +972,14 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-fexcess-precision=standard") ||
         !strcmp(argv[i], "-Wno-shadow") ||
         !strcmp(argv[i], "-Wno-unreachable-code") ||
+        !strcmp(argv[i], "-mpku") ||
+        !strcmp(argv[i], "-mshstk") ||
+        !strcmp(argv[i], "-mlwp") ||
+        !strcmp(argv[i], "-mrtm") ||
+        !strcmp(argv[i], "-mserialize") ||        
+        !strcmp(argv[i], "-mtsxldtrk") ||
+        !strcmp(argv[i], "-muintr") ||
+        !strcmp(argv[i], "-mwbnoinvd") ||
         startswith(argv[i], "-W")     
         )
       continue;

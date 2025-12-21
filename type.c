@@ -731,6 +731,7 @@ void add_type(Node *node)
   case ND_MOVNTI:
   case ND_MOVNTI64:
   case ND_MOVNTDQ:
+  case ND_SLWPCB:
     node->ty = ty_void_ptr;
     return;
   case ND_CLFLUSH:
@@ -811,6 +812,16 @@ void add_type(Node *node)
   case ND_MFENCE:
   case ND_PAUSE:
   case ND_PREFETCH:
+  case ND_SETSSBSY:
+  case ND_SAVEPREVSSP:
+  case ND_XEND:
+  case ND_SERIALIZE:
+  case ND_XSUSLDTRK:
+  case ND_XRESLDTRK:
+  case ND_CLUI:
+  case ND_STUI:
+  case ND_WBNOINVD:
+  case ND_WBINVD:
   case ND_UNREACHABLE:
     node->ty = ty_void;
     return;
@@ -1081,11 +1092,16 @@ void add_type(Node *node)
   case ND_PTESTZ128:
   case ND_PTESTC128:
   case ND_PTESTNZC128:
+  case ND_RDPKRU:
   case ND_CRC32QI:
   case ND_CRC32HI:
+  case ND_XTEST:
   case ND_CRC32SI:
     node->ty = ty_int;
     return;
+  case ND_XBEGIN:
+    node->ty = ty_uint;
+    return;    
   case ND_CRC32DI:
     node->ty = ty_long;
     return;
@@ -1103,6 +1119,14 @@ void add_type(Node *node)
   case ND_PMOVZXWQ128:
   case ND_MOVNTDQA:
     node->ty = vector_of(ty_llong, 2);
+    return;
+  case ND_READEFLAGS_U64:
+  case ND_RDSSPQ:  
+  case ND_RDTSC:
+    node->ty = ty_ullong;
+    return;
+  case ND_TESTUI:
+    node->ty = ty_uchar;
     return;
   default:
     node->ty = ty_void_ptr;

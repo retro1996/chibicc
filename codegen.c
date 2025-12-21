@@ -2114,6 +2114,37 @@ static void gen_release(Node *node) {
   println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
 }
 
+static void gen_rdtsc(Node *node) {
+  println("  rdtsc");
+  println("  shl $32, %%rdx");
+  println("  or %%rdx, %%rax");
+}
+
+static void gen_rdpkru(Node *node) {
+  println("  movl $0, %%eax");
+  println("  movl %%eax, %%ecx");
+  println("  rdpkru");
+}
+
+
+static void gen_readeflags_u64(Node *node) {
+  println("  pushfq");
+  println("  pop %%rax");
+}
+
+static void gen_binop1(Node *node, const char *insn) {
+  println("  %s %%rax", insn);
+}
+
+static void gen_nothing(Node *node) {
+  println("  mov $0, %%rax");
+}
+
+static void gen_singleop(Node *node, const char *insn) {
+  println("  %s", insn);
+}
+
+
 static void gen_mul_overflow(Node *node) {
   int c = count(); 
   Type *ty = node->lhs->ty;  
@@ -4024,6 +4055,24 @@ static void gen_expr(Node *node)
   case ND_CRC32DI: gen_crc32di(node); return;
   case ND_PSHUFD: gen_pshufd(node); return;
   case ND_PREFETCH: gen_prefetch(node); return;
+  case ND_RDTSC: gen_rdtsc(node); return;
+  case ND_READEFLAGS_U64: gen_readeflags_u64(node); return;
+  case ND_RDSSPQ: gen_binop1(node, "rdsspq"); return;
+  case ND_SAVEPREVSSP: gen_singleop(node, "saveprevssp"); return;
+  case ND_SETSSBSY: gen_singleop(node, "setssbsy"); return;
+  case ND_SLWPCB: gen_binop1(node, "slwpcb"); return;
+  case ND_RDPKRU: gen_rdpkru(node); return;
+  case ND_XBEGIN: gen_nothing(node); return;
+  case ND_XEND: gen_singleop(node, "xend"); return;
+  case ND_SERIALIZE: gen_singleop(node, "serialize"); return;
+  case ND_XSUSLDTRK: gen_singleop(node, "xsusldtrk"); return;
+  case ND_XRESLDTRK: gen_singleop(node, "xresldtrk"); return;
+  case ND_CLUI: gen_singleop(node, "clui"); return;
+  case ND_STUI: gen_singleop(node, "stui"); return;
+  case ND_TESTUI: gen_singleop(node, "testui"); return;
+  case ND_WBNOINVD: gen_singleop(node, "wbnoinvd"); return;
+  case ND_XTEST: gen_singleop(node, "xtest"); return;
+  case ND_WBINVD: gen_singleop(node, "wbinvd"); return;
 }
   
 if (is_vector(node->lhs->ty) || (node->rhs && is_vector(node->rhs->ty))) {

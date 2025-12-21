@@ -1189,8 +1189,9 @@ static bool consume_end(Token **rest, Token *tok)
 // enum-list      = ident ("=" num)? ("," ident ("=" num)?)* ","?
 static Type *enum_specifier(Token **rest, Token *tok)
 {
-  Type *ty = enum_type();
 
+  Type *ty = enum_type();
+  tok = attribute_list(tok, ty, type_attributes);
   // Read a struct tag.
   Token *tag = NULL;
   if (tok->kind == TK_IDENT)
@@ -3156,16 +3157,16 @@ static int64_t eval2(Node *node, char ***label)
       return 0;          
     }
     
-    if (!label) {
-      error_tok(node->tok, "%s %d : in eval2 : not a compile-time constant %d", PARSE_C, __LINE__, node->var->ty->kind);
-    }
-      //trying to fix ======ISS-145 compiling util-linux failed with invalid initalizer2 
+    //trying to fix ======ISS-145 compiling util-linux failed with invalid initalizer2 
     // if (node->var->ty->kind != TY_ARRAY && node->var->ty->kind != TY_FUNC && node->var->ty->kind != TY_INT) {
     //   error_tok(node->tok, "%s %d: in eval2 : invalid initializer2 %d", PARSE_C, __LINE__, node->var->ty->kind);
     // }
     //trying to fix ======ISS-145 compiling util-linux failed with invalid initalizer2 
     if (is_integer(node->var->ty))
       return 0;
+    if (!label) {
+      error_tok(node->tok, "%s %d : in eval2 : not a compile-time constant %d", PARSE_C, __LINE__, node->var->ty->kind);
+    }
     *label = &node->var->name;
     return 0;
   case ND_NUM:
@@ -4388,7 +4389,8 @@ static Token *type_attributes(Token *tok, void *arg)
       consume(&tok, tok, "transaction_may_cancel_outer") || 
       consume(&tok, tok, "transaction_callable") || 
       consume(&tok, tok, "tainted_args") ||     
-      consume(&tok, tok, "__designated_init__") ||                   
+      consume(&tok, tok, "__designated_init__") ||         
+      consume(&tok, tok, "__flag_enum__") ||            
       consume(&tok, tok, "__no_profile_instrument_function__")) 
     {
         return tok;
@@ -4400,7 +4402,20 @@ static Token *type_attributes(Token *tok, void *arg)
     {
       return tok;
     }
-      
+        
+  if (consume(&tok, tok, "__diagnose_if__") ||
+      consume(&tok, tok, "diagnose_if") || consume(&tok, tok, "__no_sanitize__") ||
+      consume(&tok, tok, "no_sanitize")) {
+      tok = skip(tok, "(", ctx);
+      int depth = 1;
+      while (depth > 0) {
+          if (equal(tok, "(")) depth++;
+          else if (equal(tok, ")")) depth--;
+          tok = tok->next;
+      }
+      return tok;
+  }
+
 
   if (consume(&tok, tok, "format") || consume(&tok, tok, "__format__")) {
     SET_CTX(ctx);       
@@ -4477,6 +4492,7 @@ static Token *type_attributes(Token *tok, void *arg)
   }
 
 
+
   if (consume(&tok, tok, "const") || consume(&tok, tok, "__const__")) {
       ty->is_const = true;
     return tok;
@@ -4491,14 +4507,10 @@ static Token *type_attributes(Token *tok, void *arg)
       if (equal(tok, "(")) {
           SET_CTX(ctx); 
           tok = skip(tok, "(",ctx);
-
-          // Optional parameter list
           while (!equal(tok, ")")) {
               if (tok->kind != TK_NUM) {
                   error_tok(tok, "%s %d: expected parameter index in __nonnull__", PARSE_C, __LINE__);
               }
-              // You can store the info if you want (e.g., attr->nonnull_params = ...)
-
               tok = tok->next;
               if (equal(tok, ","))
                   tok = tok->next;
@@ -4512,6 +4524,18 @@ static Token *type_attributes(Token *tok, void *arg)
      return tok;
   }
 
+  if (consume(&tok, tok, "enum_extensibility") ||
+      consume(&tok, tok, "__enum_extensibility__")) {
+    tok = skip(tok, "(", ctx);
+
+    if (consume(&tok, tok, "open")) {
+      //
+    } else if (consume(&tok, tok, "closed")) {
+      //
+    }
+    tok = skip(tok, ")", ctx);
+    return tok;
+  }
 
   if (consume(&tok, tok, "sentinel") || consume(&tok, tok, "__sentinel__") ||
     consume(&tok, tok, "optimize") || consume(&tok, tok, "__optimize__") ||
@@ -4885,20 +4909,15 @@ static Token *thing_attributes(Token *tok, void *arg) {
 
  
   if (consume(&tok, tok, "malloc") || consume(&tok, tok, "__malloc__")) {
-
-    // Check for optional parameters: e.g., __malloc__(rpl_free, 1)
     if (equal(tok, "(")) {
         SET_CTX(ctx); 
-        tok = skip(tok, "(", ctx);
-        // Parse the deallocator function name (e.g., rpl_free)
+        tok = skip(tok, "(", ctx);        
         if (tok->kind != TK_IDENT)
             error_tok(tok, "%s %d: expected identifier in __malloc__ attribute", PARSE_C, __LINE__);
         tok = tok->next;
-
-        // Optionally consume comma and size argument
         if (equal(tok, ",")) {
             tok = tok->next;
-            const_expr(&tok, tok); // size index (e.g., 1)
+            const_expr(&tok, tok); 
         }
         SET_CTX(ctx); 
         tok = skip(tok, ")", ctx);
@@ -4907,8 +4926,6 @@ static Token *thing_attributes(Token *tok, void *arg) {
   }
 
   if (consume(&tok, tok, "null_terminated_string_arg")) {
-
-    // GCC syntax: __attribute__((null_terminated_string_arg(index)))
     if (equal(tok, "(")) {
         SET_CTX(ctx); 
         tok = skip(tok, "(", ctx);
@@ -4988,7 +5005,8 @@ static Token *thing_attributes(Token *tok, void *arg) {
       consume(&tok, tok, "transaction_may_cancel_outer") || 
       consume(&tok, tok, "transaction_callable") ||     
       consume(&tok, tok, "tainted_args") ||     
-      consume(&tok, tok, "__designated_init__") ||                   
+      consume(&tok, tok, "__designated_init__") ||  
+      consume(&tok, tok, "__flag_enum__") ||                
       consume(&tok, tok, "__no_profile_instrument_function__")) 
     {
         return tok;
@@ -5007,18 +5025,28 @@ static Token *thing_attributes(Token *tok, void *arg) {
       return tok;
     }
 
+    if (consume(&tok, tok, "__diagnose_if__") ||
+        consume(&tok, tok, "diagnose_if") || consume(&tok, tok, "__no_sanitize__") ||
+      consume(&tok, tok, "no_sanitize")) {
+        tok = skip(tok, "(", ctx);
+        int depth = 1;
+        while (depth > 0) {
+            if (equal(tok, "(")) depth++;
+            else if (equal(tok, ")")) depth--;
+            tok = tok->next;
+        }
+        return tok;
+    }
+
+
     if (consume(&tok, tok, "nonnull") || consume(&tok, tok, "__nonnull__")) {
       if (equal(tok, "(")) {
           SET_CTX(ctx); 
           tok = skip(tok, "(",ctx);
-
-          // Optional parameter list
           while (!equal(tok, ")")) {
               if (tok->kind != TK_NUM) {
                   error_tok(tok, "%s %d: expected parameter index in __nonnull__", PARSE_C, __LINE__);
               }
-              // You can store the info if you want (e.g., attr->nonnull_params = ...)
-
               tok = tok->next;
               if (equal(tok, ","))
                   tok = tok->next;
@@ -5028,10 +5056,21 @@ static Token *thing_attributes(Token *tok, void *arg) {
           SET_CTX(ctx); 
           tok = skip(tok, ")",ctx);
       }
-
      return tok;
     }
 
+    if (consume(&tok, tok, "enum_extensibility") ||
+      consume(&tok, tok, "__enum_extensibility__")) {
+      tok = skip(tok, "(", ctx);
+
+      if (consume(&tok, tok, "open")) {
+        //
+      } else if (consume(&tok, tok, "closed")) {
+        //
+      }
+      tok = skip(tok, ")", ctx);
+      return tok;
+    }
 
     if (consume(&tok, tok, "sentinel") || consume(&tok, tok, "__sentinel__") ||
       consume(&tok, tok, "optimize") || consume(&tok, tok, "__optimize__") ||
@@ -5869,7 +5908,16 @@ static Node *primary(Token **rest, Token *tok)
 
 
   //trying to fix ===== some builtin functions linked to mmx/emms
-  if (equal(tok, "__builtin_ia32_emms") ||  
+  if (equal(tok, "__builtin_ia32_emms") ||  equal(tok, "__builtin_ia32_rdtsc") ||
+      equal(tok, "__builtin_ia32_readeflags_u64") || equal(tok, "__builtin_ia32_rdsspq") ||
+      equal(tok, "__builtin_ia32_saveprevssp") || equal(tok, "__builtin_ia32_setssbsy") ||
+      equal(tok, "__builtin_ia32_xbegin") || equal(tok, "__builtin_ia32_xend") ||
+      equal(tok, "__builtin_ia32_serialize") || equal(tok, "__builtin_ia32_xsusldtrk") ||
+      equal(tok, "__builtin_ia32_xresldtrk") || equal(tok, "__builtin_ia32_clui") ||
+      equal(tok, "__builtin_ia32_stui") || equal(tok, "__builtin_ia32_testui") ||
+      equal(tok, "__builtin_ia32_wbnoinvd") || equal(tok, "__builtin_ia32_xtest") ||
+      equal(tok, "__builtin_ia32_wbinvd") ||
+      equal(tok, "__builtin_ia32_slwpcb") || equal(tok, "__builtin_ia32_rdpkru") ||
       equal(tok, "__builtin_ia32_sfence") || equal(tok, "__builtin_ia32_pause") ||
       equal(tok, "__builtin_ia32_lfence") || equal(tok, "__builtin_ia32_mfence")) 
   {
@@ -7850,6 +7898,24 @@ char *nodekind2str(NodeKind kind)
   case ND_CRC32DI: return "CRC32DI";
   case ND_PSHUFD: return "PSHUFD";
   case ND_PREFETCH: return "PREFETCH";
+  case ND_RDTSC: return "RDTSC";
+  case ND_READEFLAGS_U64: return "READEFLAGS_U64";
+  case ND_RDSSPQ: return "RDSSPQ";
+  case ND_SAVEPREVSSP: return "SAVEPREVSSP";
+  case ND_SETSSBSY: return "SETSSBSY";
+  case ND_SLWPCB: return "SLWPCB";
+  case ND_RDPKRU: return "RDPKRU";
+  case ND_XBEGIN: return "XBEGIN";
+  case ND_XEND: return "XEND";
+  case ND_SERIALIZE: return "SERIALIZE";
+  case ND_XSUSLDTRK: return "XSUSLDTRK";
+  case ND_XRESLDTRK: return "XRESLDTRK";
+  case ND_CLUI: return "CLUI";
+  case ND_STUI: return "STUI";
+  case ND_TESTUI: return "TESTUI";
+  case ND_WBNOINVD: return "WBNOINVD";
+  case ND_XTEST: return "XTEST";
+  case ND_WBINVD: return "WBINVD";
   default: return "UNREACHABLE"; 
   }
 }
@@ -8561,6 +8627,24 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_crc32di", ND_CRC32DI },
     { "__builtin_ia32_pshufd", ND_PSHUFD },
     { "__builtin_prefetch", ND_PREFETCH },
+    { "__builtin_ia32_rdtsc", ND_RDTSC },
+    { "__builtin_ia32_readeflags_u64", ND_READEFLAGS_U64 },
+    { "__builtin_ia32_rdsspq", ND_RDSSPQ },   
+    { "__builtin_ia32_saveprevssp", ND_SAVEPREVSSP },
+    { "__builtin_ia32_setssbsy", ND_SETSSBSY },
+    { "__builtin_ia32_slwpcb", ND_SLWPCB },
+    { "__builtin_ia32_rdpkru", ND_RDPKRU },
+    { "__builtin_ia32_xbegin", ND_XBEGIN },
+    { "__builtin_ia32_xend", ND_XEND },    
+    { "__builtin_ia32_serialize", ND_SERIALIZE },    
+    { "__builtin_ia32_xsusldtrk", ND_XSUSLDTRK },
+    { "__builtin_ia32_xresldtrk", ND_XRESLDTRK },
+    { "__builtin_ia32_clui", ND_CLUI },
+    { "__builtin_ia32_stui", ND_STUI },
+    { "__builtin_ia32_testui", ND_TESTUI },
+    { "__builtin_ia32_wbnoinvd", ND_WBNOINVD },
+    { "__builtin_ia32_xtest", ND_XTEST },
+    { "__builtin_ia32_wbinvd", ND_WBINVD }
 };
 
 
