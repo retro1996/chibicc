@@ -550,7 +550,7 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     git 2 tests failed
     memcached test stuck at t/binary-extstore.t ......... 5947/?
     vim: compile OK, tests OK except two tests : on test_channel.vim (Test_error_callback_terminal) and on test_plugin_termdebug.vim (test_termdebug_basic).
-    cpython : compile OK, test execution failed due to fork/vfork probably.
+    cpython : compile OK, test execution failed due to fork/vfork probably.    
 
 ## projects compiled successfully with chibicc
 

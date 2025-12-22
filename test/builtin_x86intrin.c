@@ -1,6 +1,7 @@
 #include "test.h"
+#include <stdint.h>
 //#include <x86intrin.h>
-//#include <cetintrin.h>
+//#include <x86gprintrin.h> 
 
 void f4(void) {
     __builtin_ia32_saveprevssp();
@@ -74,6 +75,26 @@ int main(void) {
     ASSERT(s2 >= s1, 1);
     unsigned int p1 = f6();
     ASSERT(0, p1);
+    int x = 0x80000000;   // bit 31 set
+    int y = 0x00000100;   // bit 8 set
+    int z = 0x00000001;   // bit 0 set
+
+    printf("%d\n", __builtin_ia32_bsrsi(x)); // expected 31
+    ASSERT(31, __builtin_ia32_bsrsi(x));
+    printf("%d\n", __builtin_ia32_bsrsi(y)); // expected 8
+    ASSERT(8, __builtin_ia32_bsrsi(y));
+    printf("%d\n", __builtin_ia32_bsrsi(z)); // expected 0
+    ASSERT(0, __builtin_ia32_bsrsi(z));
+    uint32_t aux1, aux2;
+    uint64_t tsc1, tsc2;
+    tsc1 = __builtin_ia32_rdtscp(&aux1);
+    tsc2 = __builtin_ia32_rdtscp(&aux2);
+    if (tsc2 <= tsc1) {
+        printf("Warning: TSC did not increase\n");
+    }
+    printf("TSC1 = %lu, AUX1 = %u\n", tsc1, aux1);
+    printf("TSC2 = %lu, AUX2 = %u\n", tsc2, aux2);
+
     printf("OK\n");
     return 0;
 }

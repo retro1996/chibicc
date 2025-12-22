@@ -5983,6 +5983,8 @@ static Node *primary(Token **rest, Token *tok)
     equal(tok, "__builtin_ia32_pmovzxwd128") || equal(tok, "__builtin_ia32_pmovzxbq128") || 
     equal(tok, "__builtin_ia32_pmovzxdq128") || equal(tok, "__builtin_ia32_pmovzxwq128") ||
     equal(tok, "__builtin_ia32_pmovzxbw128") || equal(tok, "__builtin_ia32_movntdqa") ||
+    equal(tok, "__builtin_ia32_bsrsi") || equal(tok, "__builtin_ia32_rdpmc") ||
+    equal(tok, "__builtin_ia32_rdtscp") ||
     equal(tok, "__builtin_ia32_rsqrtss")) {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -6611,19 +6613,19 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "__builtin_atomic_store_n") || equal(tok, "__atomic_store_n")) {
     return ParseAtomic3(ND_STORE_N, tok, rest);
   }
-  if (equal(tok, "__builtin_atomic_fetch_add") || equal(tok, "__atomic_fetch_add")) {
+  if (equal(tok, "__builtin_atomic_fetch_add") || equal(tok, "__atomic_fetch_add") || equal(tok, "__atomic_add_fetch")) {
     return ParseAtomic3(ND_FETCHADD, tok, rest);
   }
-  if (equal(tok, "__builtin_atomic_fetch_sub") || equal(tok, "__atomic_fetch_sub")) {
+  if (equal(tok, "__builtin_atomic_fetch_sub") || equal(tok, "__atomic_fetch_sub") || equal(tok, "__atomic_sub_fetch")) {
     return ParseAtomic3(ND_FETCHSUB, tok, rest);
   }
-  if (equal(tok, "__builtin_atomic_fetch_xor") || equal(tok, "__atomic_fetch_xor")) {
+  if (equal(tok, "__builtin_atomic_fetch_xor") || equal(tok, "__atomic_fetch_xor") || equal(tok, "__atomic_xor_fetch") ) {
     return ParseAtomic3(ND_FETCHXOR, tok, rest);
   }
-  if (equal(tok, "__builtin_atomic_fetch_and") || equal(tok, "__atomic_fetch_and")) {
+  if (equal(tok, "__builtin_atomic_fetch_and") || equal(tok, "__atomic_fetch_and") ||equal(tok, "__atomic_and_fetch")) {
     return ParseAtomic3(ND_FETCHAND, tok, rest);
   }
-  if (equal(tok, "__builtin_atomic_fetch_or")  || equal(tok, "__atomic_fetch_or")) {
+  if (equal(tok, "__builtin_atomic_fetch_or")  || equal(tok, "__atomic_fetch_or") || equal(tok, "__atomic_or_fetch")) {
     return ParseAtomic3(ND_FETCHOR, tok, rest);
   }
   if (equal(tok, "__builtin_atomic_test_and_set")) {
@@ -7209,6 +7211,8 @@ static bool var_in_array2(const char *str, Obj *varArr[], size_t count) {
     }
     return false;  
 }
+
+
 // Remove redundant tentative definitions.
 // works fine when we have tentative and definition but didn't work when we have multiple tentatives.
 // that's why here we're doing two passes and managed the case of duplicate tentatives.
@@ -7216,7 +7220,7 @@ static void scan_globals(void)
 {
   Obj head;
   Obj *cur = &head;
-  Obj *varArr[50000];  
+  Obj *varArr[MAX_GLOBAL_VAR];  
   int i = 0;
   //the first pass skipped the duplicated tentative and stores in an Array of objects duplicated tentative
   for (Obj *var = globals; var; var = var->next)
@@ -7233,7 +7237,7 @@ static void scan_globals(void)
     for (; var2; var2 = var2->next) {
       if (var != var2 && var2->is_definition && !strcmp(var->name, var2->name)) {
         //warn_tok(var->tok, "%s %d: in scan_globals : duplicated tentative definition", PARSE_C, __LINE__);  
-        if (var2->is_tentative && !var_in_array(var->name, varArr, i + 1 ) && (i + 1) < 50000) {
+        if (var2->is_tentative && !var_in_array(var->name, varArr, i + 1 ) && (i + 1) < MAX_GLOBAL_VAR) {
           varArr[i++] = var;                
         }
         break;
@@ -7268,7 +7272,7 @@ static void scan_globals2(void)
 {
   Obj head;
   Obj *cur = &head;
-  Obj *varArr[50000];  
+  Obj *varArr[MAX_GLOBAL_VAR];  
   int i = 0;
   //the first pass skipped the duplicated tentative and stores in an Array of objects duplicated tentative
   for (Obj *var = globals; var; var = var->next)
@@ -7285,7 +7289,7 @@ static void scan_globals2(void)
     for (; var2; var2 = var2->next) {
       if (var != var2 && var2->is_definition && !strcmp(var->name, var2->name)) {
         //warn_tok(var->tok, "%s %d: in scan_globals : duplicated tentative definition", PARSE_C, __LINE__);  
-        if (var2->is_definition && !var_in_array2(var->name, varArr, i + 1 ) && (i + 1) < 50000) {
+        if (var2->is_definition && !var_in_array2(var->name, varArr, i + 1 ) && (i + 1) < MAX_GLOBAL_VAR) {
           varArr[i++] = var;                
         }
         break;
@@ -7963,6 +7967,9 @@ char *nodekind2str(NodeKind kind)
   case ND_VZEROALL: return "VZEROALL";
   case ND_VZEROUPPER: return "VZEROUPPER";
   case ND_FEMMS: return "FEMMS";
+  case ND_BSRSI: return "BSRSI";
+  case ND_RDPMC: return "RDPMC";
+  case ND_RDTSCP: return "RDTSCP";
   default: return "UNREACHABLE"; 
   }
 }
@@ -8699,8 +8706,10 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_rdgsbase64", ND_RDGSBASE64 },
     { "__builtin_ia32_vzeroall", ND_VZEROALL },
     { "__builtin_ia32_vzeroupper", ND_VZEROUPPER },
-    { "__builtin_ia32_femms", ND_FEMMS }
-    
+    { "__builtin_ia32_femms", ND_FEMMS },
+    { "__builtin_ia32_bsrsi", ND_BSRSI },
+    { "__builtin_ia32_rdpmc", ND_RDPMC },
+    { "__builtin_ia32_rdtscp", ND_RDTSCP },
 };
 
 

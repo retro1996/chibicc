@@ -2126,6 +2126,26 @@ static void gen_rdpkru(Node *node) {
   println("  rdpkru");
 }
 
+static void gen_bsrsi(Node *node) {
+  gen_expr(node->lhs);
+  println("  bsrl %%eax, %%eax");
+}
+
+static void gen_rdpmc(Node *node) {
+  gen_expr(node->lhs);
+  println("  mov %%eax, %%ecx"); 
+  println("  rdpmc");
+}
+
+static void gen_rdtscp(Node *node) {
+  gen_expr(node->lhs);
+  println("  mov %%rax, %%rdi");
+  println("  rdtscp");        
+  println("  movl %%ecx, (%%rdi)"); 
+  println("  movl %%edx, %%edx");  
+  println("  salq $32, %%rdx");      
+  println("  or %%rdx, %%rax");     
+}
 
 static void gen_readeflags_u64(Node *node) {
   println("  pushfq");
@@ -4086,6 +4106,9 @@ static void gen_expr(Node *node)
   case ND_VZEROALL: gen_singleop(node, "vzeroall"); return;
   case ND_VZEROUPPER: gen_singleop(node, "vzeroupper"); return;
   case ND_FEMMS: gen_singleop(node, "femms"); return;
+  case ND_BSRSI: gen_bsrsi(node); return;
+  case ND_RDPMC: gen_rdpmc(node); return;
+  case ND_RDTSCP: gen_rdtscp(node); return;
 }
   
 if (is_vector(node->lhs->ty) || (node->rhs && is_vector(node->rhs->ty))) {

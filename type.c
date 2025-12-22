@@ -1099,6 +1099,7 @@ void add_type(Node *node)
   case ND_CRC32QI:
   case ND_CRC32HI:
   case ND_XTEST:
+  case ND_BSRSI:
   case ND_CRC32SI:
     node->ty = ty_int;
     return;
@@ -1106,6 +1107,8 @@ void add_type(Node *node)
   case ND_RDPID:
   case ND_RDFSBASE32:
   case ND_RDGSBASE32:
+  case ND_RDTSCP:
+  case ND_RDPMC:
     node->ty = ty_uint;
     return;    
   case ND_CRC32DI:

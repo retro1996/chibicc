@@ -52,6 +52,7 @@
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 #define MAX_BUILTIN_ARGS 8
 #define MAX_WEAK 20
+#define MAX_GLOBAL_VAR 100000
 
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
@@ -851,6 +852,9 @@ typedef enum
   ND_VZEROALL,
   ND_VZEROUPPER,
   ND_FEMMS,
+  ND_BSRSI,
+  ND_RDPMC,
+  ND_RDTSCP,
 } NodeKind;
 
 // AST node type
