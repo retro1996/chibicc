@@ -18,6 +18,7 @@ void f4(void) {
     __builtin_ia32_wbinvd();
     __builtin_ia32_vzeroall();
     __builtin_ia32_vzeroupper();
+    __builtin_ia32_femms();
     
 }
 

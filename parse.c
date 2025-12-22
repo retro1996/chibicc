@@ -5921,6 +5921,7 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_rdfsbase32") || equal(tok, "__builtin_ia32_rdfsbase64") ||
       equal(tok, "__builtin_ia32_rdgsbase32") || equal(tok, "__builtin_ia32_rdgsbase64") ||      
       equal(tok, "__builtin_ia32_vzeroall") || equal(tok, "__builtin_ia32_vzeroupper") ||
+      equal(tok, "__builtin_ia32_femms") ||
       equal(tok, "__builtin_ia32_sfence") || equal(tok, "__builtin_ia32_pause") ||
       equal(tok, "__builtin_ia32_lfence") || equal(tok, "__builtin_ia32_mfence")) 
   {
@@ -5997,7 +5998,7 @@ static Node *primary(Token **rest, Token *tok)
 
   }
    
-  if (equal(tok, "__builtin_shuffle") || equal(tok, "__builtin_ia32_pblendvb128") || 
+  if (equal(tok, "__builtin_ia32_pblendvb128") || 
       equal(tok, "__builtin_ia32_blendvpd") ||
       equal(tok, "__builtin_ia32_blendvps"))
   {
@@ -6023,7 +6024,42 @@ static Node *primary(Token **rest, Token *tok)
     }
   }
 
-  
+  //builtin shuffle can have two forms : 
+  //builtin_shuffle(a, b, mask) or
+  //builtin_shuffle(a, mask)  where B defaults to A
+  if (equal(tok, "__builtin_shuffle")) {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);
+      SET_CTX(ctx);
+      tok = skip(tok->next, "(", ctx);
+      Node *a = assign(&tok, tok);
+      add_type(a);
+      SET_CTX(ctx);
+      tok = skip(tok, ",", ctx);
+      Node *second = assign(&tok, tok);
+      add_type(second);
+      SET_CTX(ctx);
+      if (equal(tok, ",")) {
+        tok = tok->next;
+        Node *mask = assign(&tok, tok);
+        add_type(mask);
+        node->builtin_args[0] = a;
+        node->builtin_args[1] = second;
+        node->builtin_args[2] = mask;
+      } else {
+        node->builtin_args[0] = a;
+        node->builtin_args[1] = a;      
+        node->builtin_args[2] = second; 
+      }
+      node->builtin_nargs = 3;
+      SET_CTX(ctx);
+      *rest = skip(tok, ")", ctx);
+      return node;
+    }
+  }
+
+
   if (equal(tok, "__builtin_ia32_maskmovq"))
   {   
     int builtin = builtin_enum(tok);
@@ -7926,6 +7962,7 @@ char *nodekind2str(NodeKind kind)
   case ND_RDGSBASE64: return "RDGSBASE64";
   case ND_VZEROALL: return "VZEROALL";
   case ND_VZEROUPPER: return "VZEROUPPER";
+  case ND_FEMMS: return "FEMMS";
   default: return "UNREACHABLE"; 
   }
 }
@@ -8661,7 +8698,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_rdgsbase32", ND_RDGSBASE32 },
     { "__builtin_ia32_rdgsbase64", ND_RDGSBASE64 },
     { "__builtin_ia32_vzeroall", ND_VZEROALL },
-    { "__builtin_ia32_vzeroupper", ND_VZEROUPPER }
+    { "__builtin_ia32_vzeroupper", ND_VZEROUPPER },
+    { "__builtin_ia32_femms", ND_FEMMS }
     
 };
 

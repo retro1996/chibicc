@@ -4085,6 +4085,7 @@ static void gen_expr(Node *node)
   case ND_RDGSBASE64: gen_binop2(node, "rdgsbase"); return;
   case ND_VZEROALL: gen_singleop(node, "vzeroall"); return;
   case ND_VZEROUPPER: gen_singleop(node, "vzeroupper"); return;
+  case ND_FEMMS: gen_singleop(node, "femms"); return;
 }
   
 if (is_vector(node->lhs->ty) || (node->rhs && is_vector(node->rhs->ty))) {
@@ -4598,6 +4599,14 @@ static void store_fp(int r, int offset, int sz)
     return;
   case 16:
     println("  movups %%xmm%d, %d(%%rbp)", r, offset); // movaps for 16-byte (128-bit) vector
+    return;
+  }
+  
+  // Handle wide FP/vector objects (32, 64, ...)
+  if (sz % 16 == 0) {
+    for (int i = 0; i < sz; i += 16) {
+      println("  movups %%xmm%d, %d(%%rbp)", r + i / 16, offset + i);
+    }
     return;
   }
   printf("===== r=%d offset=%d sz=%d\n", r, offset, sz);

@@ -315,6 +315,7 @@ List of options ignored :
     "-mrdpid"
     "-mfsgsbase"
     "-mavx"
+    "-m3dnow"
     "-Wno-unreachable-code"
 
 ## Dockerfile and devcontainer
@@ -589,7 +590,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23.3    Forbiding two arguments that cause failure with g++ when compiling vlc (-Werror=invalid-command-line-argument and -Werror=unknown-warning-option). Temporary fix for -A that causes infinite loop (ISS-194). Fixing attributes found in struct member. Updating GNUC from 2 to 3. Reporting commit 11d0bff from slimcc (new_inc_dec) and removing commit 2e138bb. Adding builtin_prefetch found with memcached (ISS-202). Reporting partial commit 32dbd2b from slimcc(initializer2). Reporting commit 6478f56 from slimcc (Change eval_double to long double, fix narrowing cast). Fixing issue with variadic and double/float/int mixed struct. Fixing assembly issue found at VIM (after a git pull). Adding enum_extensibility attribute support found during ruby compile. Adding some builtin functions found during ruby compile.
+1.0.23.3    Forbiding two arguments that cause failure with g++ when compiling vlc (-Werror=invalid-command-line-argument and -Werror=unknown-warning-option). Temporary fix for -A that causes infinite loop (ISS-194). Fixing attributes found in struct member. Updating GNUC from 2 to 3. Reporting commit 11d0bff from slimcc (new_inc_dec) and removing commit 2e138bb. Adding builtin_prefetch found with memcached (ISS-202). Reporting partial commit 32dbd2b from slimcc(initializer2). Reporting commit 6478f56 from slimcc (Change eval_double to long double, fix narrowing cast). Fixing issue with variadic and double/float/int mixed struct. Fixing assembly issue found at VIM (after a git pull). Adding enum_extensibility attribute support found during ruby compile. Adding some builtin functions found during ruby compile. Managing two forms of builtin_shuffle.
 
 
 

@@ -850,6 +850,7 @@ typedef enum
   ND_RDGSBASE64,
   ND_VZEROALL,
   ND_VZEROUPPER,
+  ND_FEMMS,
 } NodeKind;
 
 // AST node type
