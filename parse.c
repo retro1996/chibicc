@@ -7940,6 +7940,10 @@ char *nodekind2str(NodeKind kind)
   case ND_CRC32SI: return "CRC32SI";
   case ND_CRC32DI: return "CRC32DI";
   case ND_PSHUFD: return "PSHUFD";
+  case ND_FETCHNAND: return "FETCHNAND";
+  case ND_ADD_AND_FETCH: return "ADD_AND_FETCH";
+  case ND_SUB_AND_FETCH: return "SUB_AND_FETCH";
+  case ND_BOOL_CAS: return "BOOL_CAS";
   case ND_PREFETCH: return "PREFETCH";
   case ND_RDTSC: return "RDTSC";
   case ND_READEFLAGS_U64: return "READEFLAGS_U64";
