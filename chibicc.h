@@ -860,6 +860,7 @@ typedef enum
   ND_RORQI,
   ND_RORHI,
   ND_BSRDI, 
+  ND_WRITEEFLAGS_U64,
 } NodeKind;
 
 // AST node type

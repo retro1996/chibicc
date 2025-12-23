@@ -825,6 +825,7 @@ void add_type(Node *node)
   case ND_VZEROALL:
   case ND_VZEROUPPER:
   case ND_FEMMS:
+  case ND_WRITEEFLAGS_U64:
   case ND_UNREACHABLE:
     node->ty = ty_void;
     return;

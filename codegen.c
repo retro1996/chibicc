@@ -2193,6 +2193,12 @@ static void gen_readeflags_u64(Node *node) {
   println("  popq %%rax");
 }
 
+static void gen_writeeflags_u64(Node *node) {
+  gen_expr(node->lhs);
+  println("  pushq $%ld", node->lhs->val);
+  println("  popfq");
+}
+
 static void gen_binop1(Node *node, const char *insn) {
   println("  %s %%rax", insn);
 }
@@ -4155,6 +4161,7 @@ static void gen_expr(Node *node)
   case ND_ROLHI: gen_rolhi(node); return;
   case ND_RORHI: gen_rorhi(node); return;  
   case ND_BSRDI: gen_bsrdi(node); return;  
+  case ND_WRITEEFLAGS_U64: gen_writeeflags_u64(node); return;
 
 }
   

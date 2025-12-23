@@ -20,6 +20,9 @@ void f4(void) {
     __builtin_ia32_vzeroall();
     __builtin_ia32_vzeroupper();
     __builtin_ia32_femms();
+    __builtin_ia32_writeeflags_u64(0x200);
+    unsigned long long x = 0x201;
+    __builtin_ia32_writeeflags_u64(x);
     
 }
 
