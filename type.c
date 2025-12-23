@@ -1111,6 +1111,7 @@ void add_type(Node *node)
   case ND_RDPMC:
     node->ty = ty_uint;
     return;    
+  case ND_BSRDI:
   case ND_CRC32DI:
     node->ty = ty_long;
     return;
@@ -1136,8 +1137,14 @@ void add_type(Node *node)
   case ND_RDTSC:
     node->ty = ty_ullong;
     return;
+  case ND_ROLQI:
+  case ND_RORQI:
   case ND_TESTUI:
     node->ty = ty_uchar;
+    return;
+  case ND_RORHI:
+  case ND_ROLHI:
+    node->ty = ty_ushort;
     return;
   default:
     node->ty = ty_void_ptr;

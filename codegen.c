@@ -2131,6 +2131,11 @@ static void gen_bsrsi(Node *node) {
   println("  bsrl %%eax, %%eax");
 }
 
+static void gen_bsrdi(Node *node) {
+  gen_expr(node->lhs);
+  println("  bsrq %%rax, %%rax");
+}
+
 static void gen_rdpmc(Node *node) {
   gen_expr(node->lhs);
   println("  mov %%eax, %%ecx"); 
@@ -2147,9 +2152,45 @@ static void gen_rdtscp(Node *node) {
   println("  or %%rdx, %%rax");     
 }
 
+static void gen_rolqi(Node *node) {
+  gen_expr(node->lhs);
+  println("  mov %%al, %%bl"); 
+  gen_expr(node->rhs); 
+  println("  mov %%al, %%cl");  
+  println("  rolb %%cl, %%bl"); 
+  println("  movzb %%bl, %%rax"); 
+}
+
+static void gen_rorqi(Node *node) {
+  gen_expr(node->lhs);
+  println("  mov %%al, %%bl"); 
+  gen_expr(node->rhs); 
+  println("  mov %%al, %%cl");  
+  println("  rorb %%cl, %%bl"); 
+  println("  movzb %%bl, %%rax"); 
+}
+
+static void gen_rolhi(Node *node) {
+  gen_expr(node->lhs);
+  println("  mov %%ax, %%bx");  
+  gen_expr(node->rhs);  
+  println("  mov %%al, %%cl"); 
+  println("  rolw %%cl, %%bx");
+  println("  movzx %%bx, %%rax");  
+}
+
+static void gen_rorhi(Node *node) {
+  gen_expr(node->lhs);
+  println("  mov %%ax, %%bx");  
+  gen_expr(node->rhs);  
+  println("  mov %%al, %%cl"); 
+  println("  rorw %%cl, %%bx");
+  println("  movzx %%bx, %%rax");  
+}
+
 static void gen_readeflags_u64(Node *node) {
   println("  pushfq");
-  println("  pop %%rax");
+  println("  popq %%rax");
 }
 
 static void gen_binop1(Node *node, const char *insn) {
@@ -4109,6 +4150,12 @@ static void gen_expr(Node *node)
   case ND_BSRSI: gen_bsrsi(node); return;
   case ND_RDPMC: gen_rdpmc(node); return;
   case ND_RDTSCP: gen_rdtscp(node); return;
+  case ND_ROLQI: gen_rolqi(node); return;
+  case ND_RORQI: gen_rorqi(node); return;
+  case ND_ROLHI: gen_rolhi(node); return;
+  case ND_RORHI: gen_rorhi(node); return;  
+  case ND_BSRDI: gen_bsrdi(node); return;  
+
 }
   
 if (is_vector(node->lhs->ty) || (node->rhs && is_vector(node->rhs->ty))) {

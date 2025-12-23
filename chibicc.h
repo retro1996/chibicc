@@ -855,6 +855,11 @@ typedef enum
   ND_BSRSI,
   ND_RDPMC,
   ND_RDTSCP,
+  ND_ROLQI,
+  ND_ROLHI,
+  ND_RORQI,
+  ND_RORHI,
+  ND_BSRDI, 
 } NodeKind;
 
 // AST node type

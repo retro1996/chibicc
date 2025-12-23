@@ -5984,7 +5984,7 @@ static Node *primary(Token **rest, Token *tok)
     equal(tok, "__builtin_ia32_pmovzxdq128") || equal(tok, "__builtin_ia32_pmovzxwq128") ||
     equal(tok, "__builtin_ia32_pmovzxbw128") || equal(tok, "__builtin_ia32_movntdqa") ||
     equal(tok, "__builtin_ia32_bsrsi") || equal(tok, "__builtin_ia32_rdpmc") ||
-    equal(tok, "__builtin_ia32_rdtscp") ||
+    equal(tok, "__builtin_ia32_bsrdi") || equal(tok, "__builtin_ia32_rdtscp") ||
     equal(tok, "__builtin_ia32_rsqrtss")) {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -7970,6 +7970,11 @@ char *nodekind2str(NodeKind kind)
   case ND_BSRSI: return "BSRSI";
   case ND_RDPMC: return "RDPMC";
   case ND_RDTSCP: return "RDTSCP";
+  case ND_ROLQI: return "ROLQI";
+  case ND_ROLHI: return "ROLHI";
+  case ND_RORQI: return "RORQI";
+  case ND_RORHI: return "RORHI";
+  case ND_BSRDI: return "BSRDI";  
   default: return "UNREACHABLE"; 
   }
 }
@@ -8710,6 +8715,11 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_bsrsi", ND_BSRSI },
     { "__builtin_ia32_rdpmc", ND_RDPMC },
     { "__builtin_ia32_rdtscp", ND_RDTSCP },
+    { "__builtin_ia32_rolqi", ND_ROLQI },
+    { "__builtin_ia32_rolhi", ND_ROLHI },
+    { "__builtin_ia32_rorqi", ND_RORQI },
+    { "__builtin_ia32_rorhi", ND_RORHI },
+    { "__builtin_ia32_bsrdi", ND_BSRDI },    
 };
 
 
