@@ -2634,39 +2634,36 @@ static void gen_movnt_binop(Node *node, const char *insn) {
 }
 
 static void gen_crc32qi(Node *node) {
-  gen_expr(node->lhs);       // accumulator in %rax
+  gen_expr(node->lhs);     
   println("  movl %%eax, %%ecx");
-  gen_expr(node->rhs);       // byte input in %rax
+  gen_expr(node->rhs);     
   println("  movb %%al, %%dl");
-
   println("  crc32b %%dl, %%ecx");
   println("  movl %%ecx, %%eax");
 }
 
 static void gen_crc32di(Node *node) {
-  gen_expr(node->lhs);            // accumulator -> %rax
-  println("  movq %%rax, %%rcx");      // destination must be 64-bit
-  gen_expr(node->rhs);            // uint64 -> %rax
-  println("  movq %%rax, %%rdx");
-  println("  crc32q %%rdx, %%rcx");
-  println("  movq %%rcx, %%rax");      // return 64-bit value
+  gen_expr(node->lhs);      
+  println("  movl %%eax, %%ecx"); 
+  gen_expr(node->rhs);    
+  println("  crc32q %%rax, %%rcx"); 
+  println("  movl %%ecx, %%eax");    
 }
 
-
 static void gen_crc32hi(Node *node) {
-  gen_expr(node->lhs);           // accumulator -> %rax
+  gen_expr(node->lhs);        
   println("  movl %%eax, %%ecx");
-  gen_expr(node->rhs);           // input -> %rax
-  println("  movw %%ax, %%dx");       // 16-bit input
+  gen_expr(node->rhs);        
+  println("  movw %%ax, %%dx");
   println("  crc32w %%dx, %%ecx");
   println("  movl %%ecx, %%eax");
 }
 
 
 static void gen_crc32si(Node *node) {
-  gen_expr(node->lhs);           // accumulator -> %rax
+  gen_expr(node->lhs);         
   println("  movl %%eax, %%ecx");
-  gen_expr(node->rhs);           // uint32 -> %rax
+  gen_expr(node->rhs);         
   println("  movl %%eax, %%edx");
   println("  crc32l %%edx, %%ecx");
   println("  movl %%ecx, %%eax");
