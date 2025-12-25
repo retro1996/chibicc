@@ -1,8 +1,19 @@
-//#include <nmmintrin.h>
+//#include <smmintrin.h>
 #include <stdint.h>
 #include "test.h"
+typedef unsigned int __v4su __attribute__ ((__vector_size__ (16)));
 
 typedef uint32_t crc32_t;
+
+/* Define the default attributes for the functions in this file. */
+#define __DEFAULT_FN_ATTRS                                                     \
+  __attribute__((__always_inline__, __nodebug__,                               \
+                 __target__("ssse3,no-evex512"), __min_vector_width__(64)))
+#define __DEFAULT_FN_ATTRS_MMX                                                 \
+  __attribute__((__always_inline__, __nodebug__,                               \
+                 __target__("mmx,ssse3,no-evex512"),                           \
+                 __min_vector_width__(64)))
+
 
 #define __DEFAULT_FN_ATTRS                                                     \
   __attribute__((__always_inline__, __nodebug__, __target__("crc32")))

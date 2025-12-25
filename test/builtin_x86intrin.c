@@ -1,6 +1,7 @@
 #include "test.h"
 #include <stdint.h>
-//#include <x86intrin.h>
+#include <x86intrin.h>
+//#include <cetintrin.h>
 //#include <x86gprintrin.h> 
 
 void f4(void) {
@@ -23,7 +24,12 @@ void f4(void) {
     __builtin_ia32_writeeflags_u64(0x200);
     unsigned long long x = 0x201;
     __builtin_ia32_writeeflags_u64(x);
-    
+    __builtin_ia32_incsspq(x);
+    void *ptr;
+    __builtin_ia32_rstorssp(ptr);
+    __builtin_ia32_clrssbsy(1);
+    int val = 1;
+    __builtin_ia32_clrssbsy(val);    
 }
 
 unsigned int f7(void) {
@@ -66,6 +72,19 @@ unsigned long long f2(void) {
     return __builtin_ia32_readeflags_u64();
 }
 
+
+static inline void wrssd(uint32_t *p, uint32_t v) {
+    __builtin_ia32_wrssd(p, v);
+    __builtin_ia32_wrssq(p, v);
+    __builtin_ia32_wrussd(p, v);
+    __builtin_ia32_wrussq(p, v);
+}
+
+__attribute__((noinline))
+void test(uint32_t *p) {
+    wrssd(p, 0xdeadbeef);
+}
+
 int main(void) {
     unsigned long long t1 = f1();
     unsigned long long t2 = f1();
@@ -97,7 +116,6 @@ int main(void) {
     }
     printf("TSC1 = %lu, AUX1 = %u\n", tsc1, aux1);
     printf("TSC2 = %lu, AUX2 = %u\n", tsc2, aux2);
-
     printf("OK\n");
     return 0;
 }

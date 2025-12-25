@@ -45,6 +45,7 @@ struct VarAttr
   bool is_inline;
   bool is_tls;
   int align;
+  int min_vector_width;
     //from COSMOPOLITAN adding some attributes
   bool is_weak;
   bool is_ms_abi;
@@ -4503,6 +4504,11 @@ static Token *type_attributes(Token *tok, void *arg)
     return tok;
   }
 
+  if (consume(&tok, tok, "__min_vector_width__")) {
+      ty->min_vector_width = const_expr(&tok, tok);
+    return tok;
+  }
+
   if (consume(&tok, tok, "nonnull") || consume(&tok, tok, "__nonnull__")) {
       if (equal(tok, "(")) {
           SET_CTX(ctx); 
@@ -4731,6 +4737,11 @@ static Token *thing_attributes(Token *tok, void *arg) {
 
   if (consume(&tok, tok, "always_inline") || consume(&tok, tok, "__always_inline__")) {
     attr->is_inline = true;
+    return tok;
+  }
+
+  if (consume(&tok, tok, "__min_vector_width__")) {
+      attr->min_vector_width = const_expr(&tok, tok);
     return tok;
   }
 
@@ -5985,7 +5996,8 @@ static Node *primary(Token **rest, Token *tok)
     equal(tok, "__builtin_ia32_pmovzxbw128") || equal(tok, "__builtin_ia32_movntdqa") ||
     equal(tok, "__builtin_ia32_bsrsi") || equal(tok, "__builtin_ia32_rdpmc") ||
     equal(tok, "__builtin_ia32_bsrdi") || equal(tok, "__builtin_ia32_rdtscp") ||
-    equal(tok, "__builtin_ia32_writeeflags_u64") ||
+    equal(tok, "__builtin_ia32_writeeflags_u64") || equal(tok, "__builtin_ia32_incsspq") ||
+    equal(tok, "__builtin_ia32_rstorssp") || equal(tok, "__builtin_ia32_clrssbsy") || 
     equal(tok, "__builtin_ia32_rsqrtss")) {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -7981,6 +7993,13 @@ char *nodekind2str(NodeKind kind)
   case ND_RORHI: return "RORHI";
   case ND_BSRDI: return "BSRDI";  
   case ND_WRITEEFLAGS_U64: return "WRITEEFLAGS_U64";
+  case ND_INCSSPQ: return "INCSSPQ";
+  case ND_RSTORSSP: return "RSTORSSP";
+  case ND_WRSSD: return "WRSSD";
+  case ND_WRSSQ: return "WRSSQ";
+  case ND_WRUSSD: return "WRUSSD";
+  case ND_WRUSSQ: return "WRUSSQ";
+  case ND_CLRSSBSY: return "CLRSSBSY";
   default: return "UNREACHABLE"; 
   }
 }
@@ -8727,6 +8746,13 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_rorhi", ND_RORHI },
     { "__builtin_ia32_bsrdi", ND_BSRDI },    
     { "__builtin_ia32_writeeflags_u64", ND_WRITEEFLAGS_U64 },
+    { "__builtin_ia32_incsspq", ND_INCSSPQ },
+    { "__builtin_ia32_rstorssp", ND_RSTORSSP },
+    { "__builtin_ia32_wrssd", ND_WRSSD },
+    { "__builtin_ia32_wrssq", ND_WRSSQ },
+    { "__builtin_ia32_wrussd", ND_WRUSSD },
+    { "__builtin_ia32_wrussq", ND_WRUSSQ },
+    { "__builtin_ia32_clrssbsy", ND_CLRSSBSY },
 };
 
 

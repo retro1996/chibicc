@@ -305,6 +305,7 @@ struct Obj
   char *visibility;
   char *asmname;
   bool is_inline;
+  int min_vector_width;
 
   //from COSMOPOLITAN adding is_aligned, is_noreturn, is_destructor, is_constructor, is_ms_abi, is_no_instrument_function, is_force_align_arg_pointer, is_no_caller_saved_registers
   bool is_aligned;
@@ -861,6 +862,13 @@ typedef enum
   ND_RORHI,
   ND_BSRDI, 
   ND_WRITEEFLAGS_U64,
+  ND_INCSSPQ,
+  ND_RSTORSSP,
+  ND_WRSSD,
+  ND_WRSSQ,
+  ND_WRUSSD,
+  ND_WRUSSQ,
+  ND_CLRSSBSY,
 } NodeKind;
 
 // AST node type
@@ -1051,7 +1059,7 @@ struct Type
   bool is_weak;
   char *visibility;
   bool is_inline;
-
+  int min_vector_width;
   bool is_compound_lit; // Flag to indicate if this type is a compound literal
   // Function type
   Type *return_ty;
