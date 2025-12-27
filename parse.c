@@ -6914,6 +6914,8 @@ static Node *primary(Token **rest, Token *tok)
 static Node *parse_typedef(Token **rest, Token *tok, Type *basety) 
 {
   bool first = true;  
+  //fixing ISS-177 if is_vector is set to true it impacts next typedef wrongly
+  basety->is_vector = false;
   Node *node = new_node(ND_NULL_EXPR, tok);
   while (!consume(rest, tok, ";"))
   {
