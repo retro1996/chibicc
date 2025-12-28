@@ -972,8 +972,6 @@ static bool has_pointer(Type *ty) {
   }
 }
 
-
-
 // Structs or unions equal or smaller than 16 bytes are passed
 // using up to two registers.
 //
@@ -991,22 +989,30 @@ static bool has_flonum(Type *ty, int lo, int hi, int offset) {
     return false;
     
   if (ty->kind == TY_STRUCT || ty->kind == TY_UNION) {
-    for (Member *mem = ty->members; mem; mem = mem->next)
-      if (!has_flonum(mem->ty, lo, hi, offset + mem->offset))
+    for (Member *mem = ty->members; mem; mem = mem->next) {
+      int tmpoffset = offset + mem->offset;
+      if ((tmpoffset + mem->ty->size) <= lo)
+        continue;
+      if (hi <= tmpoffset)
+        break;
+      if (!has_flonum(mem->ty, lo, hi, tmpoffset))
         return false;
+    }
     return true;
   }
 
   if (ty->kind == TY_ARRAY || ty->kind == TY_VECTOR) {
-    for (int i = 0; i < ty->array_len; i++)
-      if (!has_flonum(ty->base, lo, hi,
-                       offset + ty->base->size * i))
+    for (int i = 0; i < ty->array_len; i++) {
+      int tmpoffset = offset + ty->base->size * i;
+      if ((tmpoffset + ty->base->size) <= lo)
+        continue;
+      if (hi <= tmpoffset)
+        break;
+      if (!has_flonum(ty->base, lo, hi, tmpoffset))
         return false;
+      }
     return true;
   }
-
-  if (offset >= hi || offset + ty->size <= lo)
-    return true;
 
   return ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE;
 }
