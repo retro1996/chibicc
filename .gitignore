@@ -17,3 +17,4 @@ pyproject.toml
 uv.lock
 **/*.py
 build.log
+compare.txt

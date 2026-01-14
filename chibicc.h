@@ -283,6 +283,7 @@ struct Obj
 
   // Local variable
   int offset;
+  char *ptr;
   int order;
   int nbparm;
   // Global variable or function
@@ -330,6 +331,8 @@ struct Obj
   int stack_size;
   int overflow_arg_area; 
   bool pass_by_stack; 
+  int stack_offset;
+  int stack_align;
 
   // Static inline function
   bool is_live;

@@ -22,6 +22,7 @@ static char *registerUsed[] = {"free", "free", "free", "free", "free", "free", "
 extern int64_t eval(Node *node);
 
 static Obj *current_fn;
+static char *lvar_ptr;
 
 static void gen_expr(Node *node);
 static void gen_stmt(Node *node);
@@ -89,23 +90,23 @@ static int pop_tmpstack(void) {
 
 static int push_tmp(void) {
   int offset = push_tmpstack();
-  println("  mov %%rax, %d(%%rbp)", offset);
+  println("  mov %%rax, %d(%s)", offset, lvar_ptr);
   return offset;
 }
 
 static void pop_tmp(char *arg) {
   int offset = pop_tmpstack();
-  println("  mov %d(%%rbp), %s", offset, arg);
+  println("  mov %d(%s), %s", offset, lvar_ptr, arg);
 }
 
 static void push_tmpf(void) {
   int offset = push_tmpstack();
-  println("  movsd %%xmm0, %d(%%rbp)", offset);
+  println("  movsd %%xmm0, %d(%s)", offset, lvar_ptr);
 }
 
 static void pop_tmpf(int reg) {
   int offset = pop_tmpstack();
-  println("  movsd %d(%%rbp), %%xmm%d", offset, reg);
+  println("  movsd %d(%s), %%xmm%d", offset, lvar_ptr, reg);
 }
 
 static void push(void)
@@ -162,16 +163,16 @@ void popx(char *a, char *b) {
 
 static void pushx_tmp(void) {
   int off_rdx = push_tmpstack(); 
-  println("  mov %%rdx, %d(%%rbp)", off_rdx);
+  println("  mov %%rdx, %d(%s)", off_rdx, lvar_ptr);
   int off_rax = push_tmpstack();  
-  println("  mov %%rax, %d(%%rbp)", off_rax);
+  println("  mov %%rax, %d(%s)", off_rax, lvar_ptr);
 }
 
 static void popx_tmp(char *a, char *b) {
   int off_rax = pop_tmpstack();   
-  println("  mov %d(%%rbp), %s", off_rax, a);
+  println("  mov %d(%s), %s", off_rax, lvar_ptr, a);
   int off_rdx = pop_tmpstack();   
-  println("  mov %d(%%rbp), %s", off_rdx, b);
+  println("  mov %d(%s), %s", off_rdx, lvar_ptr, b);
 }
 
 static void push_xmm(int x) {
@@ -408,14 +409,14 @@ static void gen_addr(Node *node)
     // Variable-length array, which is always local.
     if (node->var->ty->kind == TY_VLA)
     {
-      println("  mov %d(%%rbp), %%rax", node->var->offset);
+      println("  mov %d(%s), %%rax", node->var->offset, node->var->ptr);
       return;
     }
 
     // Local variable
     if (node->var->is_local)
     {
-      println("  lea %d(%%rbp), %%rax", node->var->offset);
+      println("  lea %d(%s), %%rax", node->var->offset, node->var->ptr);
       return;
     }
 
@@ -526,7 +527,7 @@ static void gen_addr(Node *node)
     }
     break;
   case ND_VLA_PTR:
-    println("  lea %d(%%rbp), %%rax", node->var->offset);
+    println("  lea %d(%s), %%rax", node->var->offset, node->var->ptr);
     return;
   case ND_ADD: 
   case ND_SUB:
@@ -586,22 +587,22 @@ static void gen_mem_copy(const char *dst_reg, int n) {
 static void gen_mem_zero(int offset, int n) {
   int i = offset;
   while (n >= 8) {
-    println("  movq $0, %d(%%rbp)", i);
+    println("  movq $0, %d(%s)", i, lvar_ptr);
     n -= 8;
     i += 8;
   }
   while (n >= 4) {
-    println("  movl $0, %d(%%rbp)", i);
+    println("  movl $0, %d(%s)", i, lvar_ptr);
     n -= 4;
     i += 4;
   }
   while (n >= 2) {
-    println("  movw $0, %d(%%rbp)", i);
+    println("  movw $0, %d(%s)", i, lvar_ptr);
     n -= 2;
     i += 2;
   }
   while (n >= 1) {
-    println("  movb $0, %d(%%rbp)", i);
+    println("  movb $0, %d(%s)", i, lvar_ptr);
     --n;
     ++i;
   }
@@ -1071,7 +1072,9 @@ static void push_struct(Type *ty)
     sz = align_to(ty->size, 16);
   else
     sz = align_to(ty->size, 8);
+  //int align = MAX(ty->align, 8);
   println("  sub $%d, %%rsp", sz);
+  //println("  and $-%d, %%rsp", align);
   depth += sz / 8;
 
   gen_mem_copy("%rsp", ty->size);
@@ -1217,7 +1220,7 @@ static int push_args(Node *node)
   // a pointer to a buffer as if it were the first argument.
   if (node->ret_buffer && node->ty->size > 16)
   {
-    println("  lea %d(%%rbp), %%rax", node->ret_buffer->offset);
+    println("  lea %d(%s), %%rax", node->ret_buffer->offset, node->ret_buffer->ptr);
     push();
   }
 
@@ -1238,24 +1241,22 @@ static void copy_ret_buffer(Obj *var)
         assert(ty->size == 4 || ty->size == 8 || ty->size == 12 || ty->size == 16);
 
         if (ty->size == 4) {
-            println("  movss %%xmm0, %d(%%rbp)", var->offset);  // Handle float (4 bytes)
+            println("  movss %%xmm0, %d(%s)", var->offset, var->ptr);
         } else if (ty->size == 8) {
-            println("  movsd %%xmm0, %d(%%rbp)", var->offset);  // Handle double (8 bytes)
+            println("  movsd %%xmm0, %d(%s)", var->offset, var->ptr);
         } else if (ty->size == 12 || ty->size == 16) {
-            // Split the 12 or 16 bytes into two parts, handle the first 8 bytes
-            println("  movsd %%xmm0, %d(%%rbp)", var->offset);  // Handle first 8 bytes
-            // Handle the remaining bytes (4 or 8 bytes)
+            println("  movsd %%xmm0, %d(%s)", var->offset, var->ptr);
             if (ty->size == 12) {
-                println("  movss %%xmm1, %d(%%rbp)", var->offset + 8);  // Handle the remaining 4 bytes
+                println("  movss %%xmm1, %d(%s)", var->offset + 8, var->ptr);
             } else if (ty->size == 16) {
-                println("  movsd %%xmm1, %d(%%rbp)", var->offset + 8);  // Handle the remaining 8 bytes
+                println("  movsd %%xmm1, %d(%s)", var->offset + 8, var->ptr);
             }
         }
     fp++;
     } else {
         // **Change 1: Handle the first 8 bytes for integer types (up to 64 bits)**
         for (int i = 0; i < MIN(8, ty->size); i++) {
-      println("  mov %%al, %d(%%rbp)", var->offset + i);
+      println("  mov %%al, %d(%s)", var->offset + i, var->ptr);
       println("  shr $8, %%rax");
     }
     gp++;
@@ -1267,9 +1268,9 @@ static void copy_ret_buffer(Obj *var)
     {
       assert(ty->size == 12 || ty->size == 16);
       if (ty->size == 12)
-        println("  movss %%xmm%d, %d(%%rbp)", fp, var->offset + 8);
+        println("  movss %%xmm%d, %d(%s)", fp, var->offset + 8, var->ptr);
       else
-        println("  movsd %%xmm%d, %d(%%rbp)", fp, var->offset + 8);
+        println("  movsd %%xmm%d, %d(%s)", fp, var->offset + 8, var->ptr);
     }
     else
     {
@@ -1277,7 +1278,7 @@ static void copy_ret_buffer(Obj *var)
       char *reg2 = (gp == 0) ? "%rax" : "%rdx";
       for (int i = 8; i < MIN(16, ty->size); i++)
       {
-        println("  mov %s, %d(%%rbp)", reg1, var->offset + i);
+        println("  mov %s, %d(%s)", reg1, var->offset + i, var->ptr);
         println("  shr $8, %s", reg2);
       }
     }
@@ -1345,7 +1346,7 @@ static void copy_struct_mem(void)
     error("%s %d: in copy_struct_mem : type is null!", CODEGEN_C, __LINE__);  
   Obj *var = current_fn->params;
 
-  println("  mov %d(%%rbp), %%rdi", var->offset);
+  println("  mov %d(%s), %%rdi", var->offset, var->ptr);
   gen_mem_copy("%rdi", ty->size);
   //from @fuhsnn Copy returned-by-stack aggregate's pointer to rax
   println("  mov %%rdi, %%rax");
@@ -1380,6 +1381,7 @@ static void builtin_alloca(Node *node)
   // Move alloca_bottom pointer.
   println("  mov %d(%%rbp), %%rax", current_fn->alloca_bottom->offset);
   println("  sub %%rdi, %%rax");
+  println("  and $-%d, %%rax", align);
   println("  mov %%rax, %d(%%rbp)", current_fn->alloca_bottom->offset);
 }
 
@@ -3300,7 +3302,7 @@ static void gen_expr(Node *node)
       }
 
       println("  shl $%d, %%rdi", mem->bit_offset);
-      println("  mov %d(%%rbp), %%rax", tmp_offset);
+      println("  mov %d(%s), %%rax", tmp_offset, lvar_ptr);
       load(mem->ty);
 
         
@@ -3534,7 +3536,7 @@ static void gen_expr(Node *node)
     if (node->ret_buffer && node->ty->size <= 16)
     {
       copy_ret_buffer(node->ret_buffer);
-      println("  lea %d(%%rbp), %%rax", node->ret_buffer->offset);
+      println("  lea %d(%s), %%rax", node->ret_buffer->offset, node->ret_buffer->ptr);
     }
 
     return;
@@ -3591,9 +3593,9 @@ static void gen_expr(Node *node)
       return;
   }  
   case ND_BUILTIN_FRAME_ADDRESS: {
-    int c = count();  // Unique label counter
+    int c = count();
   
-  gen_expr(node->lhs);  // level in %rax   
+    gen_expr(node->lhs);
   
   // Guard: limit frame walking to 64 levels
   println("  mov $64, %%rdi");
@@ -3603,13 +3605,9 @@ static void gen_expr(Node *node)
 
   println(".Lframe_address_ok%d:", c);
     
-  // Check if level == 0
     println("  cmp $0, %%rax");
     println("  je .Lframe_address_%d", c);
-    
-  // For level > 0, follow the frame pointer chain
-  println("  mov %%rbp, %%rcx");  // rcx = current frame pointer
-  //println("  sub $1, %%rax");     // rax = level - 1
+    println("  mov %s, %%rcx", lvar_ptr);
 
     println(".Lframe_address_loop%d:", c);
   println("  test %%rax, %%rax");
@@ -3625,7 +3623,7 @@ static void gen_expr(Node *node)
   println("  jmp .Lframe_address_return%d", c);
 
     println(".Lframe_address_%d:", c);
-  println("  mov %%rbp, %%rax");  // level 0: return current frame
+    println("  mov %s, %%rax", lvar_ptr);  // level 0: return current frame
   println("  jmp .Lframe_address_return%d", c);
 
   println(".Lframe_address_null%d:", c);
@@ -3651,7 +3649,7 @@ static void gen_expr(Node *node)
     return;
   }
   case ND_RETURN_ADDR: {
-    println("  mov %%rbp, %%rax");
+    println("  mov %s, %%rax", lvar_ptr);
     int tmpdepth = eval(node->lhs);
     
     for (int i = 0; i < tmpdepth; i++) {
@@ -4715,7 +4713,7 @@ static void emit_data(Obj *prog)
   }
 }
 
-static void store_fp(int r, int offset, int sz)
+static void store_fp(int r, int offset, int sz, char *ptr)
 {
   switch (sz) {
   case 0:
@@ -4723,23 +4721,23 @@ static void store_fp(int r, int offset, int sz)
     return;  
   case 2:
     // movw is used for 2-byte (16-bit) words
-    println("  movw %%xmm%d, %d(%%rbp)", r, offset);
+    println("  movw %%xmm%d, %d(%s)", r, offset, ptr);
     return;
   case 4:
-    println("  movss %%xmm%d, %d(%%rbp)", r, offset);
+    println("  movss %%xmm%d, %d(%s)", r, offset, ptr);
     return;
   case 8:
-    println("  movsd %%xmm%d, %d(%%rbp)", r, offset);
+    println("  movsd %%xmm%d, %d(%s)", r, offset, ptr);
     return;
   case 16:
-    println("  movups %%xmm%d, %d(%%rbp)", r, offset); // movaps for 16-byte (128-bit) vector
+    println("  movups %%xmm%d, %d(%s)", r, offset, ptr); // movaps for 16-byte (128-bit) vector
     return;
   }
   
   // Handle wide FP/vector objects (32, 64, ...)
   if (sz % 16 == 0) {
     for (int i = 0; i < sz; i += 16) {
-      println("  movups %%xmm%d, %d(%%rbp)", r + i / 16, offset + i);
+      println("  movups %%xmm%d, %d(%s)", r + i / 16, offset + i, ptr);
     }
     return;
   }
@@ -4747,30 +4745,30 @@ static void store_fp(int r, int offset, int sz)
   unreachable();
 }
 
-static void store_gp(int r, int offset, int sz) {
+static void store_gp(int r, int offset, int sz, char *ptr) {
   switch (sz) {
   case 0:
     // No operation for size 0
     return;      
   case 1:
-    println("  mov %s, %d(%%rbp)", argreg8[r], offset);
+    println("  mov %s, %d(%s)", argreg8[r], offset, ptr);
     return;
   case 2:
-    println("  mov %s, %d(%%rbp)", argreg16[r], offset);
+    println("  mov %s, %d(%s)", argreg16[r], offset, ptr);
     return;
   case 4:
-    println("  mov %s, %d(%%rbp)", argreg32[r], offset);
+    println("  mov %s, %d(%s)", argreg32[r], offset, ptr);
     return;
   case 8:
-    println("  mov %s, %d(%%rbp)", argreg64[r], offset);
+    println("  mov %s, %d(%s)", argreg64[r], offset, ptr);
     return;
   case 16:
     // Assuming we can use xmm registers to store 128 bits
-    println("  movdqu %%xmm%d, %d(%%rbp)", r, offset);
+    println("  movdqu %%xmm%d, %d(%s)", r, offset, ptr);
     return;
   default:
     for (int i = 0; i < sz; i++) {
-      println("  mov %s, %d(%%rbp)", argreg8[r], offset + i);
+      println("  mov %s, %d(%s)", argreg8[r], offset + i, ptr);
       println("  shr $8, %s", argreg64[r]);
     }
     return;
@@ -4849,6 +4847,9 @@ static void emit_text(Obj *prog)
 
     current_fn = fn;
     tmp_stack.bottom = fn->stack_size;
+    bool is_variadic = fn->ty->is_variadic;
+    bool use_rbx = (fn->stack_align > 16 && !is_variadic);
+    lvar_ptr = use_rbx ? "%rbx" : "%rbp";
 
     println("  .cfi_startproc");
     // Prologue
@@ -4863,7 +4864,13 @@ static void emit_text(Obj *prog)
       println("  mov %%rsp, %%rbp");
       println("  .cfi_def_cfa_register %%rbp");  
     
-      //println("  sub $%d, %%rsp", fn->stack_size);
+      if (use_rbx) {
+        println("  push %%rbx");
+        println("  mov %%rsp, %%rbx");
+        println("  and $-%d, %%rbx", fn->stack_align);
+        println("  mov %%rbx, %%rsp");
+      }
+
       reserved_pos = ftell(output_file);
       println("                           ");
       // Save RSP for alloca/VLA support if needed
@@ -4933,31 +4940,31 @@ static void emit_text(Obj *prog)
       }
 
       int off = fn->va_area->offset;
+      char *ptr = lvar_ptr;
 
       // va_elem
-      println("  movl $%d, %d(%%rbp)", gp * 8, off);          // gp_offset
-      println("  movl $%d, %d(%%rbp)", fp * 16 + 48, off + 4); // fp_offset
-      println("  movq %%rbp, %d(%%rbp)", off + 8);            // overflow_arg_area
-      //println("  addq $16, %d(%%rbp)", off + 8);
-      println("  addq $%d, %d(%%rbp)", fn->overflow_arg_area, off + 8);
-      println("  movq %%rbp, %d(%%rbp)", off + 16); // reg_save_area
-      println("  addq $%d, %d(%%rbp)", off + 24, off + 16);
+      println("  movl $%d, %d(%s)", gp * 8, off, ptr);          // gp_offset
+      println("  movl $%d, %d(%s)", fp * 16 + 48, off + 4, ptr); // fp_offset
+      println("  movq %s, %d(%s)", ptr, off + 8, ptr);            // overflow_arg_area
+      println("  addq $%d, %d(%s)", fn->overflow_arg_area, off + 8, ptr);
+      println("  movq %s, %d(%s)", ptr, off + 16, ptr); // reg_save_area
+      println("  addq $%d, %d(%s)", off + 24, off + 16, ptr);
 
       // __reg_save_area__
-      println("  movq %%rdi, %d(%%rbp)", off + 24);
-      println("  movq %%rsi, %d(%%rbp)", off + 32);
-      println("  movq %%rdx, %d(%%rbp)", off + 40);
-      println("  movq %%rcx, %d(%%rbp)", off + 48);
-      println("  movq %%r8, %d(%%rbp)", off + 56);
-      println("  movq %%r9, %d(%%rbp)", off + 64);
-      println("  movsd %%xmm0, %d(%%rbp)", off + 72);
-      println("  movsd %%xmm1, %d(%%rbp)", off + 88);
-      println("  movsd %%xmm2, %d(%%rbp)", off + 104);
-      println("  movsd %%xmm3, %d(%%rbp)", off + 120);
-      println("  movsd %%xmm4, %d(%%rbp)", off + 136);
-      println("  movsd %%xmm5, %d(%%rbp)", off + 152);
-      println("  movsd %%xmm6, %d(%%rbp)", off + 168);
-      println("  movsd %%xmm7, %d(%%rbp)", off + 184);
+      println("  movq %%rdi, %d(%s)", off + 24, ptr);
+      println("  movq %%rsi, %d(%s)", off + 32, ptr);
+      println("  movq %%rdx, %d(%s)", off + 40, ptr);
+      println("  movq %%rcx, %d(%s)", off + 48, ptr);
+      println("  movq %%r8, %d(%s)", off + 56, ptr);
+      println("  movq %%r9, %d(%s)", off + 64, ptr);
+      println("  movsd %%xmm0, %d(%s)", off + 72, ptr);
+      println("  movsd %%xmm1, %d(%s)", off + 88, ptr);
+      println("  movsd %%xmm2, %d(%s)", off + 104, ptr);
+      println("  movsd %%xmm3, %d(%s)", off + 120, ptr);
+      println("  movsd %%xmm4, %d(%s)", off + 136, ptr);
+      println("  movsd %%xmm5, %d(%s)", off + 152, ptr);
+      println("  movsd %%xmm6, %d(%s)", off + 168, ptr);
+      println("  movsd %%xmm7, %d(%s)", off + 184, ptr);
     }
 
     // Save passed-by-register arguments to the stack
@@ -4976,9 +4983,9 @@ static void emit_text(Obj *prog)
       {
       case TY_VECTOR:
         if (ty->base->kind == TY_FLOAT || ty->base->kind == TY_DOUBLE) {
-          store_fp(fp++, var->offset, ty->size);
+          store_fp(fp++, var->offset, ty->size, var->ptr);
         } else if (is_integer(ty->base)) {
-          store_fp(fp++, var->offset, ty->size); 
+          store_fp(fp++, var->offset, ty->size, var->ptr);
         } else {
           error("%s %d: in emit_text : Unsupported vector base type", CODEGEN_C, __LINE__);  
         }
@@ -4987,28 +4994,28 @@ static void emit_text(Obj *prog)
       case TY_UNION:
         assert(ty->size <= 16);
         if (has_flonum(ty, 0, 8, 0))
-          store_fp(fp++, var->offset, MIN(8, ty->size));
+          store_fp(fp++, var->offset, MIN(8, ty->size), var->ptr);
         else
-          store_gp(gp++, var->offset, MIN(8, ty->size));
+          store_gp(gp++, var->offset, MIN(8, ty->size), var->ptr);
 
         if (ty->size > 8)
         {
           if (has_flonum(ty, 8, 16, 0))
-            store_fp(fp++, var->offset + 8, ty->size - 8);
+            store_fp(fp++, var->offset + 8, ty->size - 8, var->ptr);
           else
-            store_gp(gp++, var->offset + 8, ty->size - 8);
+            store_gp(gp++, var->offset + 8, ty->size - 8, var->ptr);
         }
         break;
       case TY_FLOAT:
       case TY_DOUBLE:
-        store_fp(fp++, var->offset, ty->size);
+        store_fp(fp++, var->offset, ty->size, var->ptr);
         break;
       case TY_INT128:
-        store_gp(gp++, var->offset + 0, 8);
-        store_gp(gp++, var->offset + 8, 8);
+        store_gp(gp++, var->offset + 0, 8, var->ptr);
+        store_gp(gp++, var->offset + 8, 8, var->ptr);
         break;
       default:
-        store_gp(gp++, var->offset, ty->size);
+        store_gp(gp++, var->offset, ty->size, var->ptr);
       }
     }
 
@@ -5033,6 +5040,8 @@ static void emit_text(Obj *prog)
     // Epilogue
     println(".L.return.%s:", fn->name);
     if (!fn->vfork_used) {
+      if (use_rbx)
+        println("  mov -8(%%rbp), %%rbx");
       println("  mov %%rbp, %%rsp");
       println("  pop %%rbp");
       println("  .cfi_def_cfa %%rsp, 8");
@@ -5088,7 +5097,17 @@ static void print_offset(Obj *prog)
   }
 }
 
-static int assign_lvar_offsets2(Obj *fn, int bottom) {
+static int get_lvar_align(Obj *fn, int align) {
+  for (Obj *var = fn->locals; var; var = var->next) {
+      if (var->offset)
+      continue;
+    align = MAX(align, var->align);
+  }
+  return align;
+}
+
+
+static int assign_lvar_offsets2(Obj *fn, int bottom, char *ptr) {
    for (Obj *var = fn->locals; var; var = var->next)
    {
     // AMD64 System V ABI has a special alignment rule for an array of
@@ -5108,6 +5127,7 @@ static int assign_lvar_offsets2(Obj *fn, int bottom) {
     bottom += var->ty->size;
     bottom = align_to(bottom, align);
     var->offset = -bottom;
+    var->ptr = ptr;
   }
 
   return align_to(bottom, 16);
@@ -5126,6 +5146,7 @@ void assign_lvar_offsets(Obj *prog)
     int top = 16;
     int bottom = 0;
     int max_align = 8;  
+    int stack = 0;
     //trying to fix =====ISS-149 causing segmentation fault when having assembly instructions
     if (fn->alloca_bottom && fn->alloca_bottom->offset)
       bottom =  abs(fn->alloca_bottom->offset);
@@ -5176,20 +5197,30 @@ void assign_lvar_offsets(Obj *prog)
       }
 
       var->pass_by_stack = true; 
-       if (var->ty->align > max_align)
-            max_align = var->ty->align;
-
+      var->stack_offset = stack;
+      stack += align_to(var->ty->size, 8);
       top = align_to(top, 8);
-      var->offset = top;
-      top += var->ty->size;
+      top += ty->size;
     }
 
     if (is_variadic)
       fn->overflow_arg_area = align_to(top, max_align);
       //fn->overflow_arg_area = align_to(top, 8);
 
-    //fn->stack_size = align_to(bottom, 16);
-    fn->stack_size = assign_lvar_offsets2(fn, bottom);   
+    top = 16;
+    // Assign offsets to pass-by-stack parameters.
+    for (Obj *var = fn->params; var; var = var->next)
+    {
+      if (!var->pass_by_stack)
+        continue;
+
+      var->offset = var->stack_offset + top;
+      var->ptr = "%rbp";
+    }
+
+    fn->stack_align = get_lvar_align(fn, 16);
+    char *ptr = (fn->stack_align > 16 && !is_variadic) ? "%rbx" : "%rbp";
+    fn->stack_size = assign_lvar_offsets2(fn, bottom, ptr);
 
   }
 }
