@@ -1335,7 +1335,7 @@ static Node *compute_vla_size(Type *ty, Token *tok)
   return new_binary(ND_COMMA, node, expr, tok);
 }
 
-static Node *new_alloca(Node *sz)
+static Node *new_alloca(Node *sz, int align)
 {
   if (!builtin_alloca) {
     // Fallback implementation for alloca
@@ -1349,6 +1349,7 @@ static Node *new_alloca(Node *sz)
   node->func_ty = builtin_alloca->ty;
   node->ty = builtin_alloca->ty->return_ty;
   node->args = sz;
+  node->val = align;
   add_type(sz);
   return node;
 }
@@ -1415,8 +1416,9 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       Obj *var = new_lvar(get_ident(ty->name), ty, NULL);
       Token *tok = ty->name;
       tok = attribute_list(tok, ty, type_attributes);
+      int align = (attr && attr->align) ? attr->align : 16;
       Node *expr = new_binary(ND_ASSIGN, new_vla_ptr(var, tok),
-                              new_alloca(new_var_node(ty->vla_size, tok)),
+                              new_alloca(new_var_node(ty->vla_size, tok), align),
                               tok);
 
       cur = cur->next = new_unary(ND_EXPR_STMT, expr, tok);

@@ -5088,11 +5088,36 @@ static void print_offset(Obj *prog)
   }
 }
 
+static int assign_lvar_offsets2(Obj *fn, int bottom) {
+   for (Obj *var = fn->locals; var; var = var->next)
+   {
+    // AMD64 System V ABI has a special alignment rule for an array of
+    // length at least 16 bytes. We need to align such array to at least
+    // 16-byte boundaries. See p.14 of
+    // https://github.com/hjl-tools/x86-psABI/wiki/x86-64-psABI-draft.pdf.
+    int align = ((var->ty->kind == TY_ARRAY && var->ty->size >= 16) || is_vector(var->ty) || var->ty->kind == TY_INT128)
+                    ? MAX(16, var->align)
+                    : var->align;
+
+    if (var->offset) {
+      bottom += var->ty->size;
+      bottom = align_to(bottom, align);
+      continue;
+    }
+
+    bottom += var->ty->size;
+    bottom = align_to(bottom, align);
+    var->offset = -bottom;
+  }
+
+  return align_to(bottom, 16);
+}
+
 void assign_lvar_offsets(Obj *prog)
 {
   for (Obj *fn = prog; fn; fn = fn->next)
   {
-    if (!fn->is_function)
+    if (!fn->is_function || !fn->is_definition)
       continue;
 
     // If a function has many parameters, some parameters are
@@ -5163,36 +5188,8 @@ void assign_lvar_offsets(Obj *prog)
       fn->overflow_arg_area = align_to(top, max_align);
       //fn->overflow_arg_area = align_to(top, 8);
 
-    // Assign offsets to pass-by-register parameters and local variables.
-    for (Obj *var = fn->locals; var; var = var->next)
-    {
-
-      int align = ((var->ty->kind == TY_ARRAY && var->ty->size >= 16) || is_vector(var->ty) || var->ty->kind == TY_INT128)
-                      ? MAX(16, var->align)
-                      : var->align;
-
-      // if (isDebug)                      
-      //   printf("======bottom=%d kind=%d size=%d fn_bottom=%d fn_stack_size=%d name=%s funcname=%s\n", bottom, var->ty->kind, var->ty->size, fn->alloca_bottom->offset, fn->alloca_bottom->stack_size, var->name, var->funcname);
-      //trying to fix ISS-154 Extended assembly compiled with chibicc failed with ASSERT and works fine without assert function 
-      //the bottom value need to take in account the size of parameters and local variables to avoid issue with extended assembly
-      if (var->offset) {
-        bottom += var->ty->size;
-        bottom = align_to(bottom, align);
-        continue;
-      }
-
-      // AMD64 System V ABI has a special alignment rule for an array of
-      // length at least 16 bytes. We need to align such array to at least
-      // 16-byte boundaries. See p.14 of
-      // https://github.com/hjl-tools/x86-psABI/wiki/x86-64-psABI-draft.pdf.
-
-
-      bottom += var->ty->size;
-      bottom = align_to(bottom, align);
-      var->offset = -bottom;
-    }
-
-    fn->stack_size = align_to(bottom, 16);
+    //fn->stack_size = align_to(bottom, 16);
+    fn->stack_size = assign_lvar_offsets2(fn, bottom);   
 
   }
 }
