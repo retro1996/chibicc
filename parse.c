@@ -679,7 +679,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       else
         align = const_expr(&tok, tok);
       attr->align = MAX(attr->align, align);   
-    
+   
       SET_CTX(ctx); 
       tok = skip(tok, ")", ctx);
       continue;
@@ -7114,7 +7114,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   // automatically defined as a local variable containing the
   // current function name.
   
-  tok = attribute_list(tok, ty, type_attributes);
+  //tok = attribute_list(tok, ty, type_attributes);
   push_scope("__func__")->var =
       new_string_literal(fn->name, array_of(ty_char, strlen(fn->name) + 1));
 
