@@ -5082,11 +5082,11 @@ static void print_offset(Obj *prog)
       
     for (Obj *var = fn->params; var; var = var->next)
     {
-    printf("=====fn_name=%s var_name=%s offset=%d stack_size=%d\n", fn->name, var->name, var->offset, fn->stack_size );
+    printf("=====fn_name=%s var_name=%s offset=%d stack_size=%d var_alignment=%d\n", fn->name, var->name, var->offset, fn->stack_size, var->stack_align );
     }
     for (Obj *var = fn->locals; var; var = var->next)
     {
-      printf("=====fn_name=%s var_name=%s offset=%d stack_size=%d\n", fn->name, var->name, var->offset, fn->stack_size );
+      printf("=====fn_name=%s var_name=%s offset=%d stack_size=%d var_alignment=%d\n", fn->name, var->name, var->offset, fn->stack_size, var->align );
       //update the function name if it's missing
       if (!var->funcname)
         var->funcname = fn->name;
@@ -5117,13 +5117,13 @@ static int assign_lvar_offsets2(Obj *fn, int bottom, char *ptr) {
                     : var->align;
 
     if (var->offset) {
-      bottom += var->ty->size;
-      bottom = align_to(bottom, align);
+      bottom = align_to(bottom + var->ty->size, align);
       continue;
     }
 
-    bottom += var->ty->size;
-    bottom = align_to(bottom, align);
+    // bottom += var->ty->size;
+    // bottom = align_to(bottom, align);
+    bottom = align_to(bottom + var->ty->size, align);
     var->offset = -bottom;
     var->ptr = ptr;
   }

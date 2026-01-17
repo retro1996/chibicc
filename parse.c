@@ -679,13 +679,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       else
         align = const_expr(&tok, tok);
       attr->align = MAX(attr->align, align);   
-      // if (attr->align > ty->align) {
-      //  ty->align = attr->align;
-      // }
-      if (attr->align > ty->align) {
-        ty = copy_type(ty);
-        ty->align = attr->align;
-      }      
+    
       SET_CTX(ctx); 
       tok = skip(tok, ")", ctx);
       continue;
