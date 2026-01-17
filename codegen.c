@@ -1065,20 +1065,18 @@ static bool pass_by_reg(Type *ty, int gp, int fp) {
   return true;
 }
 
+
 static void push_struct(Type *ty)
 {
-  int sz = 0;
-  if (has_longdouble(ty))
-    sz = align_to(ty->size, 16);
-  else
-    sz = align_to(ty->size, 8);
-  //int align = MAX(ty->align, 8);
-  println("  sub $%d, %%rsp", sz);
-  //println("  and $-%d, %%rsp", align);
-  depth += sz / 8;
-
-  gen_mem_copy("%rsp", ty->size);
+    int min_align = has_longdouble(ty) ? 16 : 8;
+    int align = MAX(ty->align, min_align);
+    int size = align_to(ty->size, align);
+    println("  sub $%d, %%rsp", size);
+    println("  and $-%d, %%rsp", align);
+    depth += size / 8;
+    gen_mem_copy("%rsp", ty->size);
 }
+
 
 static void push_args2(Node *args, bool first_pass)
 {
