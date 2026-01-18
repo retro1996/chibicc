@@ -5,13 +5,13 @@
   ASSERT(0, ((uintptr_t)(ptr)) & ((align) - 1))
 
 /* 8-byte alignment */
-typedef struct {
+typedef struct __attribute__((aligned(8))){
   char c;
   int i;
 } S8;
 
 /* 16-byte alignment */
-typedef struct {
+typedef struct __attribute__((aligned(16))){
   double d;
   int i;
 } S16;
