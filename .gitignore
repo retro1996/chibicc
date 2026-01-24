@@ -18,3 +18,4 @@ uv.lock
 **/*.py
 build.log
 compare.txt
+**/*.diff

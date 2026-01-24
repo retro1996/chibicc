@@ -4918,33 +4918,28 @@ static void emit_text(Obj *prog)
 
     bool use_rbx = (fn->stack_align > 16);
     lvar_ptr = use_rbx ? "%rbx" : "%rbp";
-
-    println("  .cfi_startproc");
     // Prologue
-    // Check if function calls vfork - if so, avoid creating a frame
-    // (vfork is "returns_twice", meaning the child process shares the parent's stack,
-    // so stack-based temporaries would be unsafe)
     long reserved_pos = ftell(output_file);
-    if (!fn->vfork_used) {
-      println("  push %%rbp");
-      println("  .cfi_def_cfa_offset 16");
-      println("  .cfi_offset %%rbp, -16");    
-      println("  mov %%rsp, %%rbp");
-      println("  .cfi_def_cfa_register %%rbp");  
-    
-      if (use_rbx) {
-        println("  push %%rbx");
-        println("  mov %%rsp, %%rbx");
-        println("  and $-%d, %%rbx", fn->stack_align);
-        println("  mov %%rbx, %%rsp");
-      }
-
-      reserved_pos = ftell(output_file);
-      println("                           ");
-      // Save RSP for alloca/VLA support if needed
-      if (fn->alloca_bottom && fn->alloca_bottom->offset)
-        println("  mov %%rsp, %d(%s)", fn->alloca_bottom->offset, lvar_ptr);
+   
+    println("  push %%rbp");
+    println("  .cfi_startproc");
+    println("  .cfi_def_cfa_offset 16");
+    println("  .cfi_offset %%rbp, -16");    
+    println("  mov %%rsp, %%rbp");
+    println("  .cfi_def_cfa_register %%rbp");  
+  
+    if (use_rbx) {
+      println("  push %%rbx");
+      println("  mov %%rsp, %%rbx");
+      println("  and $-%d, %%rbx", fn->stack_align);
+      println("  mov %%rbx, %%rsp");
     }
+
+    reserved_pos = ftell(output_file);
+    println("                           ");
+    // Save RSP for alloca/VLA support if needed
+    if (fn->alloca_bottom && fn->alloca_bottom->offset)
+      println("  mov %%rsp, %d(%s)", fn->alloca_bottom->offset, lvar_ptr);
     //issue with postgres and local variables not initialized!
     for (Obj *var = fn->locals; var; var = var->next) {     
         if (!var->init && !var->is_param &&
@@ -5093,8 +5088,7 @@ static void emit_text(Obj *prog)
     assert(tmp_stack.depth == 0);
     long cur_pos = ftell(output_file);
     fseek(output_file, reserved_pos, SEEK_SET);
-    if (!fn->vfork_used)
-      println("  sub $%d, %%rsp", align_to(tmp_stack.bottom, 16));
+    println("  sub $%d, %%rsp", align_to(tmp_stack.bottom, 16));
     fseek(output_file, cur_pos, SEEK_SET);
 
     // [https://www.sigbus.info/n1570#5.1.2.2.3p1] The C spec defines
@@ -5107,13 +5101,11 @@ static void emit_text(Obj *prog)
 
     // Epilogue
     println(".L.return.%s:", fn->name);
-    if (!fn->vfork_used) {
-      if (use_rbx)
-        println("  mov -8(%%rbp), %%rbx");
-      println("  mov %%rbp, %%rsp");
-      println("  pop %%rbp");
-      println("  .cfi_def_cfa %%rsp, 8");
-    }
+    if (use_rbx)
+      println("  mov -8(%%rbp), %%rbx");
+    println("  mov %%rbp, %%rsp");
+    println("  pop %%rbp");
+    println("  .cfi_def_cfa %%rsp, 8");
     println("  ret");
     println("  .cfi_endproc");
     println("  .size %s, .-%s", fn->name, fn->name);
@@ -5196,119 +5188,62 @@ static int assign_lvar_offsets2(Obj *fn, int bottom, char *ptr) {
 }
 
 
-void assign_lvar_offsets(Obj *prog)
-{
-  for (Obj *fn = prog; fn; fn = fn->next)
-  {
+void assign_lvar_offsets(Obj *prog) {
+  for (Obj *fn = prog; fn; fn = fn->next) {
     if (!fn->is_function || !fn->is_definition)
       continue;
 
-    // If a function has many parameters, some parameters are
-    // inevitably passed by stack rather than by register.
-    // The first passed-by-stack parameter resides at RBP+16.
-    int top = 16;
     int bottom = 0;
-    int max_align = 8;  
-    int stack = 0;
-    //trying to fix =====ISS-149 causing segmentation fault when having assembly instructions
-    if (fn->alloca_bottom && fn->alloca_bottom->offset)
-      bottom =  abs(fn->alloca_bottom->offset);
-
     int gp = 0, fp = 0;
-    bool is_variadic = fn->ty->is_variadic;
+    int max_align = 8;
+    int stack = 0;
+    
+    if (fn->alloca_bottom && fn->alloca_bottom->offset)
+      bottom = abs(fn->alloca_bottom->offset);
 
-    // Assign offsets to pass-by-stack parameters.
-    for (Obj *var = fn->params; var; var = var->next)
-    {
+    for (Obj *var = fn->params; var; var = var->next) {
       var->is_param = true;
-      if (var->offset) {
-        continue;
-      }
+      if (var->offset) continue;
+
       Type *ty = var->ty;
-      if (!ty)
-        error("%s %d: in assign_lvar_offsets : type is null!", CODEGEN_C, __LINE__);  
-      switch (ty->kind)
-      {
-      case TY_STRUCT:
-      case TY_UNION:
+      if (!ty) error("%s %d: type is null!", CODEGEN_C, __LINE__);
+
+      // ABI: Check if passed in registers
+      if (ty->kind == TY_STRUCT || ty->kind == TY_UNION) {
         if (pass_by_reg(ty, gp, fp)) {
           fp += has_flonum1(ty) + (ty->size > 8 && has_flonum2(ty));
           gp += !has_flonum1(ty) + (ty->size > 8 && !has_flonum2(ty));
           continue;
         }
-        break;
-      case TY_VECTOR:
-      case TY_FLOAT:
-      case TY_DOUBLE:
-        if (fp < FP_MAX) {
-          fp++;
-          continue;
-        }
-        break;
-      case TY_LDOUBLE:
-        break;
-      case TY_INT128:
-        if (gp + 1 < GP_MAX) {
-          gp++;
-          gp++;
-          continue;
-        }
-        break;        
-      default:
-        if (gp++ < GP_MAX)
-          continue;
+      } else if (ty->kind == TY_VECTOR || ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE) {
+        if (fp < FP_MAX) { fp++; continue; }
+      } else if (ty->kind == TY_INT128) {
+        if (gp + 1 < GP_MAX) { gp += 2; continue; }
+      } else if (ty->kind != TY_LDOUBLE) {
+        if (gp++ < GP_MAX) continue;
       }
 
-      var->pass_by_stack = true; 
-      var->stack_offset = stack;      
-    
-      int align = 8;
-      if (ty->kind == TY_STRUCT || ty->kind == TY_UNION) {
-        align = MAX(ty->align, 8);
-        max_align = MAX(max_align, align);
-      } else if (ty->kind == TY_LDOUBLE || ty->kind == TY_INT128) {
-        align = 16;
-        max_align = MAX(max_align, 16);
-      } 
+      // Passed on stack
+      var->pass_by_stack = true;
+      int align = (ty->kind == TY_STRUCT || ty->kind == TY_UNION) ? MAX(ty->align, 8) :
+                  (ty->kind == TY_LDOUBLE || ty->kind == TY_INT128 || ty->kind == TY_VECTOR) ? 16 : 8;
+      max_align = MAX(max_align, align);
       
-      // Align stack counter
       stack = align_to(stack, align);
-      var->stack_offset = stack;
-      
-      // Add size to stack counter
-      int size = ty->size;
-      if (ty->kind == TY_STRUCT || ty->kind == TY_UNION) {
-        size = align_to(ty->size, align);
-      } else if (ty->kind == TY_LDOUBLE || ty->kind == TY_INT128) {
-        size = 16;
-      } else {
-        size = 8;
-      }
-      stack += size;
-      
-      top = align_to(top, align);
-      top += ty->size;
-    }
-
-    if (is_variadic)
-      fn->overflow_arg_area = align_to(top, max_align);
-      //fn->overflow_arg_area = align_to(top, 8);
-
-    top = 16;
-    // Assign offsets to pass-by-stack parameters.
-    for (Obj *var = fn->params; var; var = var->next)
-    {
-      if (!var->pass_by_stack)
-        continue;
-
-      var->offset = var->stack_offset + top;
+      var->offset = stack + 16;
       var->ptr = "%rbp";
+
+      int size = (ty->kind == TY_STRUCT || ty->kind == TY_UNION) ? align_to(ty->size, align) :
+                 (ty->kind == TY_LDOUBLE || ty->kind == TY_INT128 || ty->kind == TY_VECTOR) ? 16 : 8;
+      stack += size;
     }
+
+    if (fn->ty->is_variadic)
+      fn->overflow_arg_area = align_to(stack + 16, max_align);
 
     fn->stack_align = get_lvar_align(fn, 16);
-    char *ptr = (fn->stack_align > 16) ? "%rbx" : "%rbp";
-    fn->stack_size = assign_lvar_offsets2(fn, bottom, ptr);
-
+    char *base = (fn->stack_align > 16) ? "%rbx" : "%rbp";
+    fn->stack_size = assign_lvar_offsets2(fn, bottom, base);
   }
 }
 

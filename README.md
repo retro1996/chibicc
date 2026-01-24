@@ -495,24 +495,31 @@ lxc: https://github.com/lxc/lxc.git
     CC=chibicc CFLAGS="-fpic" meson build && cd build && meson compile
 
 
+  
+
 ## Limits
 
 Some C projects doesn't compile for now or crash after being compiled with chibicc. It helps to find some bugs and to try to fix them!
 
-
-   
 cpython: git clone https://github.com/python/cpython.git
         
         CC=chibicc ./configure  --host=x86_64-pc-linux-gnu ac_cv_have_lchflags=no ac_cv_have_chflags=no
         make && make test
-        failure with : 
-        ./python -E ./Tools/build/generate-build-details.py cat pybuilddir.txt/build-details.json
-        ./python -E -m test --fast-ci -u-gui --timeout=
-        ./python -u -W error -bb -E -m test --fast-ci -u-gui --timeout= --dont-add-python-opts
-        == CPython 3.15.0a0 (heads/main:fd8f42d3d10, Dec 6 2025, 20:15:20) [GCC 1.0.23.2]
-        Fatal Python error: PyOS_AfterFork_Child: the function must be called with the GIL held, after Python initialization and before Python finalization, but the GIL is released (the current Python thread state is NULL)
-        Python runtime state: initialized
+        some tests failed 
+        test_recursion_limit (test.test_marshal.BugsTestCase.test_recursion_limit) ... Fatal Python error: Segmentation fault
+        test_repr_deep (test.test_userlist.UserListTest.test_repr_deep) ... Fatal Python error: Segmentation fault
 
+        20 tests skipped:
+        2 tests skipped (resource denied):
+        7 re-run tests:
+        7 tests failed:
+            test.test_gdb.test_pretty_print test_capi test_cmd_line
+            test_functools test_marshal test_userlist test_weakref
+        325 tests OK.
+        Total duration: 17 min 12 sec
+        Total tests: run=30,996 failures=44 skipped=1,380
+        Total test files: run=359/497 failed=7 skipped=20 resource_denied=2 rerun=7
+        Result: FAILURE, INTERRUPTED then FAILURE, INTERRUPTED
 
 
 postgres: https://github.com/postgres/postgres.git  (in case of bad network use git clone --filter=blob:none --depth=1 https://github.com/postgres/postgres.git --branch master)
@@ -533,7 +540,6 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
 ## TODO
 
 - trying to compile other C projects from source to see what is missing or which bug we have with chibicc.
-- trying to fix issue with cpython tests
 - trying to fix issue with postgres tests
 - trying to rewrite extended assembly to be more robust
 - trying to improve chibicc by reporting tests from slimcc to see what is missing/need to be fixed.
@@ -550,7 +556,8 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     git 2 tests failed
     memcached test stuck at t/binary-extstore.t ......... 5947/?
     vim: compile OK, tests OK except two tests : on test_channel.vim (Test_error_callback_terminal) and on test_plugin_termdebug.vim (test_termdebug_basic).
-    cpython : compile OK, test execution failed due to fork/vfork probably.    
+     cpython : compile OK, some tests ko (segfault)
+       
 
 ## projects compiled successfully with chibicc
 
@@ -560,6 +567,7 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     nmap: compile OK, tests OK    
     openssh-portable : compile OK, tests OK
     vlc: compile OK
+   
 
 
 ## debug
@@ -590,7 +598,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23.3    Forbiding two arguments that cause failure with g++ when compiling vlc (-Werror=invalid-command-line-argument and -Werror=unknown-warning-option). Temporary fix for -A that causes infinite loop (ISS-194). Fixing attributes found in struct member. Updating GNUC from 2 to 3. Reporting commit 11d0bff from slimcc (new_inc_dec) and removing commit 2e138bb. Adding builtin_prefetch found with memcached (ISS-202). Reporting partial commit 32dbd2b from slimcc(initializer2). Reporting commit 6478f56 from slimcc (Change eval_double to long double, fix narrowing cast). Fixing issue with variadic and double/float/int mixed struct. Fixing assembly issue found at VIM (after a git pull). Adding enum_extensibility attribute support found during ruby compile. Adding some builtin functions found during ruby compile. Managing two forms of builtin_shuffle. Reporting commit ac2296c from slimcc and eb2bb49 from s311354 (issue 154 from rui314/chibicc). Reporting commit 2654b20 from slimcc (about global variables and removing scan_globals). Reporting commit 577a4f8 from slimcc (local stack alignment). Fixing -S that doesn't take in account the output directory. Fixing issue with alignment.
+1.0.23.3    Forbiding two arguments that cause failure with g++ when compiling vlc (-Werror=invalid-command-line-argument and -Werror=unknown-warning-option). Temporary fix for -A that causes infinite loop (ISS-194). Fixing attributes found in struct member. Updating GNUC from 2 to 3. Reporting commit 11d0bff from slimcc (new_inc_dec) and removing commit 2e138bb. Adding builtin_prefetch found with memcached (ISS-202). Reporting partial commit 32dbd2b from slimcc(initializer2). Reporting commit 6478f56 from slimcc (Change eval_double to long double, fix narrowing cast). Fixing issue with variadic and double/float/int mixed struct. Fixing assembly issue found at VIM (after a git pull). Adding enum_extensibility attribute support found during ruby compile. Adding some builtin functions found during ruby compile. Managing two forms of builtin_shuffle. Reporting commit ac2296c from slimcc and eb2bb49 from s311354 (issue 154 from rui314/chibicc). Reporting commit 2654b20 from slimcc (about global variables and removing scan_globals). Reporting commit 577a4f8 from slimcc (local stack alignment). Fixing -S that doesn't take in account the output directory. Fixing issue with alignment. Fixing issue with cpython tests (due to vfork hack using the parent frame)
 
 
 

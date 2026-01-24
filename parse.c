@@ -5626,11 +5626,7 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
   node->args = head.next;
 
   
-  // Mark current function if it calls vfork (returns twice - unsafe with stack frames)
-  if (current_fn && fn->kind == ND_VAR && fn->var && fn->var->name) {
-    if (!strcmp(fn->var->name, "vfork") || !strcmp(fn->var->name, "__vfork"))
-      current_fn->vfork_used = true;
-  }
+
 
   // If a function returns a struct, it is caller's responsibility
   // to allocate a space for the return value.
