@@ -1072,7 +1072,6 @@ static void push_struct(Type *ty)
     int align = MAX(ty->align, min_align);
     int size = align_to(ty->size, align);
     println("  sub $%d, %%rsp", size);
-    println("  and $-%d, %%rsp", align);
     depth += size / 8;
     gen_mem_copy("%rsp", ty->size);
 }
@@ -1209,6 +1208,19 @@ static int push_args(Node *node)
     println("  sub $8, %%rsp");
     depth++;
     stack++;
+  }
+
+   int max_align = 16;
+  for (Node *arg = node->args; arg; arg = arg->next) {
+    if (arg->pass_by_stack) {
+      int min_align = has_longdouble(arg->ty) ? 16 : 8;
+      int align = MAX(arg->ty->align, min_align);
+      max_align = MAX(max_align, align);
+    }
+  }
+
+  if (max_align > 16) {
+    println("  and $-%d, %%rsp", max_align);
   }
 
   push_args2(node->args, true);
