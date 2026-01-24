@@ -1079,7 +1079,7 @@ return parent;
 // Replace file extension
 char *replace_extn(char *tmpl, char *extn)
 {
-  char *filename = strdup(tmpl);
+  char *filename = extract_filename(tmpl);
   char *dot = strrchr(filename, '.');
   if (dot)
     *dot = '\0';
@@ -1261,6 +1261,9 @@ static void print_dependencies(void)
       fprintf(out, "%s:\n\n", quote_makefile(files[i]->name));
     }
   }
+
+  if (out != stdout)
+    fclose(out);
 }
 
 static Token *must_tokenize_file(char *path)

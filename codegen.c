@@ -4915,7 +4915,7 @@ static void emit_text(Obj *prog)
 
     current_fn = fn;
     tmp_stack.bottom = fn->stack_size;
-    bool is_variadic = fn->ty->is_variadic;
+
     bool use_rbx = (fn->stack_align > 16);
     lvar_ptr = use_rbx ? "%rbx" : "%rbp";
 
@@ -5025,14 +5025,14 @@ static void emit_text(Obj *prog)
       println("  movq %%rcx, %d(%s)", off + 48, ptr);
       println("  movq %%r8, %d(%s)", off + 56, ptr);
       println("  movq %%r9, %d(%s)", off + 64, ptr);
-      println("  movsd %%xmm0, %d(%s)", off + 72, ptr);
-      println("  movsd %%xmm1, %d(%s)", off + 88, ptr);
-      println("  movsd %%xmm2, %d(%s)", off + 104, ptr);
-      println("  movsd %%xmm3, %d(%s)", off + 120, ptr);
-      println("  movsd %%xmm4, %d(%s)", off + 136, ptr);
-      println("  movsd %%xmm5, %d(%s)", off + 152, ptr);
-      println("  movsd %%xmm6, %d(%s)", off + 168, ptr);
-      println("  movsd %%xmm7, %d(%s)", off + 184, ptr);
+      println("  movups %%xmm0, %d(%s)", off + 72, ptr);
+      println("  movups %%xmm1, %d(%s)", off + 88, ptr);
+      println("  movups %%xmm2, %d(%s)", off + 104, ptr);
+      println("  movups %%xmm3, %d(%s)", off + 120, ptr);
+      println("  movups %%xmm4, %d(%s)", off + 136, ptr);
+      println("  movups %%xmm5, %d(%s)", off + 152, ptr);
+      println("  movups %%xmm6, %d(%s)", off + 168, ptr);
+      println("  movups %%xmm7, %d(%s)", off + 184, ptr);
     }
 
     // Save passed-by-register arguments to the stack
@@ -5194,6 +5194,7 @@ static int assign_lvar_offsets2(Obj *fn, int bottom, char *ptr) {
   }
   return align_to(bottom, 16);
 }
+
 
 void assign_lvar_offsets(Obj *prog)
 {

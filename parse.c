@@ -6268,7 +6268,7 @@ static Node *primary(Token **rest, Token *tok)
 
     if (is_integer(ty) || ty->kind == TY_PTR)
       return new_num(0, start);
-    if (ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE)
+    if (ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE || ty->kind == TY_VECTOR)
       return new_num(1, start);
     return new_num(2, start);
   }
