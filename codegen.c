@@ -583,6 +583,35 @@ static void gen_mem_copy(const char *dst_reg, int n) {
   }
 }
 
+// Copy n bytes from %rax to dst_reg + offset
+static void gen_mem_copy_with_offset(const char *dst_reg, int offset, int n) {
+  int i = 0;
+  while (n >= 8) {
+    println("  movq %d(%%rax), %%r8", i);
+    println("  movq %%r8, %d(%s)", offset + i, dst_reg);
+    n -= 8;
+    i += 8;
+  }
+  while (n >= 4) {
+    println("  movl %d(%%rax), %%r8d", i);
+    println("  movl %%r8d, %d(%s)", offset + i, dst_reg);
+    n -= 4;
+    i += 4;
+  }
+  while (n >= 2) {
+    println("  movw %d(%%rax), %%r8w", i);
+    println("  movw %%r8w, %d(%s)", offset + i, dst_reg);
+    n -= 2;
+    i += 2;
+  }
+  while (n >= 1) {
+    println("  movb %d(%%rax), %%r8b", i);
+    println("  movb %%r8b, %d(%s)", offset + i, dst_reg);
+    --n;
+    ++i;
+  }
+}
+
 // Zero n bytes starting from offset bytes off %rbp.
 static void gen_mem_zero(int offset, int n) {
   int i = offset;
@@ -1066,14 +1095,20 @@ static bool pass_by_reg(Type *ty, int gp, int fp) {
 }
 
 
-static void push_struct(Type *ty)
+static void push_struct(Node *arg)
 {
+    Type *ty = arg->ty;
     int min_align = has_longdouble(ty) ? 16 : 8;
     int align = MAX(ty->align, min_align);
-    int size = align_to(ty->size, align);
-    println("  sub $%d, %%rsp", size);
-    depth += size / 8;
-    gen_mem_copy("%rsp", ty->size);
+
+    if (arg->pass_by_stack && arg->stack_offset >= 0) {
+        gen_mem_copy_with_offset("%rsp", arg->stack_offset, ty->size);
+    } else {
+        int size = align_to(ty->size, align);
+        println("  sub $%d, %%rsp", size);
+        depth += size / 8;
+        gen_mem_copy("%rsp", ty->size);
+    }
 }
 
 
@@ -1095,7 +1130,7 @@ static void push_args2(Node *args, bool first_pass)
   case TY_UNION:
     if (args->ty->size == 0)
       return;    
-    push_struct(args->ty);
+    push_struct(args);
     break;
   case TY_VECTOR:
     pushv();
@@ -1117,6 +1152,27 @@ static void push_args2(Node *args, bool first_pass)
   }
 
 
+}
+
+// Calculate stack offsets for stack-passed struct arguments taking in account the alignment
+static void calculate_struct_offsets(Node *args, int *stack_offset, int *max_align) {
+  for (Node *arg = args; arg; arg = arg->next) {
+    Type *ty = arg->ty;
+    
+    if (!arg->pass_by_stack || (ty->kind != TY_STRUCT && ty->kind != TY_UNION)) {
+      arg->stack_offset = -1; 
+      continue;
+    }    
+
+    int align = MAX(ty->align, 8);
+    *max_align = MAX(*max_align, align);    
+
+    *stack_offset = align_to(*stack_offset, align);
+    arg->stack_offset = *stack_offset;    
+   
+    int arg_size = align_to(ty->size, align);
+    *stack_offset += arg_size;
+  }
 }
 
 // Load function call arguments. Arguments are already evaluated and
@@ -1154,7 +1210,6 @@ static int push_args(Node *node)
     if (!ty)
       error("%s %d: in push_args : type is null!", CODEGEN_C, __LINE__);  
 
-
     switch (ty->kind)
     {
     case TY_STRUCT:
@@ -1167,10 +1222,6 @@ static int push_args(Node *node)
           gp += !has_flonum1(ty) + (ty->size > 8 && !has_flonum2(ty));
         } else {
           arg->pass_by_stack = true;
-          if (has_longdouble(ty))
-            stack += align_to(ty->size, 16) / 8; 
-          else
-            stack += align_to(ty->size, 8) / 8;
         }
         break;  
     case TY_VECTOR:
@@ -1203,21 +1254,28 @@ static int push_args(Node *node)
     }
   }
 
-  if ((depth + stack) % 2 == 1)
+  //fixing issue with struct alignment
+  int stack_offset = 0;
+  int max_align = 16;  
+  
+  calculate_struct_offsets(node->args, &stack_offset, &max_align);
+
+  int struct_units = (stack_offset + 7) / 8;
+  int total_stack = struct_units + stack;
+
+  if ((depth + total_stack) % 2 == 1)
   {
     println("  sub $8, %%rsp");
     depth++;
-    stack++;
+    total_stack++;
   }
 
-   int max_align = 16;
-  for (Node *arg = node->args; arg; arg = arg->next) {
-    if (arg->pass_by_stack) {
-      int min_align = has_longdouble(arg->ty) ? 16 : 8;
-      int align = MAX(arg->ty->align, min_align);
-      max_align = MAX(max_align, align);
-    }
+  // Pre-allocate space for structs BEFORE other stack args
+  if (stack_offset > 0) {
+    println("  sub $%d, %%rsp", stack_offset);
+    depth += struct_units;
   }
+
 
   if (max_align > 16) {
     println("  and $-%d, %%rsp", max_align);
@@ -1234,7 +1292,7 @@ static int push_args(Node *node)
     push();
   }
 
-  return stack;
+  return total_stack;
 }
 
 static void copy_ret_buffer(Obj *var)
@@ -5207,9 +5265,33 @@ void assign_lvar_offsets(Obj *prog)
       }
 
       var->pass_by_stack = true; 
+      var->stack_offset = stack;      
+    
+      int align = 8;
+      if (ty->kind == TY_STRUCT || ty->kind == TY_UNION) {
+        align = MAX(ty->align, 8);
+        max_align = MAX(max_align, align);
+      } else if (ty->kind == TY_LDOUBLE || ty->kind == TY_INT128) {
+        align = 16;
+        max_align = MAX(max_align, 16);
+      } 
+      
+      // Align stack counter
+      stack = align_to(stack, align);
       var->stack_offset = stack;
-      stack += align_to(var->ty->size, 8);
-      top = align_to(top, 8);
+      
+      // Add size to stack counter
+      int size = ty->size;
+      if (ty->kind == TY_STRUCT || ty->kind == TY_UNION) {
+        size = align_to(ty->size, align);
+      } else if (ty->kind == TY_LDOUBLE || ty->kind == TY_INT128) {
+        size = 16;
+      } else {
+        size = 8;
+      }
+      stack += size;
+      
+      top = align_to(top, align);
       top += ty->size;
     }
 

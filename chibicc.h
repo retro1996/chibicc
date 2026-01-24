@@ -906,6 +906,7 @@ Node
   Type *func_ty;
   Node *args;
   bool pass_by_stack;
+  int stack_offset;       // Offset for stack-passed arguments during function calls
   bool realign_stack;
   Obj *ret_buffer;
 

@@ -56,7 +56,7 @@ static void pass_many(
   CHECK_ALIGN(&c, 32);
   
   printf("Checking d at %p, align 64\n", (void*)&d);
-  //CHECK_ALIGN(&d, 64);
+  CHECK_ALIGN(&d, 64);
   
   printf("Checking e.a at %p, align 32\n", (void*)&e.a);
   CHECK_ALIGN(&e.a, 32);

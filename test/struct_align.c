@@ -98,7 +98,7 @@ static void pass_many(
   CHECK_ALIGN(&a, 8);
   CHECK_ALIGN(&b, 16);
   CHECK_ALIGN(&c, 32);
-  //CHECK_ALIGN(&d, 64);
+  CHECK_ALIGN(&d, 64);
   CHECK_ALIGN(&e.a, 32);
   CHECK_ALIGN(&f, 32);
   CHECK_ALIGN(&g, 32);
