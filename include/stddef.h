@@ -17,7 +17,10 @@
 typedef unsigned long size_t;
 typedef long ptrdiff_t;
 typedef unsigned int wchar_t;
-typedef long max_align_t;
+typedef struct {
+  long long __max_align_ll __attribute__((__aligned__(__alignof__(long long))));
+  long double __max_align_ld __attribute__((__aligned__(__alignof__(long double))));
+} max_align_t;
 
 #ifndef __has_attribute
 #define __has_attribute(x) 1

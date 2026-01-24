@@ -6485,15 +6485,21 @@ static Node *primary(Token **rest, Token *tok)
   }
 
   if (equal(tok, "__builtin_popcount")) {
-      return ParseBuiltin(ND_POPCOUNT, tok, rest);
+      Node *node = ParseBuiltin(ND_POPCOUNT, tok, rest);
+      node->builtin_val = new_cast(node->builtin_val, ty_uint);
+      return node;
   }
 
   if (equal(tok, "__builtin_popcountl")) {
-      return ParseBuiltin(ND_POPCOUNTL, tok, rest);
+      Node *node = ParseBuiltin(ND_POPCOUNTL, tok, rest);
+      node->builtin_val = new_cast(node->builtin_val, ty_ulong);
+      return node;
   }
 
   if (equal(tok, "__builtin_popcountll")) {
-      return ParseBuiltin(ND_POPCOUNTLL, tok, rest);
+      Node *node = ParseBuiltin(ND_POPCOUNTLL, tok, rest);
+      node->builtin_val = new_cast(node->builtin_val, ty_ullong);
+      return node;
   }
 
 

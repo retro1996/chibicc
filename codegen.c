@@ -138,13 +138,13 @@ static void popf(int reg)
 static void pushv(void) {
   println("  sub $16, %%rsp");
   println("  movdqu %%xmm0, (%%rsp)");
-  depth += 1; 
+  depth += 2; 
 }
 
 static void popv(int reg) {
   println("  movdqu (%%rsp), %%xmm%d", reg);
   println("  add $16, %%rsp");
-  depth -= 1;
+  depth -= 2;
 }
 
 void pushx(void) {
@@ -178,11 +178,13 @@ static void popx_tmp(char *a, char *b) {
 static void push_xmm(int x) {
   println("  sub $16, %%rsp");
   println("  movdqu %%xmm%d, (%%rsp)", x);
+  depth += 2;
 }
 
 static void pop_xmm(int x) {
   println("  movdqu (%%rsp), %%xmm%d", x);
   println("  add $16, %%rsp");
+  depth -= 2;
 }
 
 
@@ -3701,8 +3703,8 @@ static void gen_expr(Node *node)
     return;
   }
   case ND_POPCOUNTL:
-  case ND_POPCOUNTLL:
-  case ND_POPCOUNT: gen_builtin(node, "popcnt", "rax"); return;
+  case ND_POPCOUNTLL: gen_builtin(node, "popcnt", "rax"); return;
+  case ND_POPCOUNT:   gen_builtin(node, "popcnt", "eax"); return;
   case ND_EXPECT: {
     gen_expr(node->lhs); 
     push_tmp(); 
@@ -5176,7 +5178,8 @@ static int assign_lvar_offsets2(Obj *fn, int bottom, char *ptr) {
     int align = get_align(var);
 
     if (var->offset) {
-      bottom = align_to(bottom + var->ty->size, align);
+      if (var->offset < 0)
+        bottom = align_to(bottom + var->ty->size, align);
       continue;
     }
 
