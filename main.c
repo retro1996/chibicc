@@ -1079,7 +1079,7 @@ return parent;
 // Replace file extension
 char *replace_extn(char *tmpl, char *extn)
 {
-  char *filename = extract_filename(tmpl);
+  char *filename = strdup(tmpl);
   char *dot = strrchr(filename, '.');
   if (dot)
     *dot = '\0';

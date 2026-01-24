@@ -1363,7 +1363,6 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       SET_CTX(ctx); 
       tok = skip(tok, ",", ctx);
     }
-    int alt_align = attr ? attr->align : 0;
     Type *ty = declarator(&tok, tok, basety);
     if (!ty)
       error_tok(tok, "%s %d: in declaration : ty is null", PARSE_C, __LINE__);
@@ -1372,6 +1371,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     if (!ty->name)
       error_tok(ty->name_pos, "%s %d: in declaration : variable name omitted", PARSE_C, __LINE__);    
     tok = attribute_list(tok, attr, thing_attributes);
+    int alt_align = attr ? attr->align : 0;
     if (attr && attr->is_static)
     {
       // static local variable

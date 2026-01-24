@@ -12,11 +12,11 @@ static char *argreg32[] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
 static char *argreg64[] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
 
 
-static char *newargreg8[] =  {"%cl", "%bl", "%dl", "%al", "%sil", "%dil", "%r8b", "%r9b", "%r10b", "%r11b", "%r12b", "%r13b", "%r14b", "%r15b"};
-static char *newargreg16[] = {"%cx", "%bx", "%dx", "%ax", "%si",  "%di",  "%r8w", "%r9w", "%r10w", "%r11w", "%r12w", "%r13w", "%r14w", "%r15w"};
-static char *newargreg32[] = {"%ecx","%ebx","%edx","%eax","%esi","%edi","%r8d", "%r9d", "%r10d", "%r11d", "%r12d", "%r13d", "%r14d", "%r15d"};
-static char *newargreg64[] = {"%rcx","%rbx","%rdx","%rax","%rsi","%rdi","%r8",  "%r9",  "%r10",  "%r11",  "%r12",  "%r13",  "%r14",  "%r15"};
-static char *registerUsed[] = {"free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free"};
+static char *newargreg8[] =  {"%cl", "%dl", "%al", "%sil", "%dil", "%r8b", "%r9b", "%r10b", "%r11b", "%r12b", "%r13b", "%r14b", "%r15b"};
+static char *newargreg16[] = {"%cx", "%dx", "%ax", "%si",  "%di",  "%r8w", "%r9w", "%r10w", "%r11w", "%r12w", "%r13w", "%r14w", "%r15w"};
+static char *newargreg32[] = {"%ecx","%edx","%eax","%esi","%edi","%r8d", "%r9d", "%r10d", "%r11d", "%r12d", "%r13d", "%r14d", "%r15d"};
+static char *newargreg64[] = {"%rcx","%rdx","%rax","%rsi","%rdi","%r8",  "%r9",  "%r10",  "%r11",  "%r12",  "%r13",  "%r14",  "%r15"};
+static char *registerUsed[] = {"free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free"};
 
 
 extern int64_t eval(Node *node);
@@ -1430,7 +1430,7 @@ static void builtin_alloca(Node *node)
   println("  and $-%d, %%rdi", align);
 
   // Shift the temporary area by %rdi.
-  println("  mov %d(%%rbp), %%rcx", current_fn->alloca_bottom->offset);
+  println("  mov %d(%s), %%rcx", current_fn->alloca_bottom->offset, current_fn->alloca_bottom->ptr);
   println("  sub %%rsp, %%rcx");
   println("  mov %%rsp, %%rax");
   println("  sub %%rdi, %%rsp");
@@ -1447,10 +1447,10 @@ static void builtin_alloca(Node *node)
   println("2:");
 
   // Move alloca_bottom pointer.
-  println("  mov %d(%%rbp), %%rax", current_fn->alloca_bottom->offset);
+  println("  mov %d(%s), %%rax", current_fn->alloca_bottom->offset, current_fn->alloca_bottom->ptr);
   println("  sub %%rdi, %%rax");
   println("  and $-%d, %%rax", align);
-  println("  mov %%rax, %d(%%rbp)", current_fn->alloca_bottom->offset);
+  println("  mov %%rax, %d(%s)", current_fn->alloca_bottom->offset, current_fn->alloca_bottom->ptr);
 }
 
 //from cosmopolitan
@@ -4916,7 +4916,7 @@ static void emit_text(Obj *prog)
     current_fn = fn;
     tmp_stack.bottom = fn->stack_size;
     bool is_variadic = fn->ty->is_variadic;
-    bool use_rbx = (fn->stack_align > 16 && !is_variadic);
+    bool use_rbx = (fn->stack_align > 16);
     lvar_ptr = use_rbx ? "%rbx" : "%rbp";
 
     println("  .cfi_startproc");
@@ -4943,7 +4943,7 @@ static void emit_text(Obj *prog)
       println("                           ");
       // Save RSP for alloca/VLA support if needed
       if (fn->alloca_bottom && fn->alloca_bottom->offset)
-        println("  mov %%rsp, %d(%%rbp)", fn->alloca_bottom->offset);
+        println("  mov %%rsp, %d(%s)", fn->alloca_bottom->offset, lvar_ptr);
     }
     //issue with postgres and local variables not initialized!
     for (Obj *var = fn->locals; var; var = var->next) {     
@@ -5013,7 +5013,7 @@ static void emit_text(Obj *prog)
       // va_elem
       println("  movl $%d, %d(%s)", gp * 8, off, ptr);          // gp_offset
       println("  movl $%d, %d(%s)", fp * 16 + 48, off + 4, ptr); // fp_offset
-      println("  movq %s, %d(%s)", ptr, off + 8, ptr);            // overflow_arg_area
+      println("  movq %%rbp, %d(%s)", off + 8, ptr);            // overflow_arg_area
       println("  addq $%d, %d(%s)", fn->overflow_arg_area, off + 8, ptr);
       println("  movq %s, %d(%s)", ptr, off + 16, ptr); // reg_save_area
       println("  addq $%d, %d(%s)", off + 24, off + 16, ptr);
@@ -5165,39 +5165,33 @@ static void print_offset(Obj *prog)
   }
 }
 
-static int get_lvar_align(Obj *fn, int align) {
-  for (Obj *var = fn->locals; var; var = var->next) {
-      if (var->offset)
-      continue;
-    align = MAX(align, var->align);
-  }
+static int get_align(Obj *var) {
+  int align = var->align;
+  if ((var->ty->kind == TY_ARRAY && var->ty->size >= 16) || 
+      is_vector(var->ty) || var->ty->kind == TY_INT128)
+    align = MAX(16, align);
   return align;
 }
 
+static int get_lvar_align(Obj *fn, int align) {
+  for (Obj *var = fn->locals; var; var = var->next)
+    align = MAX(align, get_align(var));
+  return align;
+}
 
 static int assign_lvar_offsets2(Obj *fn, int bottom, char *ptr) {
-   for (Obj *var = fn->locals; var; var = var->next)
-   {
-    // AMD64 System V ABI has a special alignment rule for an array of
-    // length at least 16 bytes. We need to align such array to at least
-    // 16-byte boundaries. See p.14 of
-    // https://github.com/hjl-tools/x86-psABI/wiki/x86-64-psABI-draft.pdf.
-    int align = ((var->ty->kind == TY_ARRAY && var->ty->size >= 16) || is_vector(var->ty) || var->ty->kind == TY_INT128)
-                    ? MAX(16, var->align)
-                    : var->align;
+  for (Obj *var = fn->locals; var; var = var->next) {
+    int align = get_align(var);
 
     if (var->offset) {
       bottom = align_to(bottom + var->ty->size, align);
       continue;
     }
 
-    // bottom += var->ty->size;
-    // bottom = align_to(bottom, align);
     bottom = align_to(bottom + var->ty->size, align);
     var->offset = -bottom;
     var->ptr = ptr;
   }
-
   return align_to(bottom, 16);
 }
 
@@ -5311,7 +5305,7 @@ void assign_lvar_offsets(Obj *prog)
     }
 
     fn->stack_align = get_lvar_align(fn, 16);
-    char *ptr = (fn->stack_align > 16 && !is_variadic) ? "%rbx" : "%rbp";
+    char *ptr = (fn->stack_align > 16) ? "%rbx" : "%rbp";
     fn->stack_size = assign_lvar_offsets2(fn, bottom, ptr);
 
   }
