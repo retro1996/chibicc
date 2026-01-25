@@ -501,9 +501,9 @@ lxc: https://github.com/lxc/lxc.git
 
 Some C projects doesn't compile for now or crash after being compiled with chibicc. It helps to find some bugs and to try to fix them!
 
-cpython: git clone https://github.com/python/cpython.git
+cpython: git clone https://github.com/python/cpython.git (commit 3b87fb74c907510402678bf1b7c4a94df0e5e65a)
         
-        CC=chibicc ./configure  --host=x86_64-pc-linux-gnu ac_cv_have_lchflags=no ac_cv_have_chflags=no
+        CC=chibicc CFLAGS="-std=c11"  ./configure  --host=x86_64-pc-linux-gnu --without-readline
         make && make test
         some tests failed 
         test_recursion_limit (test.test_marshal.BugsTestCase.test_recursion_limit) ... Fatal Python error: Segmentation fault

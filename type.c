@@ -1,6 +1,7 @@
 #include "chibicc.h"
 #define TYPE_C "type.c"
 
+
 Type *ty_void = &(Type){TY_VOID, 1, 1};
 Type *ty_bool = &(Type){TY_BOOL, 1, 1, true};
 
@@ -517,7 +518,8 @@ void add_type(Node *node)
   case ND_VLA_PTR:
     node->ty = node->var->ty;
     return;
-  case ND_COND:
+  case ND_COND: {
+
     Type *lt = node->then->ty;
     Type *rt = node->els->ty;
     if (lt->kind == TY_VOID && rt->kind == TY_VOID)
@@ -533,6 +535,7 @@ void add_type(Node *node)
       node->ty = node->then->ty;
     }
     return;
+  }
   case ND_COMMA:
     node->ty = node->rhs->ty;
     return;

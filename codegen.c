@@ -1625,7 +1625,7 @@ static void gen_int128_op(Node *node) {
         println("  cmovne %%rax, %%rdx");
         println("  cmovne %%rdi, %%rax");  
       break;  
-    case ND_SHR:
+    case ND_SHR: {
       int c = count();
       // Move shift amount to CL register
       println("  mov %%rdi, %%rcx");
@@ -1664,6 +1664,7 @@ static void gen_int128_op(Node *node) {
       }
       println(".Lshift_done_%d:", c);
       break;
+    }
     default:
         error_tok(node->tok,"%s: %s:%d: error: in gen_int128_op : unsupported int128 operation %d", CODEGEN_C, __FILE__, __LINE__, node->kind);
     }

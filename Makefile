@@ -96,8 +96,8 @@ vlc:
     make all
 
 cpython:
-	cd ../cpython &&  CC=chibicc ./configure \
-	 --build=x86_64-pc-linux-gnu ac_cv_have_lchflags=no ac_cv_have_chflags=no && make && make test
+	cd ../cpython &&  CC=chibicc CFLAGS="-std=c11" ./configure --without-readline \
+	 --build=x86_64-pc-linux-gnu && make clean && make && make test
 
 # vlc2:
 # 	cd ../vlc && rm -rf build && mymeson setup build && cd build && mymeson compile
