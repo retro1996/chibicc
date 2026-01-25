@@ -1120,6 +1120,8 @@ void add_type(Node *node)
   case ND_RDGSBASE32:
   case ND_RDTSCP:
   case ND_RDPMC:
+  case ND_SBB_U32:
+  case ND_BEXTR_U32:
     node->ty = ty_uint;
     return;    
   case ND_BSRDI:
@@ -1151,10 +1153,13 @@ void add_type(Node *node)
   case ND_ROLQI:
   case ND_RORQI:
   case ND_TESTUI:
+  case ND_ADDCARRYX_U32:
+  case ND_SBB_U64:
     node->ty = ty_uchar;
     return;
   case ND_RORHI:
   case ND_ROLHI:
+  case ND_TZCNT_U16:
     node->ty = ty_ushort;
     return;
   default:

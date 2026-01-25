@@ -872,6 +872,12 @@ typedef enum
   ND_WRUSSD,
   ND_WRUSSQ,
   ND_CLRSSBSY,
+  ND_SBB_U32,
+  ND_ADDCARRYX_U32,
+  ND_SBB_U64,
+  ND_ADDCARRYX_U64,
+  ND_TZCNT_U16,
+  ND_BEXTR_U32,
 } NodeKind;
 
 // AST node type

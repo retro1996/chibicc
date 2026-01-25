@@ -5990,7 +5990,7 @@ static Node *primary(Token **rest, Token *tok)
     equal(tok, "__builtin_ia32_bsrdi") || equal(tok, "__builtin_ia32_rdtscp") ||
     equal(tok, "__builtin_ia32_writeeflags_u64") || equal(tok, "__builtin_ia32_incsspq") ||
     equal(tok, "__builtin_ia32_rstorssp") || equal(tok, "__builtin_ia32_clrssbsy") || 
-    equal(tok, "__builtin_ia32_rsqrtss")) {
+    equal(tok, "__builtin_ia32_rsqrtss") || equal(tok, "__builtin_ia32_tzcnt_u16")) {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
       Node *node = new_node(builtin, tok);    
@@ -6143,7 +6143,9 @@ static Node *primary(Token **rest, Token *tok)
   }
     
 
-  if (equal(tok, "__builtin_ia32_vec_init_v4hi"))
+  if (equal(tok, "__builtin_ia32_vec_init_v4hi") || equal(tok, "__builtin_ia32_sbb_u32") || 
+    equal(tok, "__builtin_ia32_addcarryx_u32") || equal(tok, "__builtin_ia32_sbb_u64") || 
+    equal(tok, "__builtin_ia32_addcarryx_u64"))
   {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -7888,6 +7890,12 @@ char *nodekind2str(NodeKind kind)
   case ND_WRUSSD: return "WRUSSD";
   case ND_WRUSSQ: return "WRUSSQ";
   case ND_CLRSSBSY: return "CLRSSBSY";
+  case ND_SBB_U32: return "SBB_U32";
+  case ND_ADDCARRYX_U32: return "ADDCARRYX_U32";
+  case ND_SBB_U64: return "SBB_U64";
+  case ND_ADDCARRYX_U64: return "ADDCARRYX_U64";  
+  case ND_TZCNT_U16: return "TZCNT_U16";
+  case ND_BEXTR_U32: return "BEXTR_U32";
   default: return "UNREACHABLE"; 
   }
 }
@@ -8641,6 +8649,13 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_wrussd", ND_WRUSSD },
     { "__builtin_ia32_wrussq", ND_WRUSSQ },
     { "__builtin_ia32_clrssbsy", ND_CLRSSBSY },
+    { "__builtin_ia32_sbb_u32", ND_SBB_U32 },
+    { "__builtin_ia32_addcarryx_u32", ND_ADDCARRYX_U32 },
+    { "__builtin_ia32_sbb_u64", ND_SBB_U64 },
+    { "__builtin_ia32_addcarryx_u64", ND_ADDCARRYX_U64 },    
+    { "__builtin_ia32_tzcnt_u16", ND_TZCNT_U16 },
+    { "__builtin_ia32_bextr_u32", ND_BEXTR_U32 },
+
 };
 
 

@@ -2223,7 +2223,7 @@ static void gen_rdpmc(Node *node) {
 
 static void gen_rdtscp(Node *node) {
   gen_expr(node->lhs);
-  println("  mov %%rax, %%rdi");
+  println("  movq %%rax, %%rdi");
   println("  rdtscp");        
   println("  movl %%ecx, (%%rdi)"); 
   println("  movl %%edx, %%edx");  
@@ -2279,49 +2279,163 @@ static void gen_writeeflags_u64(Node *node) {
 }
 
 static void gen_incsspq(Node *node) {
-    gen_expr(node->lhs);
-    println("  incsspq %%rax");
+  gen_expr(node->lhs);
+  println("  incsspq %%rax");
 }
 
 static void gen_rstorssp(Node *node) {
-    gen_addr(node->lhs);
-    println("  rstorssp (%%rax)");
+  gen_addr(node->lhs);
+  println("  rstorssp (%%rax)");
 }
 
 static void gen_wrssd(Node *node) {
-    gen_expr(node->rhs);
-    println("  mov %%rax, %%rdx");
-    gen_expr(node->lhs);
-    println("  wrssd %%eax, (%%rdx)");
+  gen_expr(node->rhs);
+  println("  movq %%rax, %%rdx");
+  gen_expr(node->lhs);
+  println("  wrssd %%eax, (%%rdx)");
 }
 
 static void gen_wrssq(Node *node) {
-    gen_expr(node->rhs);
-    println("  mov %%rax, %%rdx");
-    gen_expr(node->lhs);
-    println("  wrssq %%rax, (%%rdx)");
+  gen_expr(node->rhs);
+  println("  movq %%rax, %%rdx");
+  gen_expr(node->lhs);
+  println("  wrssq %%rax, (%%rdx)");
 }
 
 static void gen_wrussd(Node *node) {
-    gen_expr(node->rhs);
-    println("  mov %%rax, %%rdx");
-    gen_expr(node->lhs);
-    println("  wrussd %%eax, (%%rdx)");
+  gen_expr(node->rhs);
+  println("  movq %%rax, %%rdx");
+  gen_expr(node->lhs);
+  println("  wrussd %%eax, (%%rdx)");
 }
 
 static void gen_wrussq(Node *node) {
-    gen_expr(node->rhs);
-    println("  mov %%rax, %%rdx");
-    gen_expr(node->lhs);
-    println("  wrussq %%rax, (%%rdx)");
+  gen_expr(node->rhs);
+  println("  movq %%rax, %%rdx");
+  gen_expr(node->lhs);
+  println("  wrussq %%rax, (%%rdx)");
 }
 
 static void gen_clrssbsy(Node *node) {
-    gen_expr(node->lhs);
-    if (node->lhs->kind == ND_NUM)
-      println("  clrssbsy %ld", node->lhs->val);
-    else
-      println("  clrssbsy (%%rax)");
+  gen_expr(node->lhs);
+  if (node->lhs->kind == ND_NUM)
+    println("  clrssbsy %ld", node->lhs->val);
+  else
+    println("  clrssbsy (%%rax)");
+}
+
+static void gen_sbb_u32(Node *node) { 
+  gen_expr(node->builtin_args[0]);
+  println("  movl %%eax, %%edi");
+  gen_expr(node->builtin_args[1]);
+  println("  movl %%eax, %%esi");    
+  gen_expr(node->builtin_args[2]);
+  println("  movl %%eax, %%edx");    
+  gen_expr(node->builtin_args[3]);
+  println("  movq %%rax, %%rcx");    
+  println("  movl %%edi, %%eax");
+  println("  bt $0, %%edx");
+  println("  sbbl %%esi, %%eax");
+  println("  setc %%dl");
+  println("  movzbl %%dl, %%edx");
+  println("  movl %%edx, (%%rcx)");
+}
+
+static void gen_sbb_u64(Node *node) { 
+  gen_expr(node->builtin_args[0]);
+  println("  movq %%rax, %%rdi");
+  gen_expr(node->builtin_args[1]);
+  println("  movq %%rax, %%rsi");    
+  gen_expr(node->builtin_args[2]);
+  println("  movq %%rax, %%rdx");    
+  gen_expr(node->builtin_args[3]);
+  println("  movq %%rax, %%rcx");    
+  println("  movq %%rsi, %%rax");
+  println("  sbbq %%rdx, %%rax");
+  println("  sbbq %%rdi, %%rax");
+  println("  movq %%rax, (%%rcx)");
+  println("  setc %%al");
+}
+
+
+static void gen_addcarryx_u32(Node *node) { 
+  gen_expr(node->builtin_args[0]);
+  println("  movb %%al, %%dil");
+  gen_expr(node->builtin_args[1]);
+  println("  movl %%eax, %%esi");    
+  gen_expr(node->builtin_args[2]);
+  println("  movl %%eax, %%edx");    
+  gen_expr(node->builtin_args[3]);
+  println("  movq %%rax, %%rcx");    
+  println("  movl %%esi, %%eax");
+  println("  movzx %%dil, %%r8d ");
+  println("  addl %%edx, %%eax");
+  println("  addl %%r8d, %%eax");
+  println("  setc %%al");
+  println("  movl %%eax, (%%rcx)");
+}
+
+static void gen_addcarryx_u64(Node *node) { 
+  gen_expr(node->builtin_args[0]);
+  println("  movq %%rax, %%rdi");
+  gen_expr(node->builtin_args[1]);
+  println("  movq %%rax, %%rsi");    
+  gen_expr(node->builtin_args[2]);
+  println("  movq %%rax, %%rdx");    
+  gen_expr(node->builtin_args[3]);
+  println("  movq %%rax, %%rcx");    
+  println("  movq %%rsi, %%rax");
+  println("  addq    %%rdx, %%rax");
+  println("  addq    %%rdi, %%rax");
+  println("  movq    %%rax, (%%rcx)");
+}
+
+static void gen_tzcnt_u16(Node *node) {
+  gen_expr(node->lhs); 
+  println("  testw %%ax, %%ax");
+  println("  jne 1f");
+  println("  movl $16, %%eax");
+  println("  jmp 2f");
+  println("1:");
+  println("  bsfw %%ax, %%ax");
+  println("2:");
+}
+
+static void gen_bextr_u32(Node *node) {
+  gen_expr(node->lhs);
+  println("  push %%rax");
+  gen_expr(node->rhs);
+  println("  movl %%eax, %%ecx");
+  println("  pop %%rax");
+
+  println("  movl %%ecx, %%edx");
+  println("  andl $0xff, %%edx");
+
+  println("  shrl $8, %%ecx");
+  println("  andl $0xff, %%ecx");
+
+  println("  testl %%ecx, %%ecx");
+  println("  je 1f");
+
+  println("  cmpl $32, %%edx");
+  println("  jae 1f");
+
+  println("  movl $32, %%esi");
+  println("  subl %%edx, %%esi");
+  println("  cmpl %%esi, %%ecx");
+  println("  cmova %%esi, %%ecx");
+
+  println("  shrl %%cl, %%eax");
+
+  println("  movl $1, %%esi");
+  println("  shll %%cl, %%esi");
+  println("  decl %%esi");
+  println("  andl %%esi, %%eax");
+  println("  jmp 2f");
+
+  println("1:");
+  println("  xorl %%eax, %%eax");
+  println("2:");
 }
 
 
@@ -4288,7 +4402,12 @@ static void gen_expr(Node *node)
   case ND_WRUSSD: gen_wrussd(node); return;
   case ND_WRUSSQ: gen_wrussq(node); return;
   case ND_CLRSSBSY: gen_clrssbsy(node); return;
-
+  case ND_SBB_U32: gen_sbb_u32(node); return;  
+  case ND_ADDCARRYX_U32: gen_addcarryx_u32(node); return;
+  case ND_SBB_U64: gen_sbb_u64(node); return;
+  case ND_ADDCARRYX_U64: gen_addcarryx_u64(node); return;
+  case ND_TZCNT_U16: gen_tzcnt_u16(node); return;
+  case ND_BEXTR_U32: gen_bextr_u32(node); return;
 }
   
 if (is_vector(node->lhs->ty) || (node->rhs && is_vector(node->rhs->ty))) {
