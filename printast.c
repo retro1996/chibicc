@@ -373,7 +373,7 @@ static void PrintObj(FILE *f, int l, const char *s, Obj *o) {
             "is_force_align_arg_pointer: ", o->is_force_align_arg_pointer);
   PrintBool(f, l + 2,
             "is_no_caller_saved_registers: ", o->is_no_caller_saved_registers);
-  PrintBool(f, l + 2, "vfork_used: ", o->vfork_used);            
+
   PrintInt(f, l + 2, "stack_size: ", o->stack_size);
   PrintInt(f, l + 2, "overflow_arg_area: ", o->overflow_arg_area);
   PrintBool(f, l + 2, "pass_by_stack: ", o->pass_by_stack);

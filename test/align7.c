@@ -22,7 +22,7 @@ int main() {
     printf("%Lf\n", f(x));
     printf("%p\n", (void *)buf);
     ASSERT(0, ((uintptr_t)buf % 32) != 0);      
-    int __attribute__((aligned(32))) y;   
+    int __attribute__((aligned(32))) y = 0;   
     ASSERT(1, (int)f(y));
 
     A z;

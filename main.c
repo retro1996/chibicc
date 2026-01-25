@@ -1261,6 +1261,9 @@ static void print_dependencies(void)
       fprintf(out, "%s:\n\n", quote_makefile(files[i]->name));
     }
   }
+
+  if (out != stdout)
+    fclose(out);
 }
 
 static Token *must_tokenize_file(char *path)

@@ -321,7 +321,7 @@ struct Obj
   bool is_no_caller_saved_registers;
   
   // Function calls vfork returns twice unsafe with stack frames
-  bool vfork_used;
+
 
   Obj *params;
   Node *body;

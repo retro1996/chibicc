@@ -16,7 +16,7 @@ int main(void) {
     if (pid == 0) {  // child
     //     // safe write to parent stack variable
          errpipe = 123;
-         return 0;   // child exits safely
+         _exit(0);   // child exits safely
      }
 
     // parent reads updated value

@@ -1363,7 +1363,6 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       SET_CTX(ctx); 
       tok = skip(tok, ",", ctx);
     }
-    int alt_align = attr ? attr->align : 0;
     Type *ty = declarator(&tok, tok, basety);
     if (!ty)
       error_tok(tok, "%s %d: in declaration : ty is null", PARSE_C, __LINE__);
@@ -1372,6 +1371,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     if (!ty->name)
       error_tok(ty->name_pos, "%s %d: in declaration : variable name omitted", PARSE_C, __LINE__);    
     tok = attribute_list(tok, attr, thing_attributes);
+    int alt_align = attr ? attr->align : 0;
     if (attr && attr->is_static)
     {
       // static local variable
@@ -5626,11 +5626,7 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
   node->args = head.next;
 
   
-  // Mark current function if it calls vfork (returns twice - unsafe with stack frames)
-  if (current_fn && fn->kind == ND_VAR && fn->var && fn->var->name) {
-    if (!strcmp(fn->var->name, "vfork") || !strcmp(fn->var->name, "__vfork"))
-      current_fn->vfork_used = true;
-  }
+
 
   // If a function returns a struct, it is caller's responsibility
   // to allocate a space for the return value.
@@ -6268,7 +6264,7 @@ static Node *primary(Token **rest, Token *tok)
 
     if (is_integer(ty) || ty->kind == TY_PTR)
       return new_num(0, start);
-    if (ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE)
+    if (ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE || ty->kind == TY_VECTOR)
       return new_num(1, start);
     return new_num(2, start);
   }
@@ -6489,15 +6485,21 @@ static Node *primary(Token **rest, Token *tok)
   }
 
   if (equal(tok, "__builtin_popcount")) {
-      return ParseBuiltin(ND_POPCOUNT, tok, rest);
+      Node *node = ParseBuiltin(ND_POPCOUNT, tok, rest);
+      node->builtin_val = new_cast(node->builtin_val, ty_uint);
+      return node;
   }
 
   if (equal(tok, "__builtin_popcountl")) {
-      return ParseBuiltin(ND_POPCOUNTL, tok, rest);
+      Node *node = ParseBuiltin(ND_POPCOUNTL, tok, rest);
+      node->builtin_val = new_cast(node->builtin_val, ty_ulong);
+      return node;
   }
 
   if (equal(tok, "__builtin_popcountll")) {
-      return ParseBuiltin(ND_POPCOUNTLL, tok, rest);
+      Node *node = ParseBuiltin(ND_POPCOUNTLL, tok, rest);
+      node->builtin_val = new_cast(node->builtin_val, ty_ullong);
+      return node;
   }
 
 
