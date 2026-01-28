@@ -503,7 +503,7 @@ Some C projects doesn't compile for now or crash after being compiled with chibi
 
 cpython: git clone https://github.com/python/cpython.git 
         
-        CC=chibicc CFLAGS="-std=c11"  ./configure  --host=x86_64-pc-linux-gnu --without-readline
+        CC=chibicc CFLAGS="-std=c11"  ./configure  --host=x86_64-pc-linux-gnu 
         make && make test
         some tests failed 
         test_recursion_limit (test.test_marshal.BugsTestCase.test_recursion_limit) ... Fatal Python error: Segmentation fault

@@ -3288,11 +3288,12 @@ static long double eval_double(Node *node)
     if (node->lhs->ty->size == 8 && node->lhs->ty->is_unsigned)
       return (uint64_t)eval(node->lhs);
     return eval(node->lhs);
+  case ND_BUILTIN_INFF:
   case ND_NUM:
     return node->fval;
   }
 
-  error_tok(node->tok, "%s %d: in eval_double : not a compile-time constant", PARSE_C, __LINE__);
+  error_tok(node->tok, "%s %d: in eval_double : not a compile-time constant %d", PARSE_C, __LINE__, node->kind);
 }
 
 // Convert op= operators to expressions containing an assignment.
