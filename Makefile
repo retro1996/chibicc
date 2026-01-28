@@ -96,7 +96,7 @@ vlc:
     make all
 
 cpython:
-	cd ../cpython &&  CC=chibicc CFLAGS="-std=c11" ./configure --without-readline \
+	cd ../cpython &&  CC=chibicc CFLAGS="-std=c11" ./configure  \
 	 --build=x86_64-pc-linux-gnu && make clean && make && make test
 
 # vlc2:

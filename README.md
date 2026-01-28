@@ -501,7 +501,7 @@ lxc: https://github.com/lxc/lxc.git
 
 Some C projects doesn't compile for now or crash after being compiled with chibicc. It helps to find some bugs and to try to fix them!
 
-cpython: git clone https://github.com/python/cpython.git (commit 3b87fb74c907510402678bf1b7c4a94df0e5e65a)
+cpython: git clone https://github.com/python/cpython.git 
         
         CC=chibicc CFLAGS="-std=c11"  ./configure  --host=x86_64-pc-linux-gnu --without-readline
         make && make test

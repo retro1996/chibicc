@@ -21,5 +21,4 @@ RUN \
 RUN \
   DEBIAN_FRONTEND="noninteractive" apt-get install -y texinfo git
 ADD . /opt/chibicc
-ADD ../cpython /opt/cpython
 WORKDIR /opt/chibicc
