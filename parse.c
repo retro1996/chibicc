@@ -206,6 +206,7 @@ static Node *compound_stmt2(Token **rest, Token *tok);
 static int builtin_enum(Token *tok);
 static Node *scalar_to_vector(Node *scalar, Type *vec_ty);
 static void promote_scalar_to_vector(Node *node);
+static char *token_to_string(Token *tok);
 
 static int align_down(int n, int align)
 {
@@ -3288,6 +3289,8 @@ static long double eval_double(Node *node)
     if (node->lhs->ty->size == 8 && node->lhs->ty->is_unsigned)
       return (uint64_t)eval(node->lhs);
     return eval(node->lhs);
+  case ND_BUILTIN_NAN:
+  case ND_BUILTIN_NANF:
   case ND_BUILTIN_INFF:
   case ND_NUM:
     return node->fval;
@@ -7139,6 +7142,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   return tok;
 }
 
+
 static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
 {
   bool first = true;
@@ -7156,27 +7160,18 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
       error_tok(tok, "%s %d: in global_variable : ty is null", PARSE_C, __LINE__);    
     if (!ty->name)
       error_tok(ty->name_pos, "%s %d: in global_variable : variable name omitted", PARSE_C, __LINE__);
-    bool is_definition = !attr->is_extern;
-    //Obj *var = new_gvar(get_ident(ty->name), ty);
-      //from COSMOPOLITAN adding other GNUC attributes
-    if (!is_definition && equal(tok, "="))
-      is_definition = true;      
-
-    VarScope *sc = find_var(ty->name);
-    Obj *var;
-    if (sc && sc->var) {
-      if (!is_definition)
-        continue;
-      if (sc->var->is_definition && !sc->var->is_tentative && equal(tok, "="))
-        error_tok(ty->name, "%s %d: in global_variable : redefinition of the variable %s", PARSE_C, __LINE__, token_to_string(ty->name));        
-      if (sc->var->is_definition && !sc->var->is_tentative)
-        continue;        
-      var = sc->var;
-      var->is_tentative = false;
-      var->ty = ty;
-    } else {
-      var = new_gvar(get_ident(ty->name), ty);
-    }
+    if (ty->name) {
+      VarScope *sc = find_var(ty->name);
+      if (sc && sc->var) {
+        if (sc->var->is_definition && !sc->var->is_tentative && !sc->var->is_extern && equal(tok, "=") )
+          error_tok(ty->name, "%s %d: in global_variable : redefinition of the variable %s", PARSE_C, __LINE__, token_to_string(ty->name));        
+      }
+  }
+    
+    Obj *var = new_gvar(get_ident(ty->name), ty);
+    
+    
+    //from COSMOPOLITAN adding other GNUC attributes
     tok = attribute_list(tok, attr, thing_attributes);
     //tok = attribute_list(tok, ty, type_attributes);
     if (consume(&tok, tok, "asm") || consume(&tok, tok, "__asm__")) {
@@ -7196,7 +7191,7 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
     var->visibility = attr->visibility;
     var->is_aligned = var->is_aligned | attr->is_aligned;
     var->is_externally_visible = attr->is_externally_visible;
-    var->is_definition = is_definition;
+    var->is_definition = !attr->is_extern;
     var->is_static = attr->is_static;
     var->is_tls = attr->is_tls;
     if (attr->align)
@@ -7204,13 +7199,14 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
 
     if (equal(tok, "="))
       gvar_initializer(&tok, tok->next, var);
-    else if (is_definition)
+    else if (!attr->is_extern)
       var->is_tentative = true;
+     
     current_section=NULL;
-
   }
   return tok;
 }
+
 
 // Lookahead tokens and returns true if a given token is a start
 // of a function definition or declaration.
@@ -7226,6 +7222,58 @@ static bool is_function(Token *tok)
 
   return ty->kind == TY_FUNC;
 }
+
+
+static bool var_in_array(const char *str, Obj *varArr[], size_t count) {
+    for (size_t i = 0; i < count ; i++) {
+        if (varArr[i] && varArr[i]->name && strcmp(str, varArr[i]->name) == 0) {
+            return true; 
+        }
+    }
+    return false;  
+}
+
+
+// Remove redundant tentative definitions.
+// works fine when we have tentative and definition but didn't work when we have multiple tentatives.
+// that's why here we're doing two passes and managed the case of duplicate tentatives.
+static void scan_globals(void)
+{
+  Obj head;
+  Obj *cur = &head;
+  Obj *varArr[MAX_GLOBAL_VAR];  
+  int i = 0;
+  //the first pass skipped the duplicated tentative and stores in an Array of objects duplicated tentative
+  for (Obj *var = globals; var; var = var->next)
+  {
+    if (!var->is_tentative)
+    {
+      cur = cur->next = var;
+      continue;
+    }
+
+    // Find another definition of the same identifier.
+    Obj *var2 = globals;
+    
+    for (; var2; var2 = var2->next) {
+      if (var != var2 && var2->is_definition && !strcmp(var->name, var2->name)) {
+        //warn_tok(var->tok, "%s %d: in scan_globals : duplicated tentative definition", PARSE_C, __LINE__);  
+        if (var2->is_tentative && !var_in_array(var->name, varArr, i + 1 ) && (i + 1) < MAX_GLOBAL_VAR) {
+          varArr[i++] = var;                
+        }
+        break;
+      }
+    }
+
+    // If there's another definition, the tentative definition
+    // is redundant
+    if (!var2)
+      cur = cur->next = var;
+  }
+  cur->next = NULL;
+  globals = head.next;
+}
+
 
 static char *prefix_builtin(const char *name) {
     const char *prefix = "__builtin_";
@@ -7375,6 +7423,9 @@ Obj *parse(Token *tok)
   for (Obj *var = globals; var; var = var->next)
     if (var->is_root || var->is_address_used)
       mark_live(var);
+
+  // Remove redundant tentative definitions.
+  scan_globals();
 
   return globals;
 }
