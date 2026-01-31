@@ -3040,6 +3040,11 @@ static int64_t eval2(Node *node, char ***label)
   case ND_POS:
     return eval(node->lhs);    
   case ND_NEG:
+      if (node->ty->size == 4) {
+      if (node->ty->is_unsigned)
+        return (uint32_t)-eval(node->lhs);
+      return (int32_t)-eval(node->lhs);
+    }
     return -eval(node->lhs);
   case ND_MOD:
     // Check for division overflow
@@ -3061,9 +3066,17 @@ static int64_t eval2(Node *node, char ***label)
   case ND_SHL:
     return eval(node->lhs) << eval(node->rhs);
   case ND_SHR:
-    if (node->ty->is_unsigned && node->ty->size == 8)
+    // if (node->ty->is_unsigned && node->ty->size == 8)
+    //   return (uint64_t)eval(node->lhs) >> eval(node->rhs);
+    // return eval(node->lhs) >> eval(node->rhs);
+    if (node->ty->is_unsigned) {
+      if (node->ty->size == 4)
+        return (uint32_t)eval(node->lhs) >> eval(node->rhs);
       return (uint64_t)eval(node->lhs) >> eval(node->rhs);
-    return eval(node->lhs) >> eval(node->rhs);
+    }
+    if (node->ty->size == 4)
+      return (int32_t)eval(node->lhs) >> eval(node->rhs);
+    return eval(node->lhs) >> eval(node->rhs);    
   case ND_EQ:
     //from @fuhsnn fixing when lhs is a float
     if (is_flonum(node->lhs->ty))
@@ -3099,6 +3112,11 @@ static int64_t eval2(Node *node, char ***label)
       return !eval_double(node->lhs);
     return !eval(node->lhs);
   case ND_BITNOT:
+    if (node->ty->size == 4) {
+      if (node->ty->is_unsigned)
+        return (uint32_t)~eval(node->lhs);
+      return (int32_t)~eval(node->lhs);
+    }  
     return ~eval(node->lhs);
   case ND_LOGAND:
     return eval(node->lhs) && eval(node->rhs);

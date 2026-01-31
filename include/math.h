@@ -14,7 +14,9 @@ int isunordered(double x, double y);
 double sinh(double x);
 double cosh(double x);
 double tanh(double x);
-
+long double tanhl(long double x);
+long double coshl(long double x);
+long double sinhl(long double x);
 // Exponential and logarithmic functions
 double exp(double x);
 double frexp(double x, int *exp);
@@ -123,6 +125,16 @@ extern float atanf(float x);
 extern float atan2f(float y, float x);
 float floorf(float);
 float ldexpf(float x, int exp);
+
+long double sinl(long double);
+long double cosl(long double);
+long double tanl(long double);
+long double asinl(long double);
+long double acosl(long double);
+long double atanl(long double);
+long double atan2l(long double y, long double x);
+long double logl(long double x);
+long double ldexpl(long double x, int exp);
 
 // Rounding and remainder
 double floor(double x);

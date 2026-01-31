@@ -4503,21 +4503,27 @@ switch (node->lhs->ty->kind)
     case ND_NE:
     case ND_LT:
     case ND_LE:
-      println("  fcomip");
+      println("  fucomip");
       println("  fstp %%st(0)");
 
-      if (node->kind == ND_EQ)
+      if (node->kind == ND_EQ) {
         println("  sete %%al");
-      else if (node->kind == ND_NE)
+        println("  setnp %%dl");
+        println("  and %%dl, %%al");
+      } else if (node->kind == ND_NE) {
         println("  setne %%al");
-      else if (node->kind == ND_LT)
+        println("  setp %%dl");
+        println("  or %%dl, %%al");
+      } else if (node->kind == ND_LT) {
         println("  seta %%al");
-      else
+      } else {
         println("  setae %%al");
+      }
 
-      println("  movzb %%al, %%rax");
+      println("  movzbl %%al, %%eax");
       return;
     }
+
 
     error_tok(node->tok, "%s invalid expression", CODEGEN_C);
   }

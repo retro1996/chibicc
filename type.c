@@ -77,27 +77,27 @@ bool is_bitfield(Node *node) {
   return node->kind == ND_MEMBER && node->member->is_bitfield;
 }
 
-// static bool is_bitfield2(Node *node, int *width) {
-//   switch (node->kind) {
-//   case ND_ASSIGN:
-//     return is_bitfield2(node->lhs, width);
-//   case ND_COMMA:
-//     return is_bitfield2(node->rhs, width);
-//   case ND_STMT_EXPR: {
-//     Node *stmt = node->body;
-//     while (stmt->next)
-//       stmt = stmt->next;
-//     if (stmt->kind == ND_EXPR_STMT)
-//       return is_bitfield2(stmt->lhs, width);
-//   }
-//   case ND_MEMBER:
-//     if (!node->member->is_bitfield)
-//       return false;
-//     *width = node->member->bit_width;
-//     return true;
-//   }
-//   return false;
-// }
+static bool is_bitfield2(Node *node, int *width) {
+  switch (node->kind) {
+  case ND_ASSIGN:
+    return is_bitfield2(node->lhs, width);
+  case ND_COMMA:
+    return is_bitfield2(node->rhs, width);
+  case ND_STMT_EXPR: {
+    Node *stmt = node->body;
+    while (stmt->next)
+      stmt = stmt->next;
+    if (stmt->kind == ND_EXPR_STMT)
+      return is_bitfield2(stmt->lhs, width);
+  }
+  case ND_MEMBER:
+    if (!node->member->is_bitfield)
+      return false;
+    *width = node->member->bit_width;
+    return true;
+  }
+  return false;
+}
 
 
 int int_rank(Type *t) {
@@ -120,10 +120,11 @@ int int_rank(Type *t) {
 
 static void int_promotion(Node **node) {
   Type *ty = (*node)->ty;
+  int bit_width;
 
-  if (is_bitfield(*node)) {
+  if (is_bitfield2(*node, &bit_width)) {
     int int_width = ty_int->size * 8;
-    int bit_width = (*node)->member->bit_width;
+    //int bit_width = (*node)->member->bit_width;
 
     if (bit_width == int_width && ty->is_unsigned) {
       *node = new_cast(*node, ty_uint);
