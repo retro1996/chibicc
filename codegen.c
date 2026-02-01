@@ -1120,59 +1120,83 @@ static void push_args2(Node *args, bool first_pass)
     return;
   push_args2(args->next, first_pass);
 
-  // if ((first_pass && !args->pass_by_stack) || (!first_pass && args->pass_by_stack))
   if (first_pass != args->pass_by_stack)
     return;
 
   gen_expr(args);
 
-  switch (args->ty->kind)
-  {
-  case TY_STRUCT:
-  case TY_UNION:
-    if (args->ty->size == 0)
-      return;    
-    push_struct(args);
-    break;
-  case TY_VECTOR:
-    pushv();
-    break;
-  case TY_FLOAT:
-  case TY_DOUBLE:
-    pushf();
-    break;
-  case TY_LDOUBLE:
-    println("  sub $16, %%rsp");
-    println("  fstpt (%%rsp)");
-    depth += 2;
-    break;
-  case TY_INT128:
-    pushx();
-    break;    
-  default:
-    push();
+  if (first_pass) {
+    switch (args->ty->kind)
+    {
+    case TY_STRUCT:
+    case TY_UNION:
+      if (args->ty->size == 0)
+        return;    
+      push_struct(args);
+      break;
+    case TY_FLOAT:
+    case TY_DOUBLE:
+      println("  movsd %%xmm0, %d(%%rsp)", args->stack_offset);
+      break;
+    case TY_VECTOR:
+      println("  movdqu %%xmm0, %d(%%rsp)", args->stack_offset);
+      break;
+    case TY_LDOUBLE:
+      println("  fstpt %d(%%rsp)", args->stack_offset);
+      break;
+    case TY_INT128:
+      println("  mov %%rax, %d(%%rsp)", args->stack_offset);
+      println("  mov %%rdx, %d(%%rsp)", args->stack_offset + 8);
+      break;
+    default:
+      println("  mov %%rax, %d(%%rsp)", args->stack_offset);
+    }
+  } else {
+    switch (args->ty->kind)
+    {
+    case TY_STRUCT:
+    case TY_UNION:
+      if (args->ty->size == 0)
+        return;    
+      push_struct(args);
+      break;
+    case TY_VECTOR:
+      pushv();
+      break;
+    case TY_FLOAT:
+    case TY_DOUBLE:
+      pushf();
+      break;
+    case TY_LDOUBLE:
+      println("  sub $16, %%rsp");
+      println("  fstpt (%%rsp)");
+      depth += 2;
+      break;
+    case TY_INT128:
+      pushx();
+      break;    
+    default:
+      push();
+    }
   }
-
-
 }
 
-// Calculate stack offsets for stack-passed struct arguments taking in account the alignment
-static void calculate_struct_offsets(Node *args, int *stack_offset, int *max_align) {
+// Calculate stack offsets for stack-passed arguments taking in account the alignment
+static void calculate_stack_offsets(Node *args, int *stack_offset, int *max_align) {
   for (Node *arg = args; arg; arg = arg->next) {
-    Type *ty = arg->ty;
-    
-    if (!arg->pass_by_stack || (ty->kind != TY_STRUCT && ty->kind != TY_UNION)) {
-      arg->stack_offset = -1; 
+    if (!arg->pass_by_stack) {
+      arg->stack_offset = -1;
       continue;
-    }    
+    }
 
+    Type *ty = arg->ty;
     int align = MAX(ty->align, 8);
-    *max_align = MAX(*max_align, align);    
+    *max_align = MAX(*max_align, align);
 
     *stack_offset = align_to(*stack_offset, align);
-    arg->stack_offset = *stack_offset;    
-   
-    int arg_size = align_to(ty->size, align);
+    arg->stack_offset = *stack_offset;
+
+    int arg_size = align_to(ty->size, 8); // At least 8 bytes on stack
     *stack_offset += arg_size;
   }
 }
@@ -1198,7 +1222,7 @@ static void calculate_struct_offsets(Node *args, int *stack_offset, int *max_ali
 //   arguments to RAX.
 static int push_args(Node *node)
 {
-  int stack = 0, gp = 0, fp = 0;
+  int gp = 0, fp = 0;
 
   // If the return type is a large struct/union, the caller passes
   // a pointer to a buffer as if it were the first argument.
@@ -1232,17 +1256,14 @@ static int push_args(Node *node)
       if (fp++ >= FP_MAX)
       {
         arg->pass_by_stack = true;
-        stack++;
       }
       break;
     case TY_LDOUBLE:
       arg->pass_by_stack = true;
-      stack += 2;
       break;
     case TY_INT128:
       if (gp + 1 >= GP_MAX) {
         arg->pass_by_stack = true;
-        stack += 2;
       } else {
         gp += 2;
       }
@@ -1251,40 +1272,34 @@ static int push_args(Node *node)
       if (gp++ >= GP_MAX)
       {
         arg->pass_by_stack = true;
-        stack++;
       }
     }
   }
 
-  //fixing issue with struct alignment
   int stack_offset = 0;
   int max_align = 16;  
   
-  calculate_struct_offsets(node->args, &stack_offset, &max_align);
+  calculate_stack_offsets(node->args, &stack_offset, &max_align);
 
-  int struct_units = (stack_offset + 7) / 8;
-  int total_stack = struct_units + stack;
+  int total_stack_bytes = stack_offset;
+  int stack_units = (total_stack_bytes + 7) / 8;
 
-  if ((depth + total_stack) % 2 == 1)
+  if ((depth + stack_units) % 2 != 0)
   {
-    println("  sub $8, %%rsp");
-    depth++;
-    total_stack++;
+    stack_units++;
   }
 
-  // Pre-allocate space for structs BEFORE other stack args
-  if (stack_offset > 0) {
-    println("  sub $%d, %%rsp", stack_offset);
-    depth += struct_units;
+  if (stack_units > 0) {
+    println("  sub $%d, %%rsp", stack_units * 8);
+    depth += stack_units;
   }
-
 
   if (max_align > 16) {
     println("  and $-%d, %%rsp", max_align);
   }
 
-  push_args2(node->args, true);
-  push_args2(node->args, false);
+  push_args2(node->args, true);  // stack pass
+  push_args2(node->args, false); // reg pass
 
   // If the return type is a large struct/union, the caller passes
   // a pointer to a buffer as if it were the first argument.
@@ -1294,7 +1309,7 @@ static int push_args(Node *node)
     push();
   }
 
-  return total_stack;
+  return stack_units;
 }
 
 static void copy_ret_buffer(Obj *var)
