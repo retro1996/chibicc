@@ -1,13 +1,23 @@
+// noinline_stack_init.c
 #include <stdio.h>
+#include <stdint.h>
 
-long double fn(void) {
-  asm("fninit");
-  return 2.0L;
+__attribute__((noinline))
+uintptr_t f(int cond)
+{
+    uintptr_t p;
+    if (cond) {
+        p = 0x12345678;
+    }
+    return p;
 }
-long double fn2 (long double a) {
-  return  a + (a + (a + (a + (a + (a + (a + (a + a)))))));
-}
-int main(void) {
-  printf("%Lf\n", 3.0L + fn() + 5.0L); // expected 10.0
-  printf("%Lf\n", 3.0L + fn2(7.0L) + 5.0L); // expected 71.0
+
+int main(void)
+{
+    uintptr_t v = f(1);
+    if (v != 0x12345678) {
+        puts("BUG: uninitialized or clobbered");
+        return 1;
+    }
+    return 0;
 }
