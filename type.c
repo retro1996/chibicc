@@ -797,14 +797,20 @@ void add_type(Node *node)
     node->ty = ty_bool;
     return;
   case ND_EXCH_N:
+  case ND_ADDFETCH:
   case ND_FETCHADD:
   case ND_FETCHSUB:
   case ND_FETCHXOR:
   case ND_FETCHAND:
-  case ND_FETCHOR:
+  case ND_FETCHOR:  
+  case ND_ORFETCH:
+  case ND_ANDFETCH:
+  case ND_XORFETCH:
+  case ND_NANDFETCH:
+  case ND_FETCHNAND:
   case ND_SUBFETCH:
     if (node->lhs->ty->kind != TY_PTR)
-      error_tok(node->lhs->tok, "pointer expected");
+      error_tok(node->lhs->tok, "%s %d:  in add_type: pointer expected", TYPE_C, __LINE__);
     node->rhs = new_cast(node->rhs, node->lhs->ty->base);
     node->ty = node->lhs->ty->base;
     return;

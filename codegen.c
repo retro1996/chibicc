@@ -1456,7 +1456,7 @@ static void builtin_alloca(Node *node)
 }
 
 //from cosmopolitan
-static void HandleAtomicArithmetic(Node *node, const char *op) {
+static void HandleAtomicArithmetic(Node *node, const char *op, bool return_new) {
   gen_expr(node->lhs);
   push_tmp();
   gen_expr(node->rhs);
@@ -1468,7 +1468,11 @@ static void HandleAtomicArithmetic(Node *node, const char *op) {
   println("  %s %s, %s", op, reg_si(node->ty->size), reg_dx(node->ty->size));
   println("  lock cmpxchg %s, (%%r9)", reg_dx(node->ty->size));
   println("  jnz 1b");
-  println("  mov %s, %s", reg_di(node->ty->size), reg_ax(node->ty->size));
+  if (return_new)
+    println("  mov %s, %s", reg_dx(node->ty->size), reg_ax(node->ty->size));
+  else
+    println("  mov %s, %s", reg_di(node->ty->size), reg_ax(node->ty->size));
+
 }
 
 static void gen_memset(Node *node) {
@@ -2557,26 +2561,37 @@ static void gen_sub_overflow(Node *node) {
     println(".Lends%d:", c);
 }
 
-static void gen_subfetch(Node *node) {
-  gen_expr(node->lhs);
-  push_tmp();
-  gen_expr(node->rhs);
-  pop_tmp("%rdi");
-  push_tmp();
-  println("  neg %s", reg_ax(node->ty->size));
-  println("  xadd %s, (%%rdi)", reg_ax(node->ty->size));
-  pop_tmp("%rdi");
-  println("  sub %s, %s", reg_di(node->ty->size), reg_ax(node->ty->size));
-}
 
 static void gen_fetchadd(Node *node) {
   gen_expr(node->lhs);
   push_tmp();
   gen_expr(node->rhs);
   pop_tmp("%rdi");
-  println("  xadd %s, (%%rdi)", reg_ax(node->ty->size));
+  println("  lock xadd %s, (%%rdi)", reg_ax(node->ty->size));
 }
 
+static void gen_add_fetch(Node *node) {
+  gen_expr(node->lhs);
+  push_tmp();
+  gen_expr(node->rhs);
+  pop_tmp("%rdi");
+
+  println("  mov %%rax, %%rdx");
+  println("  lock xadd %s, (%%rdi)", reg_ax(node->ty->size));
+  println("  add %s, %s", reg_ax(node->ty->size), reg_dx(node->ty->size));
+  println("  mov %%rdx, %%rax");
+}
+
+static void gen_sub_fetch(Node *node) {
+  gen_expr(node->lhs); 
+  push_tmp();
+  gen_expr(node->rhs);  
+  println("  mov %%rax, %%rdx");
+  pop_tmp("%rdi");
+  println("  neg %s", reg_ax(node->ty->size));
+  println("  lock xadd %s, (%%rdi)", reg_ax(node->ty->size));
+  println("  sub %s, %s", reg_dx(node->ty->size), reg_ax(node->ty->size)); 
+}
 
 static void gen_fetchsub(Node *node) {
   gen_expr(node->lhs);
@@ -2584,7 +2599,7 @@ static void gen_fetchsub(Node *node) {
   gen_expr(node->rhs);
   pop_tmp("%rdi");
   println("  neg %s", reg_ax(node->ty->size));
-  println("  xadd %s, (%%rdi)", reg_ax(node->ty->size));
+  println("  lock xadd %s, (%%rdi)", reg_ax(node->ty->size));
 }
 
 static void gen_store_binop(Node *node, const char *insn) {
@@ -3234,39 +3249,32 @@ static void gen_prefetch(Node *node) {
 }
 
 static void gen_fetchnand(Node *node) {
-  gen_expr(node->lhs);
-  push_tmp();
-  gen_expr(node->rhs);
-  push_tmp();
-  pop_tmp("%rsi");   // rhs value (mask)
-  pop_tmp("%rdi");   // address
-  int sz = node->lhs->ty->base->size;
-  int c = count();
-  println(".L.fetchnand.loop_%d:", c);
-  switch (sz) {
-  case 1:
-    println("  movzbl (%%rdi), %%eax");
-    break;
-  case 2:
-    println("  movzwl (%%rdi), %%eax");
-    break;
-  case 4:
-    println("  movl (%%rdi), %%eax");
-    break;
-  case 8:
-    println("  movq (%%rdi), %%rax");
-    break;
-  default:
-    error("%s: %s:%d: error: in get_fetchnand: unsupported atomic size %d", CODEGEN_C, __FILE__, __LINE__, sz);    
-  }
+    gen_expr(node->lhs);  
+    push_tmp();
+    gen_expr(node->rhs);  
+    println("  mov %%rax, %%rsi");   
+    pop_tmp("%rdi");
+    int sz = node->lhs->ty->base->size;
+    int label = count();
+    println(".L.fetchnand_loop_%d:", label);
+    switch(sz) {
+        case 1: println("  movzbl (%%rdi), %%rax"); break;
+        case 2: println("  movzwl (%%rdi), %%rax"); break;
+        case 4: println("  movl (%%rdi), %%eax");   break;
+        case 8: println("  movq (%%rdi), %%rax");   break;
+        default: error("%s %d: in gen_fetchnand : unsupported size %d!", CODEGEN_C, __LINE__, sz); 
+    }
+    println("  mov %%rax, %%rdx");  
+    println("  and %%rsi, %%rdx");  
+    println("  not %%rdx");         
+    println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz));
+    println("  jnz .L.fetchnand_loop_%d", label);
 
-  println("  mov %%rax, %%rdx");
-  println("  and %%rsi, %%rdx");
-  println("  not %%rdx");       
+    if (node->kind == ND_NANDFETCH)
+        println("  mov %%rdx, %%rax"); 
 
-  println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz));  
-  println("  jnz .L.fetchnand.loop_%d", c);
 }
+
 
 
 static void gen_cas_n(Node *node)   {  
@@ -3731,7 +3739,8 @@ static void gen_expr(Node *node)
     return;
   case ND_CAS: gen_cas(node); return;
   case ND_CAS_N: gen_cas_n(node); return;
-  case ND_FETCHNAND: gen_fetchnand(node); return;
+  case ND_FETCHNAND:
+  case ND_NANDFETCH: gen_fetchnand(node); return;
   case ND_ADD_AND_FETCH: gen_add_and_fetch(node); return;
   case ND_SUB_AND_FETCH: gen_sub_and_fetch(node); return;
   case ND_BOOL_CAS: gen_bool_cas(node); return;
@@ -3954,16 +3963,14 @@ static void gen_expr(Node *node)
     return;
   case ND_FETCHADD: gen_fetchadd(node); return;
   case ND_FETCHSUB: gen_fetchsub(node); return;
-  case ND_FETCHXOR:
-    HandleAtomicArithmetic(node, "xor");
-    return;
-  case ND_FETCHAND:
-    HandleAtomicArithmetic(node, "and");
-    return;
-  case ND_FETCHOR:
-    HandleAtomicArithmetic(node, "or");
-    return;
-  case ND_SUBFETCH: gen_subfetch(node); return;
+  case ND_ADDFETCH: gen_add_fetch(node); return;  
+  case ND_SUBFETCH: gen_sub_fetch(node); return;    
+  case ND_FETCHXOR: HandleAtomicArithmetic(node, "xor", false); return;
+  case ND_FETCHAND: HandleAtomicArithmetic(node, "and", false); return;
+  case ND_FETCHOR: HandleAtomicArithmetic(node, "or", false); return;
+  case ND_ORFETCH: HandleAtomicArithmetic(node, "or", true); return;    
+  case ND_ANDFETCH: HandleAtomicArithmetic(node, "and", true); return;
+  case ND_XORFETCH: HandleAtomicArithmetic(node, "xor", true); return;
   case ND_RELEASE: gen_release(node); return;
   case ND_ALLOC: gen_alloc(node); return;
   case ND_BUILTIN_NANF:  

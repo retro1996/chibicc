@@ -878,6 +878,11 @@ typedef enum
   ND_ADDCARRYX_U64,
   ND_TZCNT_U16,
   ND_BEXTR_U32,
+  ND_ADDFETCH,  
+  ND_ORFETCH,
+  ND_ANDFETCH,
+  ND_XORFETCH,
+  ND_NANDFETCH,
 } NodeKind;
 
 // AST node type
