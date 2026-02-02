@@ -19,3 +19,4 @@ uv.lock
 build.log
 compare.txt
 **/*.diff
+AGENTS.md
