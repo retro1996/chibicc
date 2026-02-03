@@ -1142,6 +1142,8 @@ static void push_args2(Node *args, bool first_pass)
       push_struct(args);
       break;
     case TY_FLOAT:
+      println("  movss %%xmm0, %d(%%rsp)", args->stack_offset);
+      break;
     case TY_DOUBLE:
       println("  movsd %%xmm0, %d(%%rsp)", args->stack_offset);
       break;
@@ -2213,8 +2215,7 @@ static void gen_alloc(Node *node) {
 
 static void gen_release(Node *node) {
   gen_expr(node->lhs);
-  push_tmp();
-  pop_tmp("%rdi");
+  println("  mov %%rax, %%rdi");  
   println("  xor %%eax, %%eax");
   println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
 }
@@ -3171,17 +3172,14 @@ static void gen_sse_testnzc(Node *node) {
 
 static void gen_cas(Node *node)   {
   gen_expr(node->cas_addr);
-  push_tmp();
+  println("  mov %%rax, %%rdi");  
   gen_expr(node->cas_new);
-  push_tmp();
+  println("  mov %%rax, %%rdx");  
   gen_expr(node->cas_old);
   println("  mov %%rax, %%r8");
   if (!node->cas_old->ty->base)
     error("%s %d: in gen_expr : ND_CAS node base type is null!", CODEGEN_C, __LINE__); 
   load(node->cas_old->ty->base);
-  pop_tmp("%rdx"); // new
-  pop_tmp("%rdi"); // addr
-
   int sz = node->cas_addr->ty->base->size;
   println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz));
   println("  sete %%cl");
@@ -3194,14 +3192,10 @@ static void gen_cas(Node *node)   {
 
 static void gen_bool_cas(Node *node) {
   gen_expr(node->cas_ptr);      
-  push_tmp();
-  gen_expr(node->cas_expected);  
-  push_tmp();
+  println("  mov %%rax, %%rdi");  
   gen_expr(node->cas_desired);   
-  push_tmp();
-  pop_tmp("%rdx");
-  pop_tmp("%rax");
-  pop_tmp("%rdi");
+  println("  mov %%rax, %%rdx");  
+  gen_expr(node->cas_expected);  
   int sz = node->cas_ptr->ty->base->size;
   println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz)); 
   println("  sete %%al");       
@@ -3222,11 +3216,8 @@ static void  gen_add_and_fetch(Node *node) {
 
 static void gen_sub_and_fetch(Node *node) {
   gen_expr(node->lhs);    
-  push_tmp();
+  println("  mov %%rax, %%rdi");  
   gen_expr(node->rhs);    
-  push_tmp();
-  pop_tmp("%rax");        
-  pop_tmp("%rdi");        
   int sz = node->lhs->ty->base->size;
   println("  mov %s, %s", reg_ax(sz), reg_cx(sz));               
   println("  neg %s", reg_ax(sz));               
@@ -3287,26 +3278,12 @@ static void gen_fetchnand(Node *node) {
 
 static void gen_cas_n(Node *node)   {  
   gen_expr(node->cas_addr);
-  push_tmp();
+  println("  mov %%rax, %%rdi");  
   gen_expr(node->cas_new);  
-  push_tmp();
+  println("  mov %%rax, %%rdx");  
   gen_expr(node->cas_old); 
-  /*
-    * For __sync_val_compare_and_swap we must return the original
-    * value that was stored at *addr.  The `cmpxchg` instruction
-    * leaves that original memory value in RAX.  Do not overwrite
-    * RAX after the instruction; instead normalize the low bits for
-    * small integer types so the upper bits don't contain garbage.
-    */
-
-  pop_tmp("%rdx"); /* new */
-  pop_tmp("%rdi"); /* addr */
   int sz = node->cas_addr->ty->base->size;
-
-  /* cmpxchg uses RAX (old) and RDX (new), compares with (RDI) */
   println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz));
-
-  /* Normalize RAX for small return types (bool/char/short) */
   {
     Type *bt = node->cas_old->ty;
 
