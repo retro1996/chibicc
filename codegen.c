@@ -23,6 +23,7 @@ extern int64_t eval(Node *node);
 
 static Obj *current_fn;
 static char *lvar_ptr;
+bool dont_reuse_stack = false;
 
 static void gen_expr(Node *node);
 static void gen_stmt(Node *node);
@@ -75,9 +76,15 @@ static int push_tmpstack(void) {
     tmp_stack.data = realloc(tmp_stack.data, sizeof(int) * tmp_stack.capacity);
   }
 
-  tmp_stack.bottom += 8;
-  int offset = -tmp_stack.bottom;
-
+  int offset;
+  if (!dont_reuse_stack) {
+      int bottom = current_fn->stack_size + (tmp_stack.depth + 1) * 8;
+    tmp_stack.bottom = MAX(tmp_stack.bottom, bottom);
+    offset = -bottom;
+  } else {
+    tmp_stack.bottom += 8;
+    offset = -tmp_stack.bottom;
+  }
   tmp_stack.data[tmp_stack.depth] = offset;
   tmp_stack.depth++;
   return offset;
@@ -2579,18 +2586,15 @@ static void gen_sub_overflow(Node *node) {
 
 static void gen_fetchadd(Node *node) {
   gen_expr(node->lhs);
-  push_tmp();
+  println("  mov %%rax, %%rdi");
   gen_expr(node->rhs);
-  pop_tmp("%rdi");
   println("  lock xadd %s, (%%rdi)", reg_ax(node->ty->size));
 }
 
 static void gen_add_fetch(Node *node) {
   gen_expr(node->lhs);
-  push_tmp();
+  println("  mov %%rax, %%rdi");
   gen_expr(node->rhs);
-  pop_tmp("%rdi");
-
   println("  mov %%rax, %%rdx");
   println("  lock xadd %s, (%%rdi)", reg_ax(node->ty->size));
   println("  add %s, %s", reg_ax(node->ty->size), reg_dx(node->ty->size));
@@ -2599,10 +2603,9 @@ static void gen_add_fetch(Node *node) {
 
 static void gen_sub_fetch(Node *node) {
   gen_expr(node->lhs); 
-  push_tmp();
+  println("  mov %%rax, %%rdi");
   gen_expr(node->rhs);  
   println("  mov %%rax, %%rdx");
-  pop_tmp("%rdi");
   println("  neg %s", reg_ax(node->ty->size));
   println("  lock xadd %s, (%%rdi)", reg_ax(node->ty->size));
   println("  sub %s, %s", reg_dx(node->ty->size), reg_ax(node->ty->size)); 
@@ -2610,9 +2613,8 @@ static void gen_sub_fetch(Node *node) {
 
 static void gen_fetchsub(Node *node) {
   gen_expr(node->lhs);
-  push_tmp();
+  println("  mov %%rax, %%rdi");
   gen_expr(node->rhs);
-  pop_tmp("%rdi");
   println("  neg %s", reg_ax(node->ty->size));
   println("  lock xadd %s, (%%rdi)", reg_ax(node->ty->size));
 }
@@ -2848,25 +2850,18 @@ static void gen_parity(Node *node) {
 }
 
 static void gen_mwait(Node *node) {
-  gen_expr(node->builtin_args[0]); 
-  push_tmp();
-  pop_tmp("%rax");
   gen_expr(node->builtin_args[1]); 
-  push_tmp();
-  pop_tmp("%rcx");
+  println("  mov %%rax, %%rcx");
+  gen_expr(node->builtin_args[0]); 
   println("mwait");
 }
 
 static void gen_monitor(Node *node) {
-  gen_expr(node->builtin_args[0]); 
-  push_tmp();
-  pop_tmp("%rax");
   gen_expr(node->builtin_args[1]); 
-  push_tmp();
-  pop_tmp("%rcx");
+  println("  mov %%rax, %%rcx");
   gen_expr(node->builtin_args[2]); 
-  push_tmp();
-  pop_tmp("%rdx");
+  println("  mov %%rax, %%rdx");
+  gen_expr(node->builtin_args[0]); 
   println("monitor");
 }
 
@@ -3216,9 +3211,8 @@ static void gen_bool_cas(Node *node) {
 
 static void  gen_add_and_fetch(Node *node) {
   gen_expr(node->lhs);
-  push_tmp();
+  println("  mov %%rax, %%rdi");
   gen_expr(node->rhs);
-  pop_tmp("%rdi");  
   int sz = node->lhs->ty->base->size;
   println("  mov %%rax, %%rcx");           
   println("  lock xadd %s, (%%rdi)", reg_ax(sz));
@@ -3265,10 +3259,9 @@ static void gen_prefetch(Node *node) {
 
 static void gen_fetchnand(Node *node) {
     gen_expr(node->lhs);  
-    push_tmp();
+    println("  mov %%rax, %%rdi");
     gen_expr(node->rhs);  
     println("  mov %%rax, %%rsi");   
-    pop_tmp("%rdi");
     int sz = node->lhs->ty->base->size;
     int label = count();
     println(".L.fetchnand_loop_%d:", label);
@@ -3846,9 +3839,8 @@ static void gen_expr(Node *node)
   case ND_POPCOUNT:   gen_builtin(node, "popcnt", "eax"); return;
   case ND_EXPECT: {
     gen_expr(node->lhs); 
-    push_tmp(); 
-    gen_expr(node->rhs); 
-    pop_tmp("%rdi"); 
+    println("  mov %%rax, %%rdi");
+    gen_expr(node->rhs);     
     println("  cmp %%rax, %%rdi");
     println("  mov %%rdi, %%rax");
     return;
@@ -3901,10 +3893,8 @@ static void gen_expr(Node *node)
   case ND_EXCH:
   {
     gen_expr(node->lhs);
-    push_tmp();
+    println("  mov %%rax, %%rdi");
     gen_expr(node->rhs);
-    pop_tmp("%rdi");
-
     int sz = node->lhs->ty->base->size;
     println("  xchg %s, (%%rdi)", reg_ax(sz));
     return;
@@ -3912,9 +3902,8 @@ static void gen_expr(Node *node)
   case ND_EXCH_N:
   case ND_TESTANDSET: {
     gen_expr(node->lhs);
-    push_tmp();
-    gen_expr(node->rhs);
-    pop_tmp("%rdi");
+    println("  mov %%rax, %%rdi");
+    gen_expr(node->rhs);    
     println("  xchg %s, (%%rdi)", reg_ax(node->ty->size));
     return;
   }
@@ -3922,18 +3911,16 @@ static void gen_expr(Node *node)
   case ND_CMPEXCH_N: gen_cmpxchgn(node); return;
   case ND_TESTANDSETA: {
     gen_expr(node->lhs);
-    push_tmp();
-    println("  mov $1, %%eax");
-    pop_tmp("%rdi");
+    println("  mov %%rax, %%rdi");
+    println("  mov $1, %%eax");    
     println("  xchg %s, (%%rdi)", reg_ax(node->ty->size));
     return;
   }
   case ND_LOAD: {
     gen_expr(node->rhs);
-    push_tmp();
+    println("  mov %%rax, %%rdi");
     gen_expr(node->lhs);
-    println("  mov (%%rax), %s", reg_ax(node->ty->size));
-    pop_tmp("%rdi");
+    println("  mov (%%rax), %s", reg_ax(node->ty->size));    
     println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
     return;
   }
@@ -3947,9 +3934,8 @@ static void gen_expr(Node *node)
   }
   case ND_STORE: {
     gen_expr(node->lhs);
-    push_tmp();
-    gen_expr(node->rhs);
-    pop_tmp("%rdi");
+    println("  mov %%rax, %%rdi");
+    gen_expr(node->rhs);    
     println("  mov (%%rax),%s", reg_ax(node->ty->size));
     println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
     if (node->memorder) {
@@ -3959,9 +3945,8 @@ static void gen_expr(Node *node)
   }
   case ND_STORE_N:
     gen_expr(node->lhs);
-    push_tmp();
-    gen_expr(node->rhs);
-    pop_tmp("%rdi");
+    println("  mov %%rax, %%rdi");
+    gen_expr(node->rhs);    
     println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
     if (node->memorder) {
       println("  mfence");

@@ -6864,6 +6864,12 @@ static Node *primary(Token **rest, Token *tok)
         sc->var->is_root = true;
       }
 
+      char *name = sc->var->name;
+     
+      if (strstr(name, "setjmp") || strstr(name, "savectx") ||
+          strstr(name, "vfork") || strstr(name, "getcontext"))
+        dont_reuse_stack = true;
+    
     }
 
     if (sc)
