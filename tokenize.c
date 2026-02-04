@@ -745,8 +745,7 @@ static void convert_pp_number(Token *tok)
   }
 
   if (tok->loc + tok->len != end)
-    error_tok(tok, "%s: in convert_pp_number : invalid numeric constant", TOKENIZE_C);
-
+    error_tok(tok, "%s: in convert_pp_number : invalid numeric constant", TOKENIZE_C);  
   tok->kind = TK_NUM;
   tok->fval = val;
   tok->ty = ty;

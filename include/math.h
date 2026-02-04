@@ -175,7 +175,6 @@ int isnormal(double x);                      // non-zero and not subnormal
 #define signbit(x) __builtin_signbit(x)
 #define __builtin_signbit(x) ((x) < 0.0 ? 1 : 0)
 // Classification
-extern int __fpclassify(double __value);
 extern int __isnan(double __value);
 extern int __isinf(double __value);
 extern int __finite(double __value);
@@ -184,7 +183,8 @@ extern int __finite(double __value);
 #define isnan(x) __isnan(x)
 #define isinf(x) __isinf(x)
 #define isfinite(x) __finite(x)
-#define fpclassify(x) __fpclassify(x)
+#define fpclassify(x) \
+  __builtin_fpclassify(FP_NAN, FP_INFINITE, FP_NORMAL, FP_SUBNORMAL, FP_ZERO, x)
 
 // Constants
 #define HUGE_VAL (__builtin_huge_val())

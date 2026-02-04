@@ -3313,6 +3313,7 @@ static long double eval_double(Node *node)
   case ND_BUILTIN_NAN:
   case ND_BUILTIN_NANF:
   case ND_BUILTIN_INFF:
+  case ND_FPCLASSIFY:
   case ND_NUM:
     return node->fval;
   }
@@ -6428,6 +6429,27 @@ static Node *primary(Token **rest, Token *tok)
     return node;
   }
 
+    if (equal(tok, "__builtin_fpclassify")) {
+      Node *node = new_node(ND_FPCLASSIFY, tok);
+      node->fpc = calloc(1, sizeof(FpClassify));
+      node->ty = ty_int;
+      SET_CTX(ctx);
+      tok = skip(tok->next, "(", ctx);
+      for (int i = 0; i < 5; ++i) {
+        node->fpc->args[i] = const_expr(&tok, tok);
+        SET_CTX(ctx);
+        tok = skip(tok, ",", ctx);
+      }
+      node->fpc->node = expr(&tok, tok);
+      add_type(node->fpc->node);
+      if (!is_flonum(node->fpc->node->ty)) {        
+        error_tok(tok, "%s %d: in primary : need floating point", PARSE_C, __LINE__);
+      }
+      SET_CTX(ctx);
+      *rest = skip(tok, ")", ctx);
+      return node;
+    }
+
   if (equal(tok, "__builtin_inff")) {
     Node *node = new_node(ND_BUILTIN_INFF, tok);
     node->ty = ty_float;    
@@ -6932,7 +6954,7 @@ static Node *primary(Token **rest, Token *tok)
     Node *node;
     if (is_flonum(tok->ty))
     {
-      node = new_node(ND_NUM, tok);
+      node = new_node(ND_NUM, tok);          
       node->fval = tok->fval;
     }
     else
@@ -6940,7 +6962,7 @@ static Node *primary(Token **rest, Token *tok)
       node = new_num(tok->val, tok);
     }
 
-    node->ty = tok->ty;
+    node->ty = tok->ty;    
     *rest = tok->next;
     return node;
   }
@@ -7982,6 +8004,7 @@ char *nodekind2str(NodeKind kind)
   case ND_TZCNT_U16: return "TZCNT_U16";
   case ND_BEXTR_U32: return "BEXTR_U32";
   case ND_ADDFETCH: return "ADDFETCH";
+  case ND_FPCLASSIFY: return "FPCLASSIFY";
   default: return "UNREACHABLE"; 
   }
 }
