@@ -2857,18 +2857,27 @@ static void gen_parity(Node *node) {
 }
 
 static void gen_mwait(Node *node) {
-  gen_expr(node->builtin_args[1]); 
-  println("  mov %%rax, %%rcx");
   gen_expr(node->builtin_args[0]); 
+  push_tmp();
+  gen_expr(node->builtin_args[1]); 
+  push_tmp();
+  pop_tmp("%rcx");
+  pop_tmp("%rax");
   println("mwait");
 }
 
 static void gen_monitor(Node *node) {
-  gen_expr(node->builtin_args[1]); 
-  println("  mov %%rax, %%rcx");
-  gen_expr(node->builtin_args[2]); 
-  println("  mov %%rax, %%rdx");
   gen_expr(node->builtin_args[0]); 
+  push_tmp();
+
+  gen_expr(node->builtin_args[1]); 
+  push_tmp();
+
+  gen_expr(node->builtin_args[2]); 
+  push_tmp();
+  pop_tmp("%rdx");
+  pop_tmp("%rcx");
+  pop_tmp("%rax");
   println("monitor");
 }
 
@@ -3840,8 +3849,9 @@ static void gen_expr(Node *node)
   case ND_POPCOUNT:   gen_builtin(node, "popcnt", "eax"); return;
   case ND_EXPECT: {
     gen_expr(node->lhs); 
-    println("  mov %%rax, %%rdi");
+    push_tmp(); 
     gen_expr(node->rhs);     
+    pop_tmp("%rdi"); 
     println("  cmp %%rax, %%rdi");
     println("  mov %%rdi, %%rax");
     return;
