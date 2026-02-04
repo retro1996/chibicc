@@ -2215,7 +2215,8 @@ static void gen_alloc(Node *node) {
 
 static void gen_release(Node *node) {
   gen_expr(node->lhs);
-  println("  mov %%rax, %%rdi");  
+  push_tmp();
+  pop_tmp("%rdi");
   println("  xor %%eax, %%eax");
   println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
 }
@@ -2587,15 +2588,18 @@ static void gen_sub_overflow(Node *node) {
 
 static void gen_fetchadd(Node *node) {
   gen_expr(node->lhs);
-  println("  mov %%rax, %%rdi");
+  push_tmp();
   gen_expr(node->rhs);
+  pop_tmp("%rdi");
   println("  lock xadd %s, (%%rdi)", reg_ax(node->ty->size));
 }
 
 static void gen_add_fetch(Node *node) {
   gen_expr(node->lhs);
-  println("  mov %%rax, %%rdi");
+  push_tmp();
   gen_expr(node->rhs);
+  pop_tmp("%rdi");
+
   println("  mov %%rax, %%rdx");
   println("  lock xadd %s, (%%rdi)", reg_ax(node->ty->size));
   println("  add %s, %s", reg_ax(node->ty->size), reg_dx(node->ty->size));
@@ -2604,9 +2608,10 @@ static void gen_add_fetch(Node *node) {
 
 static void gen_sub_fetch(Node *node) {
   gen_expr(node->lhs); 
-  println("  mov %%rax, %%rdi");
+  push_tmp();
   gen_expr(node->rhs);  
   println("  mov %%rax, %%rdx");
+  pop_tmp("%rdi");
   println("  neg %s", reg_ax(node->ty->size));
   println("  lock xadd %s, (%%rdi)", reg_ax(node->ty->size));
   println("  sub %s, %s", reg_dx(node->ty->size), reg_ax(node->ty->size)); 
@@ -2614,8 +2619,9 @@ static void gen_sub_fetch(Node *node) {
 
 static void gen_fetchsub(Node *node) {
   gen_expr(node->lhs);
-  println("  mov %%rax, %%rdi");
+  push_tmp();
   gen_expr(node->rhs);
+  pop_tmp("%rdi");
   println("  neg %s", reg_ax(node->ty->size));
   println("  lock xadd %s, (%%rdi)", reg_ax(node->ty->size));
 }
@@ -3172,14 +3178,17 @@ static void gen_sse_testnzc(Node *node) {
 
 static void gen_cas(Node *node)   {
   gen_expr(node->cas_addr);
-  println("  mov %%rax, %%rdi");  
+  push_tmp();
   gen_expr(node->cas_new);
-  println("  mov %%rax, %%rdx");  
+  push_tmp();
   gen_expr(node->cas_old);
   println("  mov %%rax, %%r8");
   if (!node->cas_old->ty->base)
     error("%s %d: in gen_expr : ND_CAS node base type is null!", CODEGEN_C, __LINE__); 
   load(node->cas_old->ty->base);
+  pop_tmp("%rdx"); // new
+  pop_tmp("%rdi"); // addr
+
   int sz = node->cas_addr->ty->base->size;
   println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz));
   println("  sete %%cl");
@@ -3192,10 +3201,14 @@ static void gen_cas(Node *node)   {
 
 static void gen_bool_cas(Node *node) {
   gen_expr(node->cas_ptr);      
-  println("  mov %%rax, %%rdi");  
-  gen_expr(node->cas_desired);   
-  println("  mov %%rax, %%rdx");  
+  push_tmp();
   gen_expr(node->cas_expected);  
+  push_tmp();
+  gen_expr(node->cas_desired);   
+  push_tmp();
+  pop_tmp("%rdx");
+  pop_tmp("%rax");
+  pop_tmp("%rdi");
   int sz = node->cas_ptr->ty->base->size;
   println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz)); 
   println("  sete %%al");       
@@ -3205,8 +3218,9 @@ static void gen_bool_cas(Node *node) {
 
 static void  gen_add_and_fetch(Node *node) {
   gen_expr(node->lhs);
-  println("  mov %%rax, %%rdi");
+  push_tmp();
   gen_expr(node->rhs);
+  pop_tmp("%rdi");  
   int sz = node->lhs->ty->base->size;
   println("  mov %%rax, %%rcx");           
   println("  lock xadd %s, (%%rdi)", reg_ax(sz));
@@ -3216,8 +3230,11 @@ static void  gen_add_and_fetch(Node *node) {
 
 static void gen_sub_and_fetch(Node *node) {
   gen_expr(node->lhs);    
-  println("  mov %%rax, %%rdi");  
+  push_tmp();
   gen_expr(node->rhs);    
+  push_tmp();
+  pop_tmp("%rax");        
+  pop_tmp("%rdi");        
   int sz = node->lhs->ty->base->size;
   println("  mov %s, %s", reg_ax(sz), reg_cx(sz));               
   println("  neg %s", reg_ax(sz));               
@@ -3250,9 +3267,10 @@ static void gen_prefetch(Node *node) {
 
 static void gen_fetchnand(Node *node) {
     gen_expr(node->lhs);  
-    println("  mov %%rax, %%rdi");
+    push_tmp();
     gen_expr(node->rhs);  
     println("  mov %%rax, %%rsi");   
+    pop_tmp("%rdi");
     int sz = node->lhs->ty->base->size;
     int label = count();
     println(".L.fetchnand_loop_%d:", label);
@@ -3278,12 +3296,17 @@ static void gen_fetchnand(Node *node) {
 
 static void gen_cas_n(Node *node)   {  
   gen_expr(node->cas_addr);
-  println("  mov %%rax, %%rdi");  
+  push_tmp();
   gen_expr(node->cas_new);  
-  println("  mov %%rax, %%rdx");  
+  push_tmp();
   gen_expr(node->cas_old); 
+
+  pop_tmp("%rdx"); /* new */
+  pop_tmp("%rdi"); /* addr */
   int sz = node->cas_addr->ty->base->size;
+
   println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz));
+
   {
     Type *bt = node->cas_old->ty;
 
@@ -3871,8 +3894,10 @@ static void gen_expr(Node *node)
   case ND_EXCH:
   {
     gen_expr(node->lhs);
-    println("  mov %%rax, %%rdi");
+    push_tmp();
     gen_expr(node->rhs);
+    pop_tmp("%rdi");
+
     int sz = node->lhs->ty->base->size;
     println("  xchg %s, (%%rdi)", reg_ax(sz));
     return;
@@ -3880,8 +3905,9 @@ static void gen_expr(Node *node)
   case ND_EXCH_N:
   case ND_TESTANDSET: {
     gen_expr(node->lhs);
-    println("  mov %%rax, %%rdi");
+    push_tmp();
     gen_expr(node->rhs);    
+    pop_tmp("%rdi");
     println("  xchg %s, (%%rdi)", reg_ax(node->ty->size));
     return;
   }
@@ -3889,16 +3915,18 @@ static void gen_expr(Node *node)
   case ND_CMPEXCH_N: gen_cmpxchgn(node); return;
   case ND_TESTANDSETA: {
     gen_expr(node->lhs);
-    println("  mov %%rax, %%rdi");
+    push_tmp();
     println("  mov $1, %%eax");    
+    pop_tmp("%rdi");
     println("  xchg %s, (%%rdi)", reg_ax(node->ty->size));
     return;
   }
   case ND_LOAD: {
     gen_expr(node->rhs);
-    println("  mov %%rax, %%rdi");
+    push_tmp();
     gen_expr(node->lhs);
     println("  mov (%%rax), %s", reg_ax(node->ty->size));    
+    pop_tmp("%rdi");
     println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
     return;
   }
@@ -3912,8 +3940,9 @@ static void gen_expr(Node *node)
   }
   case ND_STORE: {
     gen_expr(node->lhs);
-    println("  mov %%rax, %%rdi");
+    push_tmp();
     gen_expr(node->rhs);    
+    pop_tmp("%rdi");
     println("  mov (%%rax),%s", reg_ax(node->ty->size));
     println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
     if (node->memorder) {
@@ -3923,8 +3952,9 @@ static void gen_expr(Node *node)
   }
   case ND_STORE_N:
     gen_expr(node->lhs);
-    println("  mov %%rax, %%rdi");
+    push_tmp();
     gen_expr(node->rhs);    
+    pop_tmp("%rdi");
     println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
     if (node->memorder) {
       println("  mfence");
