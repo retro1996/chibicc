@@ -42,48 +42,23 @@ typedef enum {
 #define atomic_signal_fence(order)
 #define atomic_is_lock_free(x) 1
 
-// #define atomic_load(addr) (*(addr))
-// #define atomic_store(addr, val) (*(addr) = (val))
+#define atomic_fetch_add(addr, val) __builtin_atomic_fetch_add(addr, val)
+#define atomic_fetch_sub(addr, val) __builtin_atomic_fetch_sub(addr, val)
+#define atomic_fetch_or(addr, val) __builtin_atomic_fetch_or(addr, val)
+#define atomic_fetch_xor(addr, val) __builtin_atomic_fetch_xor(addr, val)
+#define atomic_fetch_and(addr, val) __builtin_atomic_fetch_and(addr, val)
 
-// #define atomic_load_explicit(addr, order) (*(addr))
-// #define atomic_store_explicit(addr, val, order) (*(addr) = (val))
-
-// #define atomic_fetch_add(obj, val) (*(obj) += (val))
-// #define atomic_fetch_sub(obj, val) (*(obj) -= (val))
-// #define atomic_fetch_or(obj, val) (*(obj) |= (val))
-// #define atomic_fetch_xor(obj, val) (*(obj) ^= (val))
-// #define atomic_fetch_and(obj, val) (*(obj) &= (val))
-
- 
-#define atomic_fetch_add(obj, val) __builtin_atomic_fetch_op(obj, val, 0)
-#define atomic_fetch_sub(obj, val) __builtin_atomic_fetch_op(obj, val, 1)
-#define atomic_fetch_or(obj, val) __builtin_atomic_fetch_op(obj, val, 2)
-#define atomic_fetch_xor(obj, val) __builtin_atomic_fetch_op(obj, val, 3)
-#define atomic_fetch_and(obj, val) __builtin_atomic_fetch_op(obj, val, 4)
-
-
-// #define atomic_fetch_add_explicit(obj, val, order) (*(obj) += (val))
-// #define atomic_fetch_sub_explicit(obj, val, order) (*(obj) -= (val))
-// #define atomic_fetch_or_explicit(obj, val, order) (*(obj) |= (val))
-// #define atomic_fetch_xor_explicit(obj, val, order) (*(obj) ^= (val))
-// #define atomic_fetch_and_explicit(obj, val, order) (*(obj) &= (val))
-
-#define atomic_fetch_add_explicit(obj, val, order) atomic_fetch_add(obj, val)
-#define atomic_fetch_sub_explicit(obj, val, order) atomic_fetch_sub(obj, val)
-#define atomic_fetch_or_explicit(obj, val, order) atomic_fetch_or(obj, val)
-#define atomic_fetch_xor_explicit(obj, val, order) atomic_fetch_xor(obj, val)
-#define atomic_fetch_and_explicit(obj, val, order) atomic_fetch_and(obj, val)
+#define atomic_fetch_add_explicit(addr, val, order) __builtin_atomic_fetch_add(addr, val)
+#define atomic_fetch_sub_explicit(addr, val, order) __builtin_atomic_fetch_sub(addr, val)
+#define atomic_fetch_or_explicit(addr, val, order) __builtin_atomic_fetch_or(addr, val)
+#define atomic_fetch_xor_explicit(addr, val, order) __builtin_atomic_fetch_xor(addr, val)
+#define atomic_fetch_and_explicit(addr, val, order) __builtin_atomic_fetch_and(addr, val)
 
 #define atomic_compare_exchange_weak_explicit(obj, expected, desired, succ, fail) \
         __atomic_compare_exchange_n((obj), (expected), (desired), true, (succ), (fail))
 
 #define atomic_compare_exchange_strong_explicit(obj, expected, desired, succ, fail) \
         __atomic_compare_exchange_n((obj), (expected), (desired), false, (succ), (fail))
-// #define atomic_compare_exchange_strong_explicit(object, expected, desired,     \
-//                                                 success, failure)            false
-
-// #define atomic_compare_exchange_weak_explicit(object, expected, desired,     \
-//                                                 success, failure)            false
 
 #define atomic_compare_exchange_weak(p, old, new) \
   __builtin_compare_and_swap((p), (old), (new))
@@ -94,12 +69,6 @@ typedef enum {
 
 #define atomic_exchange(obj, val) __builtin_atomic_exchange((obj), (val))
 #define atomic_exchange_explicit(obj, val, order) __builtin_atomic_exchange((obj), (val))
-
-// #define atomic_flag_test_and_set(obj) atomic_exchange((obj), 1)
-// #define atomic_flag_test_and_set_explicit(obj, order) atomic_exchange((obj), 1)
-// #define atomic_flag_clear(obj) (*(obj) = 0)
-// #define atomic_flag_clear_explicit(obj, order) (*(obj) = 0)
-
 
 // Other atomic operation macros
 
@@ -115,8 +84,7 @@ typedef enum {
 
 #define atomic_flag_test_and_set(obj) __sync_lock_test_and_set(obj, 1)
 #define atomic_flag_test_and_set_explicit(obj, order) __sync_lock_test_and_set(obj, 1)
-//#define atomic_flag_clear_explicit(obj, order) __sync_lock_release(obj)
-//#define atomic_flag_clear(obj) __sync_lock_release(obj)
+
 #define atomic_flag_clear(obj) atomic_clear(obj)
 #define atomic_flag_clear_explicit(obj, order) atomic_clear_explicit(obj, order)
 #define atomic_clear(obj) __builtin_atomic_clear((obj))

@@ -144,6 +144,13 @@ typedef struct
 
 typedef Context Context;
 
+struct FpClassify {
+  Node *node;
+  int args[5];
+};
+typedef struct FpClassify FpClassify;
+
+
 //
 // strings.c
 //
@@ -872,6 +879,18 @@ typedef enum
   ND_WRUSSD,
   ND_WRUSSQ,
   ND_CLRSSBSY,
+  ND_SBB_U32,
+  ND_ADDCARRYX_U32,
+  ND_SBB_U64,
+  ND_ADDCARRYX_U64,
+  ND_TZCNT_U16,
+  ND_BEXTR_U32,
+  ND_ADDFETCH,  
+  ND_ORFETCH,
+  ND_ANDFETCH,
+  ND_XORFETCH,
+  ND_NANDFETCH,
+  ND_FPCLASSIFY,   // floating point classify
 } NodeKind;
 
 // AST node type
@@ -958,6 +977,7 @@ Node
   // Numeric literal
   int64_t val;
   long double fval;
+  FpClassify *fpc;
   // for dot diagram
   int unique_number;
   bool is_scalar_promoted;  
@@ -1183,6 +1203,12 @@ char *specific_register_available(char *regist);
 bool check_register_used(char *regist);
 void check_register_in_template(char *template); 
 void pushreg(const char *arg);
+
+extern bool dont_reuse_stack;
+
+
+
+void gen_fpclassify(FpClassify *);
 
 //
 // unicode.c

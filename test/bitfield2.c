@@ -123,6 +123,13 @@ int main(void) {
   large_field();
   uninit_global();
 
+  struct { unsigned b : 3; } s = {0};
+  printf("%d\n", (~(0,s.b) < 0) ); // expected 1
+  ASSERT(1, (~(0,s.b) < 0) );
+  printf("%d\n", (~({s.b;}) < 0) ); // expected 1
+  ASSERT(1, (~({s.b;}) < 0) );
+  printf("%d\n", (~(1 ? s.b : s.b) < 0) ); // expected 1
+  ASSERT(1, (~(1 ? s.b : s.b) < 0) );
   printf("OK\n");
 
   return 0;

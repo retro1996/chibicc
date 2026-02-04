@@ -14,7 +14,9 @@ int isunordered(double x, double y);
 double sinh(double x);
 double cosh(double x);
 double tanh(double x);
-
+long double tanhl(long double x);
+long double coshl(long double x);
+long double sinhl(long double x);
 // Exponential and logarithmic functions
 double exp(double x);
 double frexp(double x, int *exp);
@@ -124,6 +126,16 @@ extern float atan2f(float y, float x);
 float floorf(float);
 float ldexpf(float x, int exp);
 
+long double sinl(long double);
+long double cosl(long double);
+long double tanl(long double);
+long double asinl(long double);
+long double acosl(long double);
+long double atanl(long double);
+long double atan2l(long double y, long double x);
+long double logl(long double x);
+long double ldexpl(long double x, int exp);
+
 // Rounding and remainder
 double floor(double x);
 double ceil(double x);
@@ -163,7 +175,6 @@ int isnormal(double x);                      // non-zero and not subnormal
 #define signbit(x) __builtin_signbit(x)
 #define __builtin_signbit(x) ((x) < 0.0 ? 1 : 0)
 // Classification
-extern int __fpclassify(double __value);
 extern int __isnan(double __value);
 extern int __isinf(double __value);
 extern int __finite(double __value);
@@ -172,7 +183,8 @@ extern int __finite(double __value);
 #define isnan(x) __isnan(x)
 #define isinf(x) __isinf(x)
 #define isfinite(x) __finite(x)
-#define fpclassify(x) __fpclassify(x)
+#define fpclassify(x) \
+  __builtin_fpclassify(FP_NAN, FP_INFINITE, FP_NORMAL, FP_SUBNORMAL, FP_ZERO, x)
 
 // Constants
 #define HUGE_VAL (__builtin_huge_val())
