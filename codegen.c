@@ -1967,6 +1967,34 @@ static void gen_cmpxchgn(Node *node) {
     }
 }
 
+static void gen_signbit(Node *node) {  
+  gen_expr(node->lhs);
+  switch (node->lhs->ty->kind) {
+  case TY_FLOAT:
+    println("  movd %%xmm0, %%eax");
+    println("  shr $31, %%eax");
+    return;
+  case TY_DOUBLE:
+    println("  movmskpd %%xmm0, %%eax"); 
+    println("  and $1, %%eax");         
+    return;
+  case TY_LDOUBLE:
+    // println("  fxam");
+    // println("  fnstsw %%ax");
+    // println("  fstp %%st(0)");
+    // println("  and $0x200, %%eax");
+    println("  sub $16, %%rsp");
+    println("  fstpt (%%rsp)");
+    println("  movb 9(%%rsp), %%al");   // Get the byte containing the sign bit
+    println("  shr $7, %%al");          // Move sign bit to LSB
+    println("  movzbl %%al, %%eax");    // Zero-extend to EAX
+    println("  add $16, %%rsp");
+    return;
+  default:
+    unreachable();
+  }
+}
+
 static void gen_isunordered(Node *node) {
   gen_expr(node->lhs);
   push_tmpf();
@@ -4448,6 +4476,9 @@ static void gen_expr(Node *node)
   case ND_BEXTR_U32: gen_bextr_u32(node); return;
   case ND_FPCLASSIFY: gen_fpclassify(node->fpc); return;
   case ND_ISUNORDERED: gen_isunordered(node); return;
+  case ND_SIGNBIT:
+  case ND_SIGNBITF:
+  case ND_SIGNBITL: gen_signbit(node); return;
 }
   
 if (node->lhs && (is_vector(node->lhs->ty) || (node->rhs && is_vector(node->rhs->ty)))) {

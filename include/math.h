@@ -11,6 +11,10 @@ double atan(double x);
 double atan2(double y, double x);
 int isunordered(double x, double y); 
 #define isunordered(x, y) __builtin_isunordered(x, y)
+#define signbit(x)  __builtin_signbit(x)
+#define signbitf(x) __builtin_signbit(x)
+#define signbitl(x) __builtin_signbit(x)
+
 
 // Hyperbolic functions
 double sinh(double x);
@@ -174,8 +178,7 @@ float expm1f(float x);
 long double expm1l(long double x);
 int isnormal(double x);                      // non-zero and not subnormal
 #define isnormal(x)  ((fpclassify(x) == FP_NORMAL))
-#define signbit(x) __builtin_signbit(x)
-#define __builtin_signbit(x) ((x) < 0.0 ? 1 : 0)
+
 // Classification
 extern int __isnan(double __value);
 extern int __isinf(double __value);

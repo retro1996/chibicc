@@ -6583,6 +6583,39 @@ static Node *primary(Token **rest, Token *tok)
     return node;
   }
 
+  if (equal(tok, "__builtin_signbit")) {
+    Node *node = new_node(ND_SIGNBIT, tok);
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok); 
+    add_type(node->lhs);
+    SET_CTX(ctx); 
+    *rest = skip(tok, ")", ctx);    
+    return node;
+  }
+
+  if (equal(tok, "__builtin_signbitf")) {
+    Node *node = new_node(ND_SIGNBITF, tok);
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok); 
+    add_type(node->lhs);
+    SET_CTX(ctx); 
+    *rest = skip(tok, ")", ctx);    
+    return node;
+  }
+
+  if (equal(tok, "__builtin_signbitl")) {
+    Node *node = new_node(ND_SIGNBITL, tok);
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok); 
+    add_type(node->lhs);
+    SET_CTX(ctx); 
+    *rest = skip(tok, ")", ctx);    
+    return node;
+  }
+
   if (equal(tok, "__builtin_expect")) {
     Node *node = new_node(ND_EXPECT, tok);
     SET_CTX(ctx); 
@@ -8019,6 +8052,10 @@ char *nodekind2str(NodeKind kind)
   case ND_BEXTR_U32: return "BEXTR_U32";
   case ND_ADDFETCH: return "ADDFETCH";
   case ND_FPCLASSIFY: return "FPCLASSIFY";
+  case ND_ISUNORDERED: return "ISUNORDERED";
+  case ND_SIGNBIT: return "SIGNBIT";
+  case ND_SIGNBITF: return "SIGNBITF";
+  case ND_SIGNBITL: return "SIGNBITL";
   default: return "UNREACHABLE"; 
   }
 }
