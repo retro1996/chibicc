@@ -794,6 +794,7 @@ void add_type(Node *node)
     return;       
   case ND_CMPEXCH:
   case ND_CMPEXCH_N:
+  case ND_ISUNORDERED:
     node->ty = ty_bool;
     return;
   case ND_EXCH_N:

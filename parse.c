@@ -6568,6 +6568,20 @@ static Node *primary(Token **rest, Token *tok)
   }
 
 
+  if (equal(tok, "__builtin_isunordered")) {
+    Node *node = new_node(ND_ISUNORDERED, tok);
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok); 
+    add_type(node->lhs);
+    SET_CTX(ctx); 
+    tok = skip(tok, ",", ctx);
+    node->rhs = assign(&tok, tok); 
+    add_type(node->rhs);
+    SET_CTX(ctx); 
+    *rest = skip(tok, ")", ctx);    
+    return node;
+  }
 
   if (equal(tok, "__builtin_expect")) {
     Node *node = new_node(ND_EXPECT, tok);

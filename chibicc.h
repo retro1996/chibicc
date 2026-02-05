@@ -891,6 +891,7 @@ typedef enum
   ND_XORFETCH,
   ND_NANDFETCH,
   ND_FPCLASSIFY,   // floating point classify
+  ND_ISUNORDERED,
 } NodeKind;
 
 // AST node type

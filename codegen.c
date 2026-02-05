@@ -1967,6 +1967,19 @@ static void gen_cmpxchgn(Node *node) {
     }
 }
 
+static void gen_isunordered(Node *node) {
+  gen_expr(node->lhs);
+  push_tmpf();
+  gen_expr(node->rhs);
+  pop_tmpf(1);
+  if (node->lhs->ty->kind == TY_DOUBLE)
+    println("  ucomisd %%xmm1, %%xmm0");
+  else
+    println("  ucomiss %%xmm1, %%xmm0");
+  println("  setp %%al");
+  println("  movzx %%al, %%eax");
+  return;
+}
 
 static void gen_builtin(Node *node, const char *insn, const char *reg) {
     gen_expr(node->builtin_val); 
@@ -4434,6 +4447,7 @@ static void gen_expr(Node *node)
   case ND_TZCNT_U16: gen_tzcnt_u16(node); return;
   case ND_BEXTR_U32: gen_bextr_u32(node); return;
   case ND_FPCLASSIFY: gen_fpclassify(node->fpc); return;
+  case ND_ISUNORDERED: gen_isunordered(node); return;
 }
   
 if (node->lhs && (is_vector(node->lhs->ty) || (node->rhs && is_vector(node->rhs->ty)))) {

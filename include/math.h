@@ -10,6 +10,8 @@ double acos(double x);
 double atan(double x);
 double atan2(double y, double x);
 int isunordered(double x, double y); 
+#define isunordered(x, y) __builtin_isunordered(x, y)
+
 // Hyperbolic functions
 double sinh(double x);
 double cosh(double x);
