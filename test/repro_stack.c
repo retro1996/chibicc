@@ -6,11 +6,11 @@ void recursive(int depth, char *start_addr) {
         start_addr = &local;
     }
     
-    if (depth < 10) {
+    if (depth < 120000) {
         recursive(depth + 1, start_addr);
     } else {
-        printf("Stack usage for 10 calls: %ld bytes\n", start_addr - &local);
-        printf("Average stack usage per call: %ld bytes\n", (start_addr - &local) / 10);
+        printf("Stack usage for 120000 calls: %ld bytes\n", start_addr - &local);
+        printf("Average stack usage per call: %ld bytes\n", (start_addr - &local) / 120000);
     }
 }
 

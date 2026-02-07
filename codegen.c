@@ -1909,11 +1909,13 @@ static void gen_vector_op(Node *node) {
 static void gen_cmpxchg(Node *node) {
   int sz = node->cas_ptr->ty->base->size;
   gen_expr(node->cas_ptr);
-  println("  mov %%rax, %%rdi");
+  push_tmp();
   gen_expr(node->cas_expected);
-  println("  mov %%rax, %%rsi");
+  push_tmp();
   gen_expr(node->cas_desired);      
-  println("  mov %%rax, %%rcx");   
+  println("  mov %%rax, %%rcx");
+  pop_tmp("%rsi");
+  pop_tmp("%rdi");
   if (sz == 1) {
     println("  movb (%%rcx), %%cl");
   } else if (sz == 2) {
@@ -1946,11 +1948,13 @@ static void gen_cmpxchg(Node *node) {
 static void gen_cmpxchgn(Node *node) {
     int sz = node->cas_ptr->ty->base->size;
     gen_expr(node->cas_ptr);
-    println("  mov %%rax, %%rdi");  
+    push_tmp();
     gen_expr(node->cas_expected);
-    println("  mov %%rax, %%rsi");  
+    push_tmp();
     gen_expr(node->cas_desired);
     println("  mov %%rax, %%rcx");
+    pop_tmp("%rsi");
+    pop_tmp("%rdi");
 
     if (sz == 1) println("  movb (%%rsi), %%al");
     else if (sz == 2) println("  movw (%%rsi), %%ax");
