@@ -12,11 +12,11 @@ static char *argreg32[] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
 static char *argreg64[] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
 
 
-static char *newargreg8[] =  {"%cl", "%dl", "%al", "%sil", "%dil", "%r8b", "%r9b", "%r10b", "%r11b", "%r12b", "%r13b", "%r14b", "%r15b"};
-static char *newargreg16[] = {"%cx", "%dx", "%ax", "%si",  "%di",  "%r8w", "%r9w", "%r10w", "%r11w", "%r12w", "%r13w", "%r14w", "%r15w"};
-static char *newargreg32[] = {"%ecx","%edx","%eax","%esi","%edi","%r8d", "%r9d", "%r10d", "%r11d", "%r12d", "%r13d", "%r14d", "%r15d"};
-static char *newargreg64[] = {"%rcx","%rdx","%rax","%rsi","%rdi","%r8",  "%r9",  "%r10",  "%r11",  "%r12",  "%r13",  "%r14",  "%r15"};
-static char *registerUsed[] = {"free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free"};
+static char *newargreg8[] =  {"%cl", "%dl", "%al", "%sil", "%dil", "%r8b", "%r9b", "%r11b", "%r12b", "%r13b", "%r14b", "%r15b"};
+static char *newargreg16[] = {"%cx", "%dx", "%ax", "%si",  "%di",  "%r8w", "%r9w", "%r11w", "%r12w", "%r13w", "%r14w", "%r15w"};
+static char *newargreg32[] = {"%ecx","%edx","%eax","%esi","%edi","%r8d", "%r9d",  "%r11d", "%r12d", "%r13d", "%r14d", "%r15d"};
+static char *newargreg64[] = {"%rcx","%rdx","%rax","%rsi","%rdi","%r8",  "%r9",  "%r11",  "%r12",  "%r13",  "%r14",  "%r15"};
+static char *registerUsed[] = {"free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free"};
 
 
 extern int64_t eval(Node *node);
@@ -2256,8 +2256,7 @@ static void gen_alloc(Node *node) {
 
 static void gen_release(Node *node) {
   gen_expr(node->lhs);
-  push_tmp();
-  pop_tmp("%rdi");
+  println("  mov %%rax, %%rdi");
   println("  xor %%eax, %%eax");
   println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
 }
@@ -2629,18 +2628,17 @@ static void gen_sub_overflow(Node *node) {
 
 static void gen_fetchadd(Node *node) {
   gen_expr(node->lhs);
-  push_tmp();
+  println("  mov %%rax, %%r10");
   gen_expr(node->rhs);
-  pop_tmp("%rdi");
+  println("  mov %%r10, %%rdi");  
   println("  lock xadd %s, (%%rdi)", reg_ax(node->ty->size));
 }
 
 static void gen_add_fetch(Node *node) {
   gen_expr(node->lhs);
-  push_tmp();
+  println("  mov %%rax, %%r10");
   gen_expr(node->rhs);
-  pop_tmp("%rdi");
-
+  println("  mov %%r10, %%rdi"); 
   println("  mov %%rax, %%rdx");
   println("  lock xadd %s, (%%rdi)", reg_ax(node->ty->size));
   println("  add %s, %s", reg_ax(node->ty->size), reg_dx(node->ty->size));
@@ -2649,10 +2647,10 @@ static void gen_add_fetch(Node *node) {
 
 static void gen_sub_fetch(Node *node) {
   gen_expr(node->lhs); 
-  push_tmp();
+  println("  mov %%rax, %%r10");
   gen_expr(node->rhs);  
   println("  mov %%rax, %%rdx");
-  pop_tmp("%rdi");
+  println("  mov %%r10, %%rdi"); 
   println("  neg %s", reg_ax(node->ty->size));
   println("  lock xadd %s, (%%rdi)", reg_ax(node->ty->size));
   println("  sub %s, %s", reg_dx(node->ty->size), reg_ax(node->ty->size)); 
@@ -2660,9 +2658,9 @@ static void gen_sub_fetch(Node *node) {
 
 static void gen_fetchsub(Node *node) {
   gen_expr(node->lhs);
-  push_tmp();
+  println("  mov %%rax, %%r10");
   gen_expr(node->rhs);
-  pop_tmp("%rdi");
+  println("  mov %%r10, %%rdi"); 
   println("  neg %s", reg_ax(node->ty->size));
   println("  lock xadd %s, (%%rdi)", reg_ax(node->ty->size));
 }
