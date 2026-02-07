@@ -1207,12 +1207,9 @@ char *specific_register_available(char *regist);
 bool check_register_used(char *regist);
 void check_register_in_template(char *template); 
 void pushreg(const char *arg);
+void gen_fpclassify(FpClassify *);
 
 extern bool dont_reuse_stack;
-
-
-
-void gen_fpclassify(FpClassify *);
 
 //
 // unicode.c

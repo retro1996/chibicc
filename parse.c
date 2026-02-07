@@ -1333,8 +1333,16 @@ static Node *compute_vla_size(Type *ty, Token *tok)
   return new_binary(ND_COMMA, node, expr, tok);
 }
 
+static void need_alloca_bottom(void) {
+  if (!current_fn) return;
+  if (current_fn->alloca_bottom)
+    return;
+  current_fn->alloca_bottom = new_lvar("__alloca_size__", pointer_to(ty_char), current_fn->name);
+}
+
 static Node *new_alloca(Node *sz, int align)
 {
+  need_alloca_bottom();
   if (!builtin_alloca) {
     // Fallback implementation for alloca
     Node *node = new_node(ND_ALLOC, sz->tok);
@@ -2458,6 +2466,7 @@ static Node *asm_stmt(Token **rest, Token *tok)
   // extended assembly like asm ( assembler_template: output operands (optional) : input operands (optional) : list of clobbered registers (optional))
   if (equal(tok->next, ":"))
   {
+    need_alloca_bottom();
     node->asm_str = extended_asm(node, rest, tok, locals);
     if (!node->asm_str)
       error_tok(tok, "%s %d: in asm_stmt : error during extended_asm function null returned!", PARSE_C, __LINE__);
@@ -5605,6 +5614,9 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
 {
   add_type(fn);
   
+  if (fn->kind == ND_VAR && (!strcmp(fn->var->name, "alloca") || !strcmp(fn->var->name, "__builtin_alloca")))
+    need_alloca_bottom();
+
   if (fn->ty->kind != TY_FUNC &&
       (fn->ty->kind != TY_PTR || fn->ty->base->kind != TY_FUNC))
     error_tok(fn->tok, "%s %d: in funcall : not a function %d %s", PARSE_C, __LINE__, fn->ty->kind, tok->loc);
@@ -7209,7 +7221,6 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   fn->params = locals;
   if (ty->is_variadic)
     fn->va_area = new_lvar("__va_area__", array_of(ty_char, 200), name_str);
-  fn->alloca_bottom = new_lvar("__alloca_size__", pointer_to(ty_char), name_str);
 
   //from COSMOPOLITAN adding other GNUC attributes
   tok = attribute_list(tok, ty, type_attributes);

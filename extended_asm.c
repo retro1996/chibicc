@@ -1888,7 +1888,7 @@ void update_offset(char *funcname, Obj *locals)
     if (fn) {
         //fixing ====ISS-161 issue with some locals missing in fn->locals
         //if (!fn->locals)
-        fn->locals = locals;
+        fn->locals = locals;        
         assign_lvar_offsets(fn);
     }
 

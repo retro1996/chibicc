@@ -1907,32 +1907,33 @@ static void gen_vector_op(Node *node) {
 }
 
 static void gen_cmpxchg(Node *node) {
+  int sz = node->cas_ptr->ty->base->size;
   gen_expr(node->cas_ptr);
   println("  mov %%rax, %%rdi");
   gen_expr(node->cas_expected);
   println("  mov %%rax, %%rsi");
   gen_expr(node->cas_desired);      
   println("  mov %%rax, %%rcx");   
-  if (node->ty->size == 1) {
+  if (sz == 1) {
     println("  movb (%%rcx), %%cl");
-  } else if (node->ty->size == 2) {
+  } else if (sz == 2) {
     println("  movw (%%rcx), %%cx");
-  } else if (node->ty->size == 4) {
+  } else if (sz == 4) {
     println("  movl (%%rcx), %%ecx");
-  } else if (node->ty->size == 8) {
+  } else if (sz == 8) {
     println("  movq (%%rcx), %%rcx");
   }
-  if (node->ty->size == 1) {
+  if (sz == 1) {
     println("  movb (%%rsi), %%al");
-  } else if (node->ty->size == 2) {
+  } else if (sz == 2) {
     println("  movw (%%rsi), %%ax");
-  } else if (node->ty->size == 4) {
+  } else if (sz == 4) {
     println("  movl (%%rsi), %%eax");
-  } else if (node->ty->size == 8) {
+  } else if (sz == 8) {
     println("  movq (%%rsi), %%rax");
   }
-  println("  lock cmpxchg %s, (%%rdi)", reg_cx(node->ty->size));
-  println("  mov %s, (%%rsi)", reg_ax(node->ty->size));
+  println("  lock cmpxchg %s, (%%rdi)", reg_cx(sz));
+  println("  mov %s, (%%rsi)", reg_ax(sz));
   println("  sete %%al");
   println("  movzbl %%al, %%eax");
 
@@ -1943,23 +1944,34 @@ static void gen_cmpxchg(Node *node) {
 
 
 static void gen_cmpxchgn(Node *node) {
+    int sz = node->cas_ptr->ty->base->size;
     gen_expr(node->cas_ptr);
     println("  mov %%rax, %%rdi");  
     gen_expr(node->cas_expected);
     println("  mov %%rax, %%rsi");  
     gen_expr(node->cas_desired);
     println("  mov %%rax, %%rcx");
-    println("  movq (%%rsi), %%rax");
-    if (node->ty->size == 1) {
+
+    if (sz == 1) println("  movb (%%rsi), %%al");
+    else if (sz == 2) println("  movw (%%rsi), %%ax");
+    else if (sz == 4) println("  movl (%%rsi), %%eax");
+    else println("  movq (%%rsi), %%rax");
+
+    if (sz == 1) {
         println("  lock cmpxchg %%cl, (%%rdi)");
-    } else if (node->ty->size == 2) {
+    } else if (sz == 2) {
         println("  lock cmpxchg %%cx, (%%rdi)");
-    } else if (node->ty->size == 4) {
+    } else if (sz == 4) {
         println("  lock cmpxchg %%ecx, (%%rdi)");
-    } else if (node->ty->size == 8) {
+    } else if (sz == 8) {
         println("  lock cmpxchg %%rcx, (%%rdi)");
     }
-    println("  movq %%rax, (%%rsi)");
+    
+    if (sz == 1) println("  movb %%al, (%%rsi)");
+    else if (sz == 2) println("  movw %%ax, (%%rsi)");
+    else if (sz == 4) println("  movl %%eax, (%%rsi)");
+    else println("  movq %%rax, (%%rsi)");
+
     println("  sete %%al");
     println("  movzbl %%al, %%eax");
     if (node->cas_success || node->cas_failure) {
@@ -5395,9 +5407,6 @@ void assign_lvar_offsets(Obj *prog) {
     int gp = 0, fp = 0;
     int max_align = 8;
     int stack = 0;
-    
-    if (fn->alloca_bottom && fn->alloca_bottom->offset)
-      bottom = abs(fn->alloca_bottom->offset);
 
     for (Obj *var = fn->params; var; var = var->next) {
       var->is_param = true;
@@ -5774,4 +5783,3 @@ void gen_fpclassify(FpClassify *fpc) {
       unreachable();
   }
 }
-
