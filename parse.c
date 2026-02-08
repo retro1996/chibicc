@@ -1337,6 +1337,7 @@ static void need_alloca_bottom(void) {
   if (!current_fn) return;
   if (current_fn->alloca_bottom)
     return;
+  opt_omit_frame_pointer = false;
   current_fn->alloca_bottom = new_lvar("__alloca_size__", pointer_to(ty_char), current_fn->name);
 }
 
@@ -2452,6 +2453,8 @@ static bool is_typename(Token *tok)
 // asm-stmt = "asm" ("volatile" | "inline")* "(" string-literal ")"
 static Node *asm_stmt(Token **rest, Token *tok)
 {
+  if (current_fn)
+    current_fn->has_asm = true;
   Node *node = new_node(ND_ASM, tok);
   tok = tok->next;
 
@@ -3940,6 +3943,13 @@ static Node *cast(Token **rest, Token *tok)
   return unary(rest, tok);
 }
 
+static void mark_var_address_taken(Node *node) {
+  while (node->kind == ND_MEMBER)
+    node = node->lhs;
+  if (node->kind == ND_VAR && node->var)
+    node->var->is_address_used = true;
+}
+
 // unary = ("+" | "-" | "*" | "&" | "!" | "~") cast
 //       | ("++" | "--") unary
 //       | "&&" ident
@@ -3965,6 +3975,7 @@ static Node *unary(Token **rest, Token *tok)
     if (lhs->kind == ND_VAR && lhs->var && lhs->var->is_function) {
         lhs->var->is_address_used = true;
     }
+    mark_var_address_taken(lhs);
 
     return new_unary(ND_ADDR, lhs, tok);
   }
@@ -6654,6 +6665,7 @@ static Node *primary(Token **rest, Token *tok)
 
 
   if (equal(tok, "__builtin_return_address")) {
+    opt_omit_frame_pointer = false;
     Node *node = new_node(ND_RETURN_ADDR, tok);
     SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
@@ -6666,6 +6678,7 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "__builtin_frame_address"))
   {
+    opt_omit_frame_pointer = false;
     Node *node = new_node(ND_BUILTIN_FRAME_ADDRESS, tok);
     add_type(node);
     SET_CTX(ctx); 
@@ -6948,8 +6961,10 @@ static Node *primary(Token **rest, Token *tok)
       char *name = sc->var->name;
      
       if (strstr(name, "setjmp") || strstr(name, "savectx") ||
-          strstr(name, "vfork") || strstr(name, "getcontext"))
+          strstr(name, "vfork") || strstr(name, "getcontext")) {
         dont_reuse_stack = true;
+        opt_omit_frame_pointer = false;
+      }
     
     }
 

@@ -5,6 +5,7 @@ GCC_VERSION!=gcc -dumpversion
 CC=gcc
 CFLAGS =-std=c11 -g -fno-common -Wall -Wno-switch -DPREFIX=\"$(PREFIX)\" -DGCC_VERSION=\"$(GCC_VERSION)\"
 CFLAGS_DIAG= -std=c11 
+CFLAGS_SPE = -fomit-frame-pointer
 OBJECT=chibicc
 OBJECTLIB=libchibicc
 SRCS=$(wildcard *.c)
@@ -13,6 +14,7 @@ OBJS=$(SRCS:.c=.o)
 TEST_SRCS=$(wildcard test/*.c)
 TESTS=$(TEST_SRCS:.c=.exe)
 ISSUES_SRCS=$(wildcard issues/*.c)
+TESTS_SPE = $(TESTS:test/%=test_spe/%)
 #PNG=$(TEST_SRCS:.c=.tmp)
 #PNG2=$(ISSUES_SRCS:.c=.tmp)
 
@@ -33,6 +35,13 @@ test: $(TESTS)
 	for i in $^; do echo $$i; ./$$i || exit 1; echo; done
 	test/driver.sh ./$(OBJECT)
 
+test_spe/%.exe: $(OBJECT) test/%.c
+	./$(OBJECT) $(CFLAGS_DIAG) $(CFLAGS_SPE) -Iinclude -Itest \
+		-c -o test_spe/$*.o test/$*.c
+	$(CC) -pthread -o $@ test_spe/$*.o -xc test/common -lm
+
+test_spe: $(TESTS_SPE)
+	for i in $^; do echo $$i; ./$$i || exit 1; echo; done
 
 # #for managing dot diagram
 # test-png: $(TESTS)
@@ -134,4 +143,4 @@ uninstall:
 	rm -f $(PREFIX)/bin/chibicc
 	rm -f $(PREFIX)/include/x86_64-linux-gnu/chibicc/*
 
-.PHONY: test clean test-stage2 libchibicc projects projects-all  projects-oth test-all install uninstall
+.PHONY: test clean test-stage2 libchibicc projects projects-all  projects-oth test-all install uninstall test_spe

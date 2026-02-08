@@ -24,6 +24,8 @@ extern int64_t eval(Node *node);
 static Obj *current_fn;
 static char *lvar_ptr;
 bool dont_reuse_stack = false;
+extern bool opt_omit_frame_pointer;
+extern bool opt_fbuiltin;
 
 static void gen_expr(Node *node);
 static void gen_stmt(Node *node);
@@ -70,6 +72,21 @@ static int count(void)
   return i++;
 }
 
+
+static bool is_omit_fp(Obj *fn) {
+  if (!opt_omit_frame_pointer) return false;
+  if (fn->alloca_bottom) return false;
+  if (fn->stack_align > 16) return false;
+  if (fn->ty->is_variadic) return false;
+  if (fn->has_asm) return false;  
+
+  for (Obj *var = fn->locals; var; var = var->next)
+    if (var->is_address_used)
+      return false;
+
+  return true;
+}
+
 static int push_tmpstack(void) {
   if (tmp_stack.depth == tmp_stack.capacity) {
     tmp_stack.capacity += 4;
@@ -96,22 +113,44 @@ static int pop_tmpstack(void) {
 }
 
 static int push_tmp(void) {
+  if (is_omit_fp(current_fn)) {
+    println("  push %%rax");
+    depth++;
+    return 0;
+  }
   int offset = push_tmpstack();
   println("  mov %%rax, %d(%s)", offset, lvar_ptr);
   return offset;
 }
 
 static void pop_tmp(char *arg) {
+  if (is_omit_fp(current_fn)) {
+    println("  pop %s", arg);
+    depth--;
+    return;
+  }
   int offset = pop_tmpstack();
   println("  mov %d(%s), %s", offset, lvar_ptr, arg);
 }
 
 static void push_tmpf(void) {
+  if (is_omit_fp(current_fn)) {
+    println("  sub $8, %%rsp");
+    println("  movsd %%xmm0, (%%rsp)");
+    depth++;
+    return;
+  }
   int offset = push_tmpstack();
   println("  movsd %%xmm0, %d(%s)", offset, lvar_ptr);
 }
 
 static void pop_tmpf(int reg) {
+  if (is_omit_fp(current_fn)) {
+    println("  movsd (%%rsp), %%xmm%d", reg);
+    println("  add $8, %%rsp");
+    depth--;
+    return;
+  }
   int offset = pop_tmpstack();
   println("  movsd %d(%s), %%xmm%d", offset, lvar_ptr, reg);
 }
@@ -169,6 +208,12 @@ void popx(char *a, char *b) {
 }
 
 static void pushx_tmp(void) {
+  if (is_omit_fp(current_fn)) {
+    println("  push %%rdx");
+    println("  push %%rax");
+    depth += 2;
+    return;
+  }
   int off_rdx = push_tmpstack(); 
   println("  mov %%rdx, %d(%s)", off_rdx, lvar_ptr);
   int off_rax = push_tmpstack();  
@@ -176,6 +221,12 @@ static void pushx_tmp(void) {
 }
 
 static void popx_tmp(char *a, char *b) {
+  if (is_omit_fp(current_fn)) {
+    println("  pop %s", a);
+    println("  pop %s", b);
+    depth -= 2;
+    return;
+  }
   int off_rax = pop_tmpstack();   
   println("  mov %d(%s), %s", off_rax, lvar_ptr, a);
   int off_rdx = pop_tmpstack();   
@@ -418,14 +469,20 @@ static void gen_addr(Node *node)
     // Variable-length array, which is always local.
     if (node->var->ty->kind == TY_VLA)
     {
-      println("  mov %d(%s), %%rax", node->var->offset, node->var->ptr);
+      if (is_omit_fp(current_fn))
+        println("  mov %d(%%rsp), %%rax", node->var->offset + current_fn->stack_size + depth * 8);
+      else
+        println("  mov %d(%s), %%rax", node->var->offset, node->var->ptr);
       return;
     }
 
     // Local variable
     if (node->var->is_local)
     {
-      println("  lea %d(%s), %%rax", node->var->offset, node->var->ptr);
+      if (is_omit_fp(current_fn))
+        println("  lea %d(%%rsp), %%rax", node->var->offset + current_fn->stack_size + depth * 8);
+      else
+        println("  lea %d(%s), %%rax", node->var->offset, node->var->ptr);
       return;
     }
 
@@ -536,7 +593,10 @@ static void gen_addr(Node *node)
     }
     break;
   case ND_VLA_PTR:
-    println("  lea %d(%s), %%rax", node->var->offset, node->var->ptr);
+    if (is_omit_fp(current_fn))
+      println("  lea %d(%%rsp), %%rax", node->var->offset + current_fn->stack_size + depth * 8);
+    else
+      println("  lea %d(%s), %%rax", node->var->offset, node->var->ptr);
     return;
   case ND_ADD: 
   case ND_SUB:
@@ -624,23 +684,38 @@ static void gen_mem_copy_with_offset(const char *dst_reg, int offset, int n) {
 // Zero n bytes starting from offset bytes off %rbp.
 static void gen_mem_zero(int offset, int n) {
   int i = offset;
+  if (is_omit_fp(current_fn))
+    i += current_fn->stack_size + depth * 8;
+
   while (n >= 8) {
-    println("  movq $0, %d(%s)", i, lvar_ptr);
+    if (is_omit_fp(current_fn))
+      println("  movq $0, %d(%%rsp)", i);
+    else
+      println("  movq $0, %d(%s)", i, lvar_ptr);
     n -= 8;
     i += 8;
   }
   while (n >= 4) {
-    println("  movl $0, %d(%s)", i, lvar_ptr);
+    if (is_omit_fp(current_fn))
+      println("  movl $0, %d(%%rsp)", i);
+    else
+      println("  movl $0, %d(%s)", i, lvar_ptr);
     n -= 4;
     i += 4;
   }
   while (n >= 2) {
-    println("  movw $0, %d(%s)", i, lvar_ptr);
+    if (is_omit_fp(current_fn))
+      println("  movw $0, %d(%%rsp)", i);
+    else
+      println("  movw $0, %d(%s)", i, lvar_ptr);
     n -= 2;
     i += 2;
   }
   while (n >= 1) {
-    println("  movb $0, %d(%s)", i, lvar_ptr);
+    if (is_omit_fp(current_fn))
+      println("  movb $0, %d(%%rsp)", i);
+    else
+      println("  movb $0, %d(%s)", i, lvar_ptr);
     --n;
     ++i;
   }
@@ -1040,7 +1115,7 @@ static bool has_flonum(Type *ty, int lo, int hi, int offset) {
     return true;
   }
 
-  if (ty->kind == TY_ARRAY || ty->kind == TY_VECTOR) {
+  if (ty->kind == TY_ARRAY) {
     for (int i = 0; i < ty->array_len; i++) {
       int tmpoffset = offset + ty->base->size * i;
       if ((tmpoffset + ty->base->size) <= lo)
@@ -1052,6 +1127,9 @@ static bool has_flonum(Type *ty, int lo, int hi, int offset) {
       }
     return true;
   }
+
+  if (ty->kind == TY_VECTOR)
+    return true;
 
   return ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE;
 }
@@ -1330,27 +1408,33 @@ static void copy_ret_buffer(Obj *var)
   int gp = 0, fp = 0;
 
     if (has_flonum1(ty)) {
+        int offset = var->offset;
+        if (is_omit_fp(current_fn))
+          offset += current_fn->stack_size + depth * 8;
 
         // Allow sizes 4, 8, 12, and 16 for floating-point types
         assert(ty->size == 4 || ty->size == 8 || ty->size == 12 || ty->size == 16);
 
         if (ty->size == 4) {
-            println("  movss %%xmm0, %d(%s)", var->offset, var->ptr);
+            println("  movss %%xmm0, %d(%s)", offset, var->ptr);
         } else if (ty->size == 8) {
-            println("  movsd %%xmm0, %d(%s)", var->offset, var->ptr);
+            println("  movsd %%xmm0, %d(%s)", offset, var->ptr);
         } else if (ty->size == 12 || ty->size == 16) {
-            println("  movsd %%xmm0, %d(%s)", var->offset, var->ptr);
+            println("  movsd %%xmm0, %d(%s)", offset, var->ptr);
             if (ty->size == 12) {
-                println("  movss %%xmm1, %d(%s)", var->offset + 8, var->ptr);
+                println("  movss %%xmm1, %d(%s)", offset + 8, var->ptr);
             } else if (ty->size == 16) {
-                println("  movsd %%xmm1, %d(%s)", var->offset + 8, var->ptr);
+                println("  movsd %%xmm1, %d(%s)", offset + 8, var->ptr);
             }
         }
     fp++;
     } else {
+        int offset = var->offset;
+        if (is_omit_fp(current_fn))
+          offset += current_fn->stack_size + depth * 8;
         // **Change 1: Handle the first 8 bytes for integer types (up to 64 bits)**
         for (int i = 0; i < MIN(8, ty->size); i++) {
-      println("  mov %%al, %d(%s)", var->offset + i, var->ptr);
+      println("  mov %%al, %d(%s)", offset + i, var->ptr);
       println("  shr $8, %%rax");
     }
     gp++;
@@ -1358,13 +1442,16 @@ static void copy_ret_buffer(Obj *var)
 
   if (ty->size > 8)
   {
+    int offset = var->offset;
+    if (is_omit_fp(current_fn))
+      offset += current_fn->stack_size + depth * 8;
     if (has_flonum2(ty))
     {
       assert(ty->size == 12 || ty->size == 16);
       if (ty->size == 12)
-        println("  movss %%xmm%d, %d(%s)", fp, var->offset + 8, var->ptr);
+        println("  movss %%xmm%d, %d(%s)", fp, offset + 8, var->ptr);
       else
-        println("  movsd %%xmm%d, %d(%s)", fp, var->offset + 8, var->ptr);
+        println("  movsd %%xmm%d, %d(%s)", fp, offset + 8, var->ptr);
     }
     else
     {
@@ -1372,7 +1459,7 @@ static void copy_ret_buffer(Obj *var)
       char *reg2 = (gp == 0) ? "%rax" : "%rdx";
       for (int i = 8; i < MIN(16, ty->size); i++)
       {
-        println("  mov %s, %d(%s)", reg1, var->offset + i, var->ptr);
+        println("  mov %s, %d(%s)", reg1, offset + i, var->ptr);
         println("  shr $8, %s", reg2);
       }
     }
@@ -1439,8 +1526,10 @@ static void copy_struct_mem(void)
   if (!ty)
     error("%s %d: in copy_struct_mem : type is null!", CODEGEN_C, __LINE__);  
   Obj *var = current_fn->params;
-
-  println("  mov %d(%s), %%rdi", var->offset, var->ptr);
+  if (is_omit_fp(current_fn))
+    println("  mov %d(%%rsp), %%rdi", var->offset + current_fn->stack_size + depth * 8);
+  else
+    println("  mov %d(%s), %%rdi", var->offset, var->ptr);
   gen_mem_copy("%rdi", ty->size);
   //from @fuhsnn Copy returned-by-stack aggregate's pointer to rax
   println("  mov %%rdi, %%rax");
@@ -2256,10 +2345,11 @@ static void gen_loadhps(Node *node) {
 
 static void gen_packss128_binop(Node *node, const char *insn) {
   gen_expr(node->lhs);
-  println("  movups (%%rax), %%xmm1");  
-  gen_expr(node->rhs);
-  println("  %s (%%rax), %%xmm1", insn); 
-  println("  movups %%xmm1, %%xmm0");
+  push_xmm(0);
+  gen_expr(node->rhs); 
+  pop_xmm(1); 
+  println("  %s %%xmm0, %%xmm1", insn); 
+  println("  movdqu %%xmm1, %%xmm0");
 }
 
 
@@ -2644,17 +2734,17 @@ static void gen_sub_overflow(Node *node) {
 
 static void gen_fetchadd(Node *node) {
   gen_expr(node->lhs);
-  println("  mov %%rax, %%r10");
+  push_tmp();
   gen_expr(node->rhs);
-  println("  mov %%r10, %%rdi");  
+  pop_tmp("%rdi");
   println("  lock xadd %s, (%%rdi)", reg_ax(node->ty->size));
 }
 
 static void gen_add_fetch(Node *node) {
   gen_expr(node->lhs);
-  println("  mov %%rax, %%r10");
+  push_tmp();
   gen_expr(node->rhs);
-  println("  mov %%r10, %%rdi"); 
+  pop_tmp("%rdi");
   println("  mov %%rax, %%rdx");
   println("  lock xadd %s, (%%rdi)", reg_ax(node->ty->size));
   println("  add %s, %s", reg_ax(node->ty->size), reg_dx(node->ty->size));
@@ -2663,10 +2753,10 @@ static void gen_add_fetch(Node *node) {
 
 static void gen_sub_fetch(Node *node) {
   gen_expr(node->lhs); 
-  println("  mov %%rax, %%r10");
+  push_tmp();
   gen_expr(node->rhs);  
   println("  mov %%rax, %%rdx");
-  println("  mov %%r10, %%rdi"); 
+  pop_tmp("%rdi");
   println("  neg %s", reg_ax(node->ty->size));
   println("  lock xadd %s, (%%rdi)", reg_ax(node->ty->size));
   println("  sub %s, %s", reg_dx(node->ty->size), reg_ax(node->ty->size)); 
@@ -2674,9 +2764,9 @@ static void gen_sub_fetch(Node *node) {
 
 static void gen_fetchsub(Node *node) {
   gen_expr(node->lhs);
-  println("  mov %%rax, %%r10");
+  push_tmp();
   gen_expr(node->rhs);
-  println("  mov %%r10, %%rdi"); 
+  pop_tmp("%rdi");
   println("  neg %s", reg_ax(node->ty->size));
   println("  lock xadd %s, (%%rdi)", reg_ax(node->ty->size));
 }
@@ -3568,7 +3658,10 @@ static void gen_expr(Node *node)
       }
 
       println("  shl $%d, %%rdi", mem->bit_offset);
-      println("  mov %d(%s), %%rax", tmp_offset, lvar_ptr);
+      if (is_omit_fp(current_fn))
+        println("  mov (%%rsp), %%rax");
+      else
+        println("  mov %d(%s), %%rax", tmp_offset, lvar_ptr);
       load(mem->ty);
 
         
@@ -3802,6 +3895,9 @@ static void gen_expr(Node *node)
     if (node->ret_buffer && node->ty->size <= 16)
     {
       copy_ret_buffer(node->ret_buffer);
+      if (is_omit_fp(current_fn))
+        println("  lea %d(%%rsp), %%rax", node->ret_buffer->offset + current_fn->stack_size + depth * 8);
+      else
       println("  lea %d(%s), %%rax", node->ret_buffer->offset, node->ret_buffer->ptr);
     }
 
@@ -3876,6 +3972,7 @@ static void gen_expr(Node *node)
     println("  je .Lframe_address_%d", c);
     println("  mov %s, %%rcx", lvar_ptr);
 
+
     println(".Lframe_address_loop%d:", c);
   println("  test %%rax, %%rax");
     println("  jz .Lframe_address_done%d", c);
@@ -3916,6 +4013,7 @@ static void gen_expr(Node *node)
     return;
   }
   case ND_RETURN_ADDR: {
+
     println("  mov %s, %%rax", lvar_ptr);
     int tmpdepth = eval(node->lhs);
     
@@ -5134,12 +5232,14 @@ static void emit_text(Obj *prog)
     // Prologue
     long reserved_pos = ftell(output_file);
    
+    if (!is_omit_fp(fn)) {
     println("  push %%rbp");
     println("  .cfi_startproc");
     println("  .cfi_def_cfa_offset 16");
     println("  .cfi_offset %%rbp, -16");    
     println("  mov %%rsp, %%rbp");
     println("  .cfi_def_cfa_register %%rbp");  
+    }
   
     if (use_rbx) {
       println("  push %%rbx");
@@ -5251,6 +5351,15 @@ static void emit_text(Obj *prog)
       //   continue;
       if (var->pass_by_stack)
         continue;
+        
+      int offset = var->offset;  
+      if (offset == 0) {
+          if (is_omit_fp(fn))
+            offset = -16;
+          else
+            offset = -fn->stack_size - 16;
+        } else if (is_omit_fp(fn))
+            offset += fn->stack_size;
 
       Type *ty = var->ty;
       if (!ty)
@@ -5259,9 +5368,9 @@ static void emit_text(Obj *prog)
       {
       case TY_VECTOR:
         if (ty->base->kind == TY_FLOAT || ty->base->kind == TY_DOUBLE) {
-          store_fp(fp++, var->offset, ty->size, var->ptr);
+          store_fp(fp++, offset, ty->size, var->ptr);
         } else if (is_integer(ty->base)) {
-          store_fp(fp++, var->offset, ty->size, var->ptr);
+          store_fp(fp++, offset, ty->size, var->ptr);
         } else {
           error("%s %d: in emit_text : Unsupported vector base type", CODEGEN_C, __LINE__);  
         }
@@ -5270,28 +5379,28 @@ static void emit_text(Obj *prog)
       case TY_UNION:
         assert(ty->size <= 16);
         if (has_flonum(ty, 0, 8, 0))
-          store_fp(fp++, var->offset, MIN(8, ty->size), var->ptr);
+          store_fp(fp++, offset, MIN(8, ty->size), var->ptr);
         else
-          store_gp(gp++, var->offset, MIN(8, ty->size), var->ptr);
+          store_gp(gp++, offset, MIN(8, ty->size), var->ptr);
 
         if (ty->size > 8)
         {
           if (has_flonum(ty, 8, 16, 0))
-            store_fp(fp++, var->offset + 8, ty->size - 8, var->ptr);
+            store_fp(fp++, offset + 8, ty->size - 8, var->ptr);
           else
-            store_gp(gp++, var->offset + 8, ty->size - 8, var->ptr);
+            store_gp(gp++, offset + 8, ty->size - 8, var->ptr);
         }
         break;
       case TY_FLOAT:
       case TY_DOUBLE:
-        store_fp(fp++, var->offset, ty->size, var->ptr);
+        store_fp(fp++, offset, ty->size, var->ptr);
         break;
       case TY_INT128:
-        store_gp(gp++, var->offset + 0, 8, var->ptr);
-        store_gp(gp++, var->offset + 8, 8, var->ptr);
+        store_gp(gp++, offset + 0, 8, var->ptr);
+        store_gp(gp++, offset + 8, 8, var->ptr);
         break;
       default:
-        store_gp(gp++, var->offset, ty->size, var->ptr);
+        store_gp(gp++, offset, ty->size, var->ptr);
       }
     }
 
@@ -5301,7 +5410,11 @@ static void emit_text(Obj *prog)
     assert(tmp_stack.depth == 0);
     long cur_pos = ftell(output_file);
     fseek(output_file, reserved_pos, SEEK_SET);
-    println("  sub $%d, %%rsp", align_to(tmp_stack.bottom, 16));
+    //println("  sub $%d, %%rsp", align_to(tmp_stack.bottom, 16));
+    if (is_omit_fp(fn))
+      println("  sub $%d, %%rsp", tmp_stack.bottom);
+    else
+      println("  sub $%d, %%rsp", align_to(tmp_stack.bottom, 16));
     fseek(output_file, cur_pos, SEEK_SET);
 
     // [https://www.sigbus.info/n1570#5.1.2.2.3p1] The C spec defines
@@ -5316,11 +5429,16 @@ static void emit_text(Obj *prog)
     println(".L.return.%s:", fn->name);
     if (use_rbx)
       println("  mov -8(%%rbp), %%rbx");
+    if (!is_omit_fp(fn)) {
     println("  mov %%rbp, %%rsp");
     println("  pop %%rbp");
     println("  .cfi_def_cfa %%rsp, 8");
+    } else {
+      println("  add $%d, %%rsp", fn->stack_size);
+    }
     println("  ret");
-    println("  .cfi_endproc");
+    if (!is_omit_fp(fn)) 
+      println("  .cfi_endproc");
     println("  .size %s, .-%s", fn->name, fn->name);
   }
   emit_constructors(); 
@@ -5412,6 +5530,9 @@ void assign_lvar_offsets(Obj *prog) {
     int max_align = 8;
     int stack = 0;
 
+    fn->stack_align = get_lvar_align(fn, 16);
+    bool omit_fp = is_omit_fp(fn);
+
     for (Obj *var = fn->params; var; var = var->next) {
       var->is_param = true;
       if (var->offset) continue;
@@ -5441,8 +5562,13 @@ void assign_lvar_offsets(Obj *prog) {
       max_align = MAX(max_align, align);
       
       stack = align_to(stack, align);
+      if (omit_fp) {
+        var->offset = stack + 8;
+        var->ptr = "%rsp";
+      } else {
       var->offset = stack + 16;
       var->ptr = "%rbp";
+      }
 
       int size = (ty->kind == TY_STRUCT || ty->kind == TY_UNION) ? align_to(ty->size, align) :
                  (ty->kind == TY_LDOUBLE || ty->kind == TY_INT128 || ty->kind == TY_VECTOR) ? 16 : 8;
@@ -5450,11 +5576,12 @@ void assign_lvar_offsets(Obj *prog) {
     }
 
     if (fn->ty->is_variadic)
-      fn->overflow_arg_area = align_to(stack + 16, max_align);
+      fn->overflow_arg_area = stack + 16;
 
-    fn->stack_align = get_lvar_align(fn, 16);
-    char *base = (fn->stack_align > 16) ? "%rbx" : "%rbp";
+    char *base = omit_fp ? "%rsp" : (fn->stack_align > 16) ? "%rbx" : "%rbp";
     fn->stack_size = assign_lvar_offsets2(fn, bottom, base);
+    if (omit_fp)
+      fn->stack_size += 8;
   }
 }
 
