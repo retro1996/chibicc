@@ -3883,8 +3883,18 @@ static void gen_expr(Node *node)
                 param = param->next;
             }
 
-            if (stack_args > 0)
-                println("  add $%d, %%rsp", stack_args * 8);
+            // Restore stack pointer before jumping back to function body
+            // .L.body is now before the sub instruction, so we just need to reset RSP
+            if (is_omit_fp(current_fn)) {
+                // No frame pointer: just clean up stack args
+                if (stack_args > 0)
+                    println("  add $%d, %%rsp", stack_args * 8);
+            } else {
+                // Frame pointer exists: restore RSP to base pointer
+                bool use_rbx = (current_fn->stack_align > 16);
+                char *base = use_rbx ? "%rbx" : "%rbp";
+                println("  mov %s, %%rsp", base);
+            }
 
             depth -= stack_args;
             println("  jmp .L.body.%s", current_fn->name);
@@ -5289,8 +5299,19 @@ static void emit_text(Obj *prog)
       println("  mov %%rbx, %%rsp");
     }
 
+    // Place .L.body label:
+    // - BEFORE sub for frame-pointer functions (allows RSP restoration + re-execution of sub)
+    // - AFTER sub for omit-fp functions (avoids re-allocating stack on each jump)
+    // Note: Recursive TCO is disabled for omit-fp with stack params, so no offset issues
+    if (!is_omit_fp(fn))
+      println(".L.body.%s:", fn->name);
+    
     reserved_pos = ftell(output_file);
     println("                           ");
+    
+    if (is_omit_fp(fn))
+      println(".L.body.%s:", fn->name);
+    
     // Save RSP for alloca/VLA support if needed
     if (fn->alloca_bottom && fn->alloca_bottom->offset)
       println("  mov %%rsp, %d(%s)", fn->alloca_bottom->offset, lvar_ptr);
@@ -5384,7 +5405,6 @@ static void emit_text(Obj *prog)
       println("  movups %%xmm7, %d(%s)", off + 184, ptr);
     }
 
-    println(".L.body.%s:", fn->name);
     // Save passed-by-register arguments to the stack
     int gp = 0, fp = 0;
     for (Obj *var = fn->params; var; var = var->next)
