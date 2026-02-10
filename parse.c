@@ -7147,6 +7147,42 @@ static void mark_live(Obj *var)
   }
 }
 
+//implementing tail call optimization. Marking tails calls.
+static void mark_tail_calls(Node *node) {
+  if (!node)
+    return;
+
+  switch (node->kind) {
+  case ND_BLOCK:
+    if (!node->body)
+      return;
+    Node *last = node->body;
+    while (last->next)
+      last = last->next;
+    mark_tail_calls(last);
+    break;
+  case ND_IF:
+    mark_tail_calls(node->then);
+    mark_tail_calls(node->els);
+    break;
+  case ND_RETURN:
+    mark_tail_calls(node->lhs);
+    break;
+  case ND_EXPR_STMT:
+    mark_tail_calls(node->lhs);
+    break;
+  case ND_CAST:
+    mark_tail_calls(node->lhs);
+    break;
+  case ND_COMMA:
+    mark_tail_calls(node->rhs);
+    break;
+  case ND_FUNCALL:
+    node->is_tail = true;
+    break;
+  }
+}
+
 static Token *function(Token *tok, Type *basety, VarAttr *attr)
 {
 
@@ -7263,6 +7299,8 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   push_scope("__FUNCTION__")->var =
       new_string_literal(fn->name, array_of(ty_char, strlen(fn->name) + 1));
   fn->body = compound_stmt(&tok, tok, NULL);
+  //implementing tail call optimization.
+  mark_tail_calls(fn->body);
   fn->locals = locals;  
   order = 0;
   leave_scope();
@@ -7601,7 +7639,7 @@ char *nodekind2str(NodeKind kind)
   case ND_GOTO_EXPR: return "GOTO_EXPR"; 
   case ND_LABEL: return "LABEL"; 
   case ND_LABEL_VAL: return "LABEL_VAL";
-  case ND_FUNCALL: return "FUNCCALL";
+  case ND_FUNCALL: return "FUNCALL";
   case ND_EXPR_STMT: return "EXPRSTMR";
   case ND_STMT_EXPR: return "STMTEXPR"; 
   case ND_VAR: return "VAR"; 

@@ -26,6 +26,7 @@ static char *lvar_ptr;
 bool dont_reuse_stack = false;
 extern bool opt_omit_frame_pointer;
 extern bool opt_fbuiltin;
+extern bool opt_optimize_level3;
 
 static void gen_expr(Node *node);
 static void gen_stmt(Node *node);
@@ -3857,6 +3858,50 @@ static void gen_expr(Node *node)
     //println("  mov $%d, %%rax", fp);
     println("  mov $%d, %%al", fp);
      
+    // Tail call optimization
+    if (node->is_tail && opt_optimize_level3) {
+        char *funcname = NULL;
+        if (node->lhs->kind == ND_VAR && node->lhs->var->is_function)
+            funcname = node->lhs->var->name;
+
+        if (funcname && strcmp(funcname, current_fn->name) == 0) {
+            // Recursive tail call optimization
+            Node *arg = node->args;
+            Obj *param = current_fn->params;
+            while (arg && param) {
+                if (arg->pass_by_stack) {
+                    for (int i = 0; i < arg->ty->size; i += 8) {
+                        int dest_offset = param->offset;
+                        if (strcmp(param->ptr, "%rsp") == 0)
+                            dest_offset += current_fn->stack_size + depth * 8;
+
+                        println("  mov %d(%%rsp), %%r11", arg->stack_offset + i);
+                        println("  mov %%r11, %d(%s)", dest_offset, param->ptr);
+                    }
+                }
+                arg = arg->next;
+                param = param->next;
+            }
+
+            if (stack_args > 0)
+                println("  add $%d, %%rsp", stack_args * 8);
+
+            depth -= stack_args;
+            println("  jmp .L.body.%s", current_fn->name);
+            return;
+        }
+
+        if (stack_args == 0 && current_fn->stack_size == 0) {
+            if (!is_omit_fp(current_fn)) {
+                println("  add $%d, %%rsp", current_fn->stack_size);
+            } else {
+                println("  mov %%rbp, %%rsp");
+                println("  pop %%rbp");
+            }
+            println("  jmp *%%r10");
+            return;
+        }
+    }
 
     println("  call *%%r10");
     println("  add $%d, %%rsp", stack_args * 8);
@@ -5339,6 +5384,7 @@ static void emit_text(Obj *prog)
       println("  movups %%xmm7, %d(%s)", off + 184, ptr);
     }
 
+    println(".L.body.%s:", fn->name);
     // Save passed-by-register arguments to the stack
     int gp = 0, fp = 0;
     for (Obj *var = fn->params; var; var = var->next)

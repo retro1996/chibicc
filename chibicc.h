@@ -988,6 +988,7 @@ Node
   // for dot diagram
   int unique_number;
   bool is_scalar_promoted;  
+  bool is_tail;
 };
 
 typedef struct
