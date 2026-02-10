@@ -80,10 +80,6 @@ static bool is_omit_fp(Obj *fn) {
   if (fn->ty->is_variadic) return false;
   if (fn->has_asm) return false;  
 
-  for (Obj *var = fn->locals; var; var = var->next)
-    if (var->is_address_used)
-      return false;
-
   return true;
 }
 
