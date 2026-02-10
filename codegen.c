@@ -3892,7 +3892,7 @@ static void gen_expr(Node *node)
         }
 
         if (stack_args == 0 && current_fn->stack_size == 0) {
-            if (!is_omit_fp(current_fn)) {
+            if (is_omit_fp(current_fn)) {
                 println("  add $%d, %%rsp", current_fn->stack_size);
             } else {
                 println("  mov %%rbp, %%rsp");
