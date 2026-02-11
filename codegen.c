@@ -3871,7 +3871,7 @@ static void gen_expr(Node *node)
             while (arg && param) {
                 if (arg->pass_by_stack) {
                     for (int i = 0; i < arg->ty->size; i += 8) {
-                        int dest_offset = param->offset;
+                        int dest_offset = param->offset + i;
                         if (strcmp(param->ptr, "%rsp") == 0)
                             dest_offset += current_fn->stack_size + depth * 8;
 
@@ -3888,8 +3888,8 @@ static void gen_expr(Node *node)
             if (is_omit_fp(current_fn)) {
                 // No frame pointer: just clean up stack args
                 if (stack_args > 0)
-                    //println("  add $%d, %%rsp", stack_args * 8);
-                    println("  add $%d, %%rsp", current_fn->stack_size);
+                    println("  add $%d, %%rsp", stack_args * 8);
+                    //println("  add $%d, %%rsp", current_fn->stack_size);
             } else {
                 // Frame pointer exists: restore RSP to base pointer
                 bool use_rbx = (current_fn->stack_align > 16);
@@ -3904,7 +3904,8 @@ static void gen_expr(Node *node)
 
         if (stack_args == 0 && current_fn->stack_size == 0) {
             if (is_omit_fp(current_fn)) {
-                println("  add $%d, %%rsp", current_fn->stack_size);
+                //println("  add $%d, %%rsp", current_fn->stack_size);
+                println("  add $%d, %%rsp", stack_args * 8);
             } else {
                 println("  mov %%rbp, %%rsp");
                 println("  pop %%rbp");
