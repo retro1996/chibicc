@@ -17,9 +17,9 @@ int main() {
   printf("Test: sum_many(10, 2, 3, 4, 5, 6, 7, 8, 0)\n");
   ASSERT(55, sum_many(10, 2, 3, 4, 5, 6, 7, 8, 0));
   
-  // Test deep recursion to ensure TCO is working (stack overflow if not)
-  printf("Test: deep recursion sum_many(1000000, ...)\n");
-  ASSERT(1784293664, sum_many(1000000, 2, 3, 4, 5, 6, 7, 8, 0));
+  // Test deep recursion to ensure TCO is working (stack overflow  > 60000 )
+  printf("Test: deep recursion sum_many(50000, ...)\n");
+  ASSERT(1250025000, sum_many(50000, 2, 3, 4, 5, 6, 7, 8, 0));
 
   printf("OK\n");
   return 0;

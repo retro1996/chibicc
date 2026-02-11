@@ -3888,7 +3888,8 @@ static void gen_expr(Node *node)
             if (is_omit_fp(current_fn)) {
                 // No frame pointer: just clean up stack args
                 if (stack_args > 0)
-                    println("  add $%d, %%rsp", stack_args * 8);
+                    //println("  add $%d, %%rsp", stack_args * 8);
+                    println("  add $%d, %%rsp", current_fn->stack_size);
             } else {
                 // Frame pointer exists: restore RSP to base pointer
                 bool use_rbx = (current_fn->stack_align > 16);
