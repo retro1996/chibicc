@@ -1337,7 +1337,6 @@ static void need_alloca_bottom(void) {
   if (!current_fn) return;
   if (current_fn->alloca_bottom)
     return;
-  opt_omit_frame_pointer = false;
   current_fn->alloca_bottom = new_lvar("__alloca_size__", pointer_to(ty_char), current_fn->name);
 }
 
@@ -6665,7 +6664,8 @@ static Node *primary(Token **rest, Token *tok)
 
 
   if (equal(tok, "__builtin_return_address")) {
-    opt_omit_frame_pointer = false;
+    if (current_fn)
+      current_fn->force_frame_pointer = true;
     Node *node = new_node(ND_RETURN_ADDR, tok);
     SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
@@ -6678,7 +6678,8 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "__builtin_frame_address"))
   {
-    opt_omit_frame_pointer = false;
+    if (current_fn)
+      current_fn->force_frame_pointer = true;
     Node *node = new_node(ND_BUILTIN_FRAME_ADDRESS, tok);
     add_type(node);
     SET_CTX(ctx); 
@@ -6962,8 +6963,10 @@ static Node *primary(Token **rest, Token *tok)
      
       if (strstr(name, "setjmp") || strstr(name, "savectx") ||
           strstr(name, "vfork") || strstr(name, "getcontext")) {
-        dont_reuse_stack = true;
-        opt_omit_frame_pointer = false;
+        if (current_fn) {
+          current_fn->dont_reuse_stack = true;
+          current_fn->force_frame_pointer = true;
+        }
       }
     
     }

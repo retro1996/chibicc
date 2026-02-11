@@ -355,6 +355,8 @@ struct Obj
   Initializer *init;
   bool is_address_used;
   bool has_asm;
+  bool force_frame_pointer;
+  bool dont_reuse_stack;
   bool is_param;
 };
 
@@ -1212,8 +1214,6 @@ bool check_register_used(char *regist);
 void check_register_in_template(char *template); 
 void pushreg(const char *arg);
 void gen_fpclassify(FpClassify *);
-
-extern bool dont_reuse_stack;
 
 //
 // unicode.c

@@ -23,7 +23,6 @@ extern int64_t eval(Node *node);
 
 static Obj *current_fn;
 static char *lvar_ptr;
-bool dont_reuse_stack = false;
 extern bool opt_omit_frame_pointer;
 extern bool opt_fbuiltin;
 extern bool opt_optimize_level3;
@@ -76,6 +75,7 @@ static int count(void)
 
 static bool is_omit_fp(Obj *fn) {
   if (!opt_omit_frame_pointer) return false;
+  if (fn->force_frame_pointer) return false;
   if (fn->alloca_bottom) return false;
   if (fn->stack_align > 16) return false;
   if (fn->ty->is_variadic) return false;
@@ -91,7 +91,7 @@ static int push_tmpstack(void) {
   }
 
   int offset;
-  if (!dont_reuse_stack) {
+  if (!current_fn->dont_reuse_stack) {
       int bottom = current_fn->stack_size + (tmp_stack.depth + 1) * 8;
     tmp_stack.bottom = MAX(tmp_stack.bottom, bottom);
     offset = -bottom;
