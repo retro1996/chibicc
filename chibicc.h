@@ -356,6 +356,7 @@ struct Obj
   bool is_address_used;
   bool has_asm;
   bool is_param;
+  bool force_frame_pointer;
 };
 
 // Global variable can be initialized either by a constant expression

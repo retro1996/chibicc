@@ -5619,6 +5619,15 @@ static char *token_to_string(Token *tok) {
   return buf;
 }
 
+static bool is_returned_twice(char *name) {
+  return !strcmp(name, "setjmp") || !strcmp(name, "_setjmp") ||
+         !strcmp(name, "sigsetjmp") || !strcmp(name, "__sigsetjmp") ||
+         !strcmp(name, "__builtin_setjmp") ||
+         !strcmp(name, "savectx") || !strcmp(name, "vfork") ||
+         !strcmp(name, "getcontext");
+}
+
+
 
 // funcall = (assign ("," assign)*)? ")"
 static Node *funcall(Token **rest, Token *tok, Node *fn)
@@ -6665,7 +6674,8 @@ static Node *primary(Token **rest, Token *tok)
 
 
   if (equal(tok, "__builtin_return_address")) {
-    opt_omit_frame_pointer = false;
+    if (current_fn)
+      current_fn->force_frame_pointer = true;
     Node *node = new_node(ND_RETURN_ADDR, tok);
     SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
@@ -6678,7 +6688,8 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "__builtin_frame_address"))
   {
-    opt_omit_frame_pointer = false;
+    if (current_fn)
+      current_fn->force_frame_pointer = true;
     Node *node = new_node(ND_BUILTIN_FRAME_ADDRESS, tok);
     add_type(node);
     SET_CTX(ctx); 
@@ -6960,10 +6971,10 @@ static Node *primary(Token **rest, Token *tok)
 
       char *name = sc->var->name;
      
-      if (strstr(name, "setjmp") || strstr(name, "savectx") ||
-          strstr(name, "vfork") || strstr(name, "getcontext")) {
+      if (is_returned_twice(name)) {
         dont_reuse_stack = true;
-        opt_omit_frame_pointer = false;
+        if (current_fn)
+          current_fn->force_frame_pointer = true;
       }
     
     }

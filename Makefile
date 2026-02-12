@@ -6,6 +6,7 @@ CC=gcc
 CFLAGS =-std=c11 -g -fno-common -Wall -Wno-switch -DPREFIX=\"$(PREFIX)\" -DGCC_VERSION=\"$(GCC_VERSION)\"
 CFLAGS_DIAG= -std=c11 
 CFLAGS_SPE = -fomit-frame-pointer -O3
+TEST_JOBS ?=
 OBJECT=chibicc
 OBJECTLIB=libchibicc
 SRCS=$(wildcard *.c)
@@ -32,16 +33,17 @@ test/%.exe: $(OBJECT) test/%.c
 	
 
 test: $(TESTS) 
-	for i in $^; do echo $$i; ./$$i || exit 1; echo; done
+	TEST_JOBS="$(TEST_JOBS)" ./test/run_tests.sh $(addprefix ./,$^)
 	test/driver.sh ./$(OBJECT)
 
 test_spe/%.exe: $(OBJECT) test/%.c
+	mkdir -p test_spe
 	./$(OBJECT) $(CFLAGS_DIAG) $(CFLAGS_SPE) -Iinclude -Itest \
 		-c -o test_spe/$*.o test/$*.c
 	$(CC) -pthread -o $@ test_spe/$*.o -xc test/common -lm
 
 test_spe: $(TESTS_SPE)
-	for i in $^; do echo $$i; ./$$i || exit 1; echo; done
+	TEST_JOBS="$(TEST_JOBS)" ./test/run_tests.sh $(addprefix ./,$^)
 
 # #for managing dot diagram
 # test-png: $(TESTS)
@@ -63,7 +65,7 @@ stage2/test/%.exe: stage2/$(OBJECT) test/%.c
 	$(CC) -pthread -o $@ stage2/test/$*.o -xc test/common
 
 test-stage2: $(TESTS:test/%=stage2/test/%)
-	for i in $^; do echo $$i; ./$$i || exit 1; echo; done
+	TEST_JOBS="$(TEST_JOBS)" ./test/run_tests.sh $(addprefix ./,$^)
 	test/driver.sh ./stage2/$(OBJECT)
 
 projects-all: projects projects-oth lxc vlc git memcached cpython openssl
@@ -74,25 +76,25 @@ projects: zlib util-linux nginx
 
 
 curl:
-	cd ../curl && make clean && CC=chibicc  CFLAGS="-std=c11" ./configure --with-openssl && make && make test
+	cd ../curl && make clean && CC=chibicc  CFLAGS="-std=c11" ./configure --with-openssl && make -j$(nproc) && make -j$(nproc) test
 
 zlib:
 	cd ../zlib && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make && make test
 
 nmap:
-	cd ../nmap && make clean && CC=chibicc  CFLAGS="-fPIC -std=c11" LIBS="-ldbus-1 -latomic -libverbs -lrdmacm" ./configure --with-dbus && make && make check
+	cd ../nmap && make clean && CC=chibicc  CFLAGS="-fPIC -std=c11" LIBS="-ldbus-1 -latomic -libverbs -lrdmacm" ./configure --with-dbus && make -j$(nproc) && make check
 
 openssl:
 	cd ../openssl && make clean && CC=chibicc CFLAGS="-std=c11" ./Configure && make 
 
 util-linux:
-	cd ../util-linux && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make && make check-programs && cd tests && ./run.sh
+	cd ../util-linux && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make -j$(nproc) && make check-programs && cd tests && ./run.sh
 
 nginx:
 	cd ../nginx && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./auto/configure --with-http_ssl_module && make
 
 vim:
-	cd ../vim && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make &&  make test 
+	cd ../vim && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make -j$(nproc) &&  make -j$(nproc) test 
 
 lxc:
 	cd ../lxc && rm -rf build && CC=gcc \
@@ -106,7 +108,7 @@ vlc:
 
 cpython:
 	cd ../cpython &&  CC=chibicc CFLAGS="-std=c11" ./configure  \
-	 --build=x86_64-pc-linux-gnu && make clean && make && make test
+	 --build=x86_64-pc-linux-gnu && make clean && make -j$(nproc) && make -j$(nproc) test
 
 # vlc2:
 # 	cd ../vlc && rm -rf build && mymeson setup build && cd build && mymeson compile

@@ -76,6 +76,7 @@ static int count(void)
 
 static bool is_omit_fp(Obj *fn) {
   if (!opt_omit_frame_pointer) return false;
+  if (fn->force_frame_pointer) return false;
   if (fn->alloca_bottom) return false;
   if (fn->stack_align > 16) return false;
   if (fn->ty->is_variadic) return false;
@@ -1540,6 +1541,12 @@ static void builtin_alloca(Node *node)
   int align = node->val > 16 ? node->val : 16;
   println("  add $%d, %%rdi", align - 1);
   println("  and $-%d, %%rdi", align);
+
+  if (!current_fn->alloca_bottom) {
+    println("  sub %%rdi, %%rsp");
+    println("  mov %%rsp, %%rax");
+    return;
+  }
 
   // Shift the temporary area by %rdi.
   println("  mov %d(%s), %%rcx", current_fn->alloca_bottom->offset, current_fn->alloca_bottom->ptr);
