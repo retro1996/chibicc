@@ -35,11 +35,16 @@ export tmpdir failfile
 printf '%s\n' "$@" | xargs -P"$jobs" -I{} bash -c 'run_one "$1"' _ {}
 
 if [ -s "$failfile" ]; then
+  mapfile -t failed_exes < <(sort -u "$failfile")
+  echo "FAILED TESTS (${#failed_exes[@]}):" >&2
+  printf '  %s\n' "${failed_exes[@]}" >&2
+  echo >&2
+
   while IFS= read -r exe; do
     log="$tmpdir/$(echo "$exe" | tr '/ ' '__').log"
     echo "FAILED: $exe" >&2
     [ -f "$log" ] && cat "$log" >&2
     echo >&2
-  done < "$failfile"
+    done < <(printf '%s\n' "${failed_exes[@]}")
   exit 1
 fi
