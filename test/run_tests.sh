@@ -32,7 +32,11 @@ run_one() {
 export -f run_one
 export tmpdir failfile
 
-printf '%s\n' "$@" | xargs -P"$jobs" -I{} bash -c 'run_one "$1"' _ {}
+# Let all tests run and summarize failures ourselves below.
+# With "set -e", xargs would otherwise stop the script before summary printing.
+if ! printf '%s\n' "$@" | xargs -P"$jobs" -I{} bash -c 'run_one "$1"' _ {}; then
+  :
+fi
 
 if [ -s "$failfile" ]; then
   mapfile -t failed_exes < <(sort -u "$failfile")
