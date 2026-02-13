@@ -2453,8 +2453,9 @@ static bool is_typename(Token *tok)
 // asm-stmt = "asm" ("volatile" | "inline")* "(" string-literal ")"
 static Node *asm_stmt(Token **rest, Token *tok)
 {
-  if (current_fn)
-    current_fn->has_asm = true;
+  if (current_fn) {
+    current_fn->force_frame_pointer = true;
+  }
   Node *node = new_node(ND_ASM, tok);
   tok = tok->next;
 
@@ -6688,8 +6689,9 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "__builtin_frame_address"))
   {
-    if (current_fn)
-      current_fn->force_frame_pointer = true;
+    // if (current_fn)
+    //   current_fn->force_frame_pointer = true;
+    opt_omit_frame_pointer = false;
     Node *node = new_node(ND_BUILTIN_FRAME_ADDRESS, tok);
     add_type(node);
     SET_CTX(ctx); 

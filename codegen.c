@@ -77,11 +77,7 @@ static int count(void)
 static bool is_omit_fp(Obj *fn) {
   if (!opt_omit_frame_pointer) return false;
   if (fn->force_frame_pointer) return false;
-  if (fn->alloca_bottom) return false;
   if (fn->stack_align > 16) return false;
-  if (fn->ty->is_variadic) return false;
-  if (fn->has_asm) return false;  
-
   return true;
 }
 
@@ -3059,8 +3055,34 @@ static void gen_movnti64(Node *node) {
 
 static void gen_movnt_binop(Node *node, const char *insn) {
   gen_expr(node->rhs);
+  push_xmm(0);
   gen_expr(node->lhs);
+  pop_xmm(0);
+  int c = count();
+  println("  test $15, %%rax");
+  println("  jnz .L.movnt_unaligned.%d", c);
   println("  %s %%xmm0, (%%rax)", insn);
+  println("  jmp .L.movnt_done.%d", c);
+  println(".L.movnt_unaligned.%d:", c);
+  // movnt* faults on unaligned memory; fall back to unaligned SSE store.
+  if (!strcmp(insn, "movntpd"))
+    println("  movupd %%xmm0, (%%rax)");
+  else
+    println("  movdqu %%xmm0, (%%rax)");
+  println(".L.movnt_done.%d:", c);
+}
+
+static void gen_movntdqa(Node *node) {
+  gen_expr(node->lhs);
+  int c = count();
+  println("  test $15, %%rax");
+  println("  jnz .L.movntdqa_unaligned.%d", c);
+  println("  movntdqa (%%rax), %%xmm0");
+  println("  jmp .L.movntdqa_done.%d", c);
+  println(".L.movntdqa_unaligned.%d:", c);
+  // movntdqa faults on unaligned memory; fall back to unaligned load.
+  println("  movdqu (%%rax), %%xmm0");
+  println(".L.movntdqa_done.%d:", c);
 }
 
 static void gen_crc32qi(Node *node) {
@@ -3195,12 +3217,6 @@ static void gen_sse_binop12(Node *node, const char *insn) {
   println("  %s  %%xmm0, %%xmm1", insn);  
 }
 
-
-static void gen_sse_binop13(Node *node, const char *insn, const char *reg) {
-  gen_expr(node->lhs);
-  println("  movq (%%rax), %%xmm0");
-  println("  %s (%%%s), %%xmm0", insn, reg);  
-}
 
 
 static void gen_lddqu(Node *node) {
@@ -4591,7 +4607,7 @@ static void gen_expr(Node *node)
   case ND_PMOVZXWQ128: gen_sse_binop2(node, "pmovzxwq", "xmm0", false);  return;
   case ND_PMOVZXBW128: gen_sse_binop2(node, "pmovzxbw", "xmm0", false);  return;
   case ND_PACKUSDW128: gen_sse_binop3(node, "packusdw", false); return; 
-  case ND_MOVNTDQA: gen_sse_binop13(node, "movntdqa", "rax"); return;
+  case ND_MOVNTDQA: gen_movntdqa(node); return;
   case ND_CRC32QI: gen_crc32qi(node); return;
   case ND_CRC32HI: gen_crc32hi(node); return;
   case ND_CRC32SI: gen_crc32si(node); return;
@@ -5387,13 +5403,20 @@ static void emit_text(Obj *prog)
       }
 
       int off = fn->va_area->offset;
-      char *ptr = lvar_ptr;
+      char *ptr = fn->va_area->ptr;
+      if (is_omit_fp(fn))
+        off += fn->stack_size;
 
       // va_elem
       println("  movl $%d, %d(%s)", gp * 8, off, ptr);          // gp_offset
       println("  movl $%d, %d(%s)", fp * 16 + 48, off + 4, ptr); // fp_offset
+      if (is_omit_fp(fn)) {
+        println("  movq %%rsp, %d(%s)", off + 8, ptr);            // overflow_arg_area
+        println("  addq $%d, %d(%s)", fn->stack_size + fn->overflow_arg_area - 8, off + 8, ptr);
+      } else {
       println("  movq %%rbp, %d(%s)", off + 8, ptr);            // overflow_arg_area
       println("  addq $%d, %d(%s)", fn->overflow_arg_area, off + 8, ptr);
+      }
       println("  movq %s, %d(%s)", ptr, off + 16, ptr); // reg_save_area
       println("  addq $%d, %d(%s)", off + 24, off + 16, ptr);
 

@@ -12,6 +12,9 @@ else
   jobs="$(nproc 2>/dev/null || echo 4)"
 fi
 
+# Optional per-test timeout in seconds (0 disables timeout).
+timeout_secs="${TEST_TIMEOUT:-0}"
+
 tmpdir="$(mktemp -d /tmp/chibicc-run-XXXXXX)"
 trap 'rm -rf "$tmpdir"' EXIT INT TERM HUP
 
@@ -20,9 +23,24 @@ touch "$failfile"
 
 run_one() {
   exe="$1"
+  mkdir -p "$tmpdir"
+  touch "$failfile"
   log="$tmpdir/$(echo "$exe" | tr '/ ' '__').log"
   echo "$exe"
-  if ! "$exe" >"$log" 2>&1; then
+
+  status=0
+  if [ "$timeout_secs" -gt 0 ] && command -v timeout >/dev/null 2>&1; then
+    timeout "${timeout_secs}s" "$exe" >"$log" 2>&1 || status=$?
+  else
+    "$exe" >"$log" 2>&1 || status=$?
+  fi
+
+  if [ "$status" -ne 0 ]; then
+    mkdir -p "$tmpdir"
+    touch "$failfile"
+    if [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then
+      echo "[TIMEOUT ${timeout_secs}s] $exe" >> "$log"
+    fi
     echo "$exe" >> "$failfile"
     return 1
   fi
@@ -30,7 +48,7 @@ run_one() {
 }
 
 export -f run_one
-export tmpdir failfile
+export tmpdir failfile timeout_secs
 
 # Let all tests run and summarize failures ourselves below.
 # With "set -e", xargs would otherwise stop the script before summary printing.

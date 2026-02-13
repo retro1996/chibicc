@@ -7,6 +7,7 @@ CFLAGS =-std=c11 -g -fno-common -Wall -Wno-switch -DPREFIX=\"$(PREFIX)\" -DGCC_V
 CFLAGS_DIAG= -std=c11 
 CFLAGS_SPE = -fomit-frame-pointer -O3
 TEST_JOBS ?=
+TEST_TIMEOUT ?= 30
 OBJECT=chibicc
 OBJECTLIB=libchibicc
 SRCS=$(wildcard *.c)
@@ -33,7 +34,7 @@ test/%.exe: $(OBJECT) test/%.c
 	
 
 test: $(TESTS) 
-	TEST_JOBS="$(TEST_JOBS)" ./test/run_tests.sh $(addprefix ./,$^)
+	TEST_JOBS="$(TEST_JOBS)" TEST_TIMEOUT="$(TEST_TIMEOUT)" ./test/run_tests.sh $(addprefix ./,$^)
 	test/driver.sh ./$(OBJECT)
 
 test_spe/%.exe: $(OBJECT) test/%.c
@@ -43,7 +44,7 @@ test_spe/%.exe: $(OBJECT) test/%.c
 	$(CC) -pthread -o $@ test_spe/$*.o -xc test/common -lm
 
 test_spe: $(TESTS_SPE)
-	TEST_JOBS="$(TEST_JOBS)" ./test/run_tests.sh $(addprefix ./,$^)
+	TEST_JOBS="$(TEST_JOBS)" TEST_TIMEOUT="$(TEST_TIMEOUT)" ./test/run_tests.sh $(addprefix ./,$^)
 
 # #for managing dot diagram
 # test-png: $(TESTS)
@@ -65,7 +66,7 @@ stage2/test/%.exe: stage2/$(OBJECT) test/%.c
 	$(CC) -pthread -o $@ stage2/test/$*.o -xc test/common
 
 test-stage2: $(TESTS:test/%=stage2/test/%)
-	TEST_JOBS="$(TEST_JOBS)" ./test/run_tests.sh $(addprefix ./,$^)
+	TEST_JOBS="$(TEST_JOBS)" TEST_TIMEOUT="$(TEST_TIMEOUT)" ./test/run_tests.sh $(addprefix ./,$^)
 	test/driver.sh ./stage2/$(OBJECT)
 
 projects-all: projects projects-oth lxc vlc git memcached cpython openssl

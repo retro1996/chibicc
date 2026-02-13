@@ -354,7 +354,6 @@ struct Obj
   bool is_prototyped; // Whether the function is prototyped or not
   Initializer *init;
   bool is_address_used;
-  bool has_asm;
   bool is_param;
   bool force_frame_pointer;
 };
