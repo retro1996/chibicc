@@ -824,6 +824,7 @@ void add_type(Node *node)
     node->ty = node->lhs->ty->base;
     return;
   case ND_SYNC:
+  case ND_MEMBARRIER:
     node->ty = ty_void;
     return;
   case ND_MWAIT:

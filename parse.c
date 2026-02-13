@@ -210,6 +210,8 @@ static char *token_to_string(Token *tok);
 static Node *ParseAtomicFetch(NodeKind kind, Token *tok, Token **rest);
 static Node *ParseSyncFetch(NodeKind kind, Token *tok, Token **rest);
 static Node *ParseAtomicBitwise(NodeKind kind, Token *tok, Token **rest);
+static Node *ParseAtomicFence(NodeKind kind, Token *tok, Token **rest);
+static Node *ParseAtomicClear(NodeKind kind, Token *tok, Token **rest);
 
 static int align_down(int n, int align)
 {
@@ -6823,6 +6825,14 @@ static Node *primary(Token **rest, Token *tok)
     return ParseAtomic2(ND_TESTANDSETA, tok, rest);
   }
 
+  if (equal(tok, "__atomic_test_and_set")) {
+    return ParseAtomic2(ND_TESTANDSETA, tok, rest);
+  }
+
+  if (equal(tok, "__atomic_clear")) {
+    return ParseAtomicClear(ND_CLEAR, tok, rest);
+  }
+
   if (equal(tok, "__sync_add_and_fetch")) {
       return ParseAtomic3(ND_ADD_AND_FETCH, tok, rest);
   }
@@ -6843,6 +6853,15 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "__builtin_atomic_clear")) {
     return ParseAtomic2(ND_CLEAR, tok, rest);
   }
+
+  if (equal(tok, "__atomic_thread_fence")) {
+    return ParseAtomicFence(ND_MEMBARRIER, tok, rest);
+  }
+
+  if (equal(tok, "__atomic_signal_fence")) {
+    return ParseAtomicFence(ND_MEMBARRIER, tok, rest);
+  }
+
   if (equal(tok, "__sync_lock_test_and_set")) {
     Node *node = new_node(ND_TESTANDSET, tok);
     SET_CTX(ctx); 
@@ -7681,7 +7700,8 @@ char *nodekind2str(NodeKind kind)
   case ND_FETCHAND: return "FETCHAND";    
   case ND_FETCHOR: return "FETCHOR";
   case ND_SUBFETCH: return "SUBFETCH";
-  case ND_SYNC: return "SYNC";    
+  case ND_SYNC: return "SYNC";   
+  case ND_MEMBARRIER: return "MEMBARRIER"; 
   case ND_BUILTIN_MEMCPY: return "MEMCPY";  
   case ND_BUILTIN_MEMSET: return "MEMSET";  
   case ND_BUILTIN_CLZ: return "CLZ";   
@@ -8393,6 +8413,35 @@ static Node *parse_memset(Token *tok, Token **rest) {
     node->builtin_size = assign(&tok, tok);
     add_type(node->builtin_size); 
     SET_CTX(ctx); 
+    *rest = skip(tok, ")", ctx);
+    return node;
+}
+
+static Node *ParseAtomicFence(NodeKind kind, Token *tok, Token **rest) {
+    Node *node = new_node(kind, tok);
+    SET_CTX(ctx);
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok); // memory order
+    add_type(node->lhs);
+    SET_CTX(ctx);
+    *rest = skip(tok, ")", ctx);
+    return node;
+}
+
+static Node *ParseAtomicClear(NodeKind kind, Token *tok, Token **rest) {
+    Node *node = new_node(kind, tok);
+    SET_CTX(ctx);
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok); // pointer
+    add_type(node->lhs);
+    node->ty = node->lhs->ty->base;
+    // __atomic_clear has a second argument for memory order
+    if (equal(tok, ",")) {
+        SET_CTX(ctx);
+        tok = skip(tok, ",", ctx);
+        node->memorder = const_expr(&tok, tok);
+    }
+    SET_CTX(ctx);
     *rest = skip(tok, ")", ctx);
     return node;
 }

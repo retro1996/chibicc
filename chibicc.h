@@ -440,6 +440,7 @@ typedef enum
   ND_FETCHOR,      // Atomic fetch and or
   ND_SUBFETCH,     // Atomic sub and fetch
   ND_SYNC,      //atomic synchronize
+  ND_MEMBARRIER, // atomic thread/signal fence
   ND_BUILTIN_MEMCPY, //builtin memcpy
   ND_BUILTIN_MEMSET, //builtin memset
   ND_BUILTIN_CLZ, //builtin clz

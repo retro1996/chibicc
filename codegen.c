@@ -3993,6 +3993,7 @@ static void gen_expr(Node *node)
   case ND_ADD_AND_FETCH: gen_add_and_fetch(node); return;
   case ND_SUB_AND_FETCH: gen_sub_and_fetch(node); return;
   case ND_BOOL_CAS: gen_bool_cas(node); return;
+  case ND_MEMBARRIER:
   case ND_SYNC: {
     println("  mfence"); // x86-64 instruction for full memory barrier
     return;
