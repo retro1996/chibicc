@@ -763,7 +763,7 @@ void add_type(Node *node)
     return;
   case ND_BUILTIN_ISNAN:
     add_type(node->builtin_val);
-    node->ty = ty_bool;
+    node->ty = ty_int;
     return;
   case ND_BUILTIN_CTZ:
   case ND_BUILTIN_CTZL:
@@ -771,26 +771,29 @@ void add_type(Node *node)
   case ND_BUILTIN_CLZ:
   case ND_BUILTIN_CLZL:
   case ND_BUILTIN_CLZLL:
-  case ND_BUILTIN_BSWAP32:  
   case ND_POPCOUNT:
     add_type(node->builtin_val);
     node->ty = ty_int;
     return;
+  case ND_BUILTIN_BSWAP32:
+    add_type(node->builtin_val);
+    node->ty = ty_uint;
+    return;
   case ND_POPCOUNTL:
     add_type(node->builtin_val);
-    node->ty = ty_long;
+    node->ty = ty_int;
     return;
   case ND_POPCOUNTLL:
     add_type(node->builtin_val);
-    node->ty = ty_llong;
+    node->ty = ty_int;
     return;
   case ND_BUILTIN_BSWAP16:
     add_type(node->builtin_val);
-    node->ty = ty_short;
+    node->ty = ty_ushort;
     return;   
   case ND_BUILTIN_BSWAP64:
     add_type(node->builtin_val);
-    node->ty = ty_long;
+    node->ty = ty_ulong;
     return;       
   case ND_CMPEXCH:
   case ND_CMPEXCH_N:
@@ -884,11 +887,7 @@ void add_type(Node *node)
   case ND_CVTSD2SI64:
   case ND_CVTSS2SI64:
   case ND_CVTTSS2SI64:
-  case ND_PARITYL:
     node->ty = ty_long;
-    return;
-  case ND_PARITYLL:
-    node->ty = ty_llong;
     return;
   case ND_VECINITV4HI:
   case ND_PCMPGTW:
@@ -1118,6 +1117,8 @@ void add_type(Node *node)
   case ND_UCOMISDNEQ:  
   case ND_CVTSD2SI:
   case ND_PMOVMSKB128:
+  case ND_PARITYL:
+  case ND_PARITYLL:
   case ND_PARITY:
   case ND_PTESTZ128:
   case ND_PTESTC128:
