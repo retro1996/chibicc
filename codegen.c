@@ -1599,8 +1599,11 @@ static void gen_memset(Node *node) {
     pop_tmp("%rcx");  
     pop_tmp("%rsi");  
     pop_tmp("%rdi");  
+    println("  mov %%rdi, %%r8");
     println("  mov %%sil, %%al");  
+    println("  cld");
     println("  rep stosb");  
+    println("  mov %%r8, %%rax");
   }     
 }
 
@@ -1614,9 +1617,9 @@ static void gen_memcpy(Node *node) {
     println("  mov %%rax, %%rcx");  
     pop_tmp("%rsi");                    
     pop_tmp("%rdi");                   
+    println("  mov %%rdi, %%rax");
     println("  cld");
     println("  rep movsb");
-    println("  mov %%rdi, %%rax");
     return;
   }
 }
