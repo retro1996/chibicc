@@ -3086,38 +3086,39 @@ static void gen_movntdqa(Node *node) {
 }
 
 static void gen_crc32qi(Node *node) {
-  gen_expr(node->lhs);     
-  println("  movl %%eax, %%ecx");
-  gen_expr(node->rhs);     
-  println("  movb %%al, %%dl");
-  println("  crc32b %%dl, %%ecx");
+  gen_expr(node->lhs);
+  push_tmp();
+  gen_expr(node->rhs);
+  pop_tmp("%rcx");
+  println("  crc32b %%al, %%ecx");
   println("  movl %%ecx, %%eax");
 }
 
 static void gen_crc32di(Node *node) {
-  gen_expr(node->lhs);      
-  println("  movl %%eax, %%ecx"); 
-  gen_expr(node->rhs);    
-  println("  crc32q %%rax, %%rcx"); 
-  println("  movl %%ecx, %%eax");    
+  gen_expr(node->lhs);
+  push_tmp();
+  gen_expr(node->rhs);
+  pop_tmp("%rcx");
+  println("  crc32q %%rax, %%rcx");
+  println("  movl %%ecx, %%eax");
 }
 
 static void gen_crc32hi(Node *node) {
-  gen_expr(node->lhs);        
-  println("  movl %%eax, %%ecx");
-  gen_expr(node->rhs);        
-  println("  movw %%ax, %%dx");
-  println("  crc32w %%dx, %%ecx");
+  gen_expr(node->lhs);
+  push_tmp();
+  gen_expr(node->rhs);
+  pop_tmp("%rcx");
+  println("  crc32w %%ax, %%ecx");
   println("  movl %%ecx, %%eax");
 }
 
 
 static void gen_crc32si(Node *node) {
-  gen_expr(node->lhs);         
-  println("  movl %%eax, %%ecx");
-  gen_expr(node->rhs);         
-  println("  movl %%eax, %%edx");
-  println("  crc32l %%edx, %%ecx");
+  gen_expr(node->lhs);
+  push_tmp();
+  gen_expr(node->rhs);
+  pop_tmp("%rcx");
+  println("  crc32l %%eax, %%ecx");
   println("  movl %%ecx, %%eax");
 }
 
@@ -5601,8 +5602,7 @@ static int assign_lvar_offsets2(Obj *fn, int bottom, char *ptr) {
     int align = get_align(var);
 
     if (var->offset) {
-      if (var->offset < 0)
-        bottom = align_to(bottom + var->ty->size, align);
+      // Skip variables that already have an offset
       continue;
     }
 
@@ -5619,13 +5619,16 @@ void assign_lvar_offsets(Obj *prog) {
     if (!fn->is_function || !fn->is_definition)
       continue;
 
-    int bottom = 0;
+    fn->stack_align = get_lvar_align(fn, 16);
+    bool omit_fp = is_omit_fp(fn);
+
+    int bottom = fn->stack_size;
+    if (omit_fp) bottom -= 8;
+    if (bottom < 0) bottom = 0;
+
     int gp = 0, fp = 0;
     int max_align = 8;
     int stack = 0;
-
-    fn->stack_align = get_lvar_align(fn, 16);
-    bool omit_fp = is_omit_fp(fn);
 
     for (Obj *var = fn->params; var; var = var->next) {
       var->is_param = true;
