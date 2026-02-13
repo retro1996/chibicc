@@ -720,7 +720,7 @@ void add_type(Node *node)
   case ND_EXPECT:
     add_type(node->rhs);
     add_type(node->lhs);
-    node->ty = ty_bool;
+    node->ty = node->lhs->ty;
     return;
   case ND_ABORT:
     return;
@@ -819,6 +819,9 @@ void add_type(Node *node)
       error_tok(node->lhs->tok, "%s %d:  in add_type: pointer expected", TYPE_C, __LINE__);
     node->rhs = new_cast(node->rhs, node->lhs->ty->base);
     node->ty = node->lhs->ty->base;
+    return;
+  case ND_SYNC:
+    node->ty = ty_void;
     return;
   case ND_MWAIT:
   case ND_MONITOR:
