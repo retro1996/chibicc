@@ -6691,14 +6691,18 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "__builtin_frame_address"))
   {
-    // if (current_fn)
-    //   current_fn->force_frame_pointer = true;
-    opt_omit_frame_pointer = false;
+    if (current_fn)
+      current_fn->force_frame_pointer = true;
     Node *node = new_node(ND_BUILTIN_FRAME_ADDRESS, tok);
     add_type(node);
     SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
-    node->lhs = assign(&tok, tok); 
+    node->lhs = assign(&tok, tok);
+    // __builtin_frame_address(0) only needs a frame pointer in the current function.
+    // For levels >0 (or non-constant), keep frame pointers globally in this TU
+    // so caller-chain walking remains available for existing tests.
+    if (!(is_const_expr(node->lhs) && eval(node->lhs) == 0))
+      opt_omit_frame_pointer = false;
     SET_CTX(ctx); 
     *rest = skip(tok, ")", ctx);
     return node;
