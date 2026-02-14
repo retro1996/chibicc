@@ -6764,10 +6764,10 @@ static Node *primary(Token **rest, Token *tok)
     return ParseAtomicCompareExchangeN(ND_CMPEXCH_N, tok, rest);
   }
 
-  if (equal(tok, "__builtin_atomic_load")) {
+  if (equal(tok, "__builtin_atomic_load") || equal(tok, "__atomic_load")) {
     return ParseAtomic3(ND_LOAD, tok, rest);
   }
-  if (equal(tok, "__builtin_atomic_store")) {
+  if (equal(tok, "__builtin_atomic_store") || equal(tok, "__atomic_store")) {
     return ParseAtomic3(ND_STORE, tok, rest);
   }
   if (equal(tok, "__builtin_atomic_load_n") || equal(tok, "__atomic_load_n")) {

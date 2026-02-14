@@ -818,7 +818,6 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 asmExt->output[nbOutput]->size = sc->var->ty->size;
                 if (!asmExt->output[nbOutput]->reg)
                     error_tok(tok, "%s %d: in output_asm function : reg is null extended assembly not managed yet", EXTASM_C, __LINE__);
-                asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                 asmExt->output[nbOutput]->isVariable = true;
                 asmExt->output[nbOutput]->output = tok;
                 asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
@@ -920,6 +919,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     return;
                 }
 
+                asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                 // skip the variable to go to next token that should be a ")"
                 // tok = tok->next;
                 tok = tok->next;                
@@ -1419,7 +1419,6 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 } 
                 if (!asmExt->input[nbInput]->reg) 
                     error_tok(tok, "%s : %s:%d: error: in input_asm function input_asm :reg is null! %d", EXTASM_C, __FILE__, __LINE__, nbInput);
-                asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
 
                 //managing specific case of arrays
                 if (sc->var->ty->kind == TY_ARRAY) {
@@ -1507,6 +1506,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     return;
                 }
 
+                asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
                 tok = tok->next;
                 SET_CTX(ctx);
                 *rest = skip(tok, ")", ctx);
@@ -1915,13 +1915,13 @@ char *update_register_size(char *reg, int size)
     else if (!strncmp(reg, "%rsi", strlen(reg)) || !strncmp(reg, "%esi", strlen(reg)) || !strncmp(reg, "%si", strlen(reg)) || !strncmp(reg, "%sih", strlen(reg)) || !strncmp(reg, "%sil", strlen(reg)))
         return reg_si(size);       
     else if (!strncmp(reg, "%r8", strlen(reg)) || !strncmp(reg, "%r8d", strlen(reg)) || !strncmp(reg, "%r8w", strlen(reg)) || !strncmp(reg, "%r8h", strlen(reg)) || !strncmp(reg, "%r8b", strlen(reg)))
-        return reg_si(size);                    
+        return reg_r8w(size);                    
     else if (!strncmp(reg, "%r9", strlen(reg)) || !strncmp(reg, "%r9d", strlen(reg)) || !strncmp(reg, "%r9w", strlen(reg)) || !strncmp(reg, "%r9h", strlen(reg)) || !strncmp(reg, "%r9b", strlen(reg)))
-        return reg_si(size);    
+        return reg_r9w(size);    
     else if (!strncmp(reg, "%r10", strlen(reg)) || !strncmp(reg, "%r10d", strlen(reg)) || !strncmp(reg, "%r10w", strlen(reg)) || !strncmp(reg, "%r10h", strlen(reg)) || !strncmp(reg, "%r10b", strlen(reg)))
-        return reg_si(size); 
+        return reg_r10w(size); 
     else if (!strncmp(reg, "%r11", strlen(reg)) || !strncmp(reg, "%r11d", strlen(reg)) || !strncmp(reg, "%r11w", strlen(reg)) || !strncmp(reg, "%r11h", strlen(reg)) || !strncmp(reg, "%r11b", strlen(reg)))
-        return reg_si(size);                               
+        return reg_r11w(size);                               
     else
         return reg;
 }

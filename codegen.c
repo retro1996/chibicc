@@ -78,6 +78,18 @@ static bool is_omit_fp(Obj *fn) {
   if (!opt_omit_frame_pointer) return false;
   if (fn->force_frame_pointer) return false;
   if (fn->stack_align > 16) return false;
+  // 16-byte atomics/int128 on stack can be used by cmpxchg16b paths.
+  // Keep a frame pointer for these cases to preserve slot alignment.
+  for (Obj *var = fn->locals; var; var = var->next) {
+    if (var->ty && var->ty->size == 16 &&
+        (var->ty->is_atomic || var->ty->kind == TY_INT128 || var->ty->kind == TY_LDOUBLE))
+      return false;
+  }
+  for (Obj *var = fn->params; var; var = var->next) {
+    if (var->ty && var->ty->size == 16 &&
+        (var->ty->is_atomic || var->ty->kind == TY_INT128 || var->ty->kind == TY_LDOUBLE))
+      return false;
+  }
   return true;
 }
 
@@ -280,8 +292,6 @@ char *reg_dx(int sz)
     return "%edx";
   case 8:
     return "%rdx";
-  case 16:
-    return "%rdx";
   }
   unreachable();
 }
@@ -299,8 +309,6 @@ char *reg_di(int sz)
     return "%edi";
   case 8:
     return "%rdi";
-  case 16:
-    return "%rdi";
   }
   unreachable();
 }
@@ -316,8 +324,6 @@ char *reg_si(int sz)
   case 4:
     return "%esi";
   case 8:
-    return "%rsi";
-  case 16:
     return "%rsi";
   }
   unreachable();
@@ -336,8 +342,6 @@ char *reg_r8w(int sz)
     return "%r8d";
   case 8:
     return "%r8";
-  case 16:
-    return "%r8";
   }
   unreachable();
 }
@@ -353,8 +357,6 @@ char *reg_r9w(int sz)
   case 4:
     return "%r9d";
   case 8:
-    return "%r9";
-  case 16:
     return "%r9";
   }
   unreachable();
@@ -373,8 +375,6 @@ char *reg_r10w(int sz)
     return "%r10d";
   case 8:
     return "%r10";
-  case 16:
-    return "%r10";
   }
   unreachable();
 }
@@ -390,8 +390,6 @@ char *reg_r11w(int sz)
   case 4:
     return "%r11d";
   case 8:
-    return "%r11";
-  case 16:
     return "%r11";
   }
   unreachable();
@@ -410,8 +408,6 @@ char *reg_bx(int sz)
     return "%ebx";
   case 8:
     return "%rbx";
-  case 16:
-    return "%rbx";
   }
   unreachable();
 }
@@ -427,8 +423,6 @@ char *reg_cx(int sz)
   case 4:
     return "%ecx";
   case 8:
-    return "%rcx";
-  case 16:
     return "%rcx";
   }
   unreachable();
@@ -446,8 +440,6 @@ char *reg_ax(int sz)
   case 4:
     return "%eax";
   case 8:
-    return "%rax";
-  case 16:
     return "%rax";
   }
   unreachable();
@@ -1573,6 +1565,32 @@ static void HandleAtomicArithmetic(Node *node, const char *op, bool return_new) 
   gen_expr(node->lhs);
   push_tmp();
   gen_expr(node->rhs);
+
+  if (node->ty->size == 16) {
+    println("  mov %%rax, %%r8"); // val low
+    println("  mov %%rdx, %%r9"); // val high
+    pop_tmp("%rdi"); // addr
+
+    println("  mov (%%rdi), %%rax"); // old low
+    println("  mov 8(%%rdi), %%rdx"); // old high
+
+    println("1:");
+    println("  mov %%rax, %%rbx");
+    println("  mov %%rdx, %%rcx");
+    
+    println("  %s %%r8, %%rbx", op);
+    println("  %s %%r9, %%rcx", op);
+
+    println("  lock cmpxchg16b (%%rdi)");
+    println("  jnz 1b");
+
+    if (return_new) {
+        println("  mov %%rbx, %%rax");
+        println("  mov %%rcx, %%rdx");
+    }
+    return;
+  }
+
   pop_tmp("%r9");
   println("  mov %s, %s", reg_ax(node->ty->size), reg_si(node->ty->size));
   println("  mov (%%r9), %s", reg_ax(node->ty->size));
@@ -2008,6 +2026,29 @@ static void gen_cmpxchg(Node *node) {
   println("  mov %%rax, %%rcx");
   pop_tmp("%rsi");
   pop_tmp("%rdi");
+
+  if (sz == 16) {
+     println("  mov %%rcx, %%r8"); // desired ptr
+     
+     println("  mov (%%r8), %%rbx");
+     println("  mov 8(%%r8), %%rcx");
+     
+     println("  mov (%%rsi), %%rax");
+     println("  mov 8(%%rsi), %%rdx");
+     
+     println("  lock cmpxchg16b (%%rdi)");
+     
+     println("  mov %%rax, (%%rsi)");
+     println("  mov %%rdx, 8(%%rsi)");
+     
+     println("  sete %%al");
+     println("  movzbl %%al, %%eax");
+     if (node->cas_success || node->cas_failure) {
+        println("  mfence");
+     }
+     return;
+  }
+
   if (sz == 1) {
     println("  movb (%%rcx), %%cl");
   } else if (sz == 2) {
@@ -2045,6 +2086,29 @@ static void gen_cmpxchgn(Node *node) {
     push_tmp();
     gen_expr(node->cas_desired);
     println("  mov %%rax, %%rcx");
+
+    if (sz == 16) {
+        println("  mov %%rax, %%rbx");
+        println("  mov %%rdx, %%rcx");
+        pop_tmp("%rsi");
+        pop_tmp("%rdi");
+
+        println("  mov (%%rsi), %%rax");
+        println("  mov 8(%%rsi), %%rdx");
+
+        println("  lock cmpxchg16b (%%rdi)");
+
+        println("  mov %%rax, (%%rsi)");
+        println("  mov %%rdx, 8(%%rsi)");
+
+        println("  sete %%al");
+        println("  movzbl %%al, %%eax");
+        if (node->cas_success || node->cas_failure) {
+            println("  mfence");
+        }
+        return;
+    }
+
     pop_tmp("%rsi");
     pop_tmp("%rdi");
 
@@ -2366,6 +2430,14 @@ static void gen_alloc(Node *node) {
 static void gen_release(Node *node) {
   gen_expr(node->lhs);
   println("  mov %%rax, %%rdi");
+  
+  if (node->ty->size == 16) {
+      println("  xor %%rax, %%rax");
+      println("  mov %%rax, (%%rdi)");
+      println("  mov %%rax, 8(%%rdi)");
+      return;
+  }
+
   println("  xor %%eax, %%eax");
   println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
 }
@@ -2739,6 +2811,24 @@ static void gen_fetchadd(Node *node) {
   gen_expr(node->lhs);
   push_tmp();
   gen_expr(node->rhs);
+  if (node->ty->size == 16) {
+    println("  mov %%rax, %%r8"); // val low
+    println("  mov %%rdx, %%r9"); // val high
+    pop_tmp("%rdi"); // addr
+
+    println("  mov (%%rdi), %%rax"); // old low
+    println("  mov 8(%%rdi), %%rdx"); // old high
+
+    println("1:");
+    println("  mov %%rax, %%rbx");
+    println("  add %%r8, %%rbx");
+    println("  mov %%rdx, %%rcx");
+    println("  adc %%r9, %%rcx");
+
+    println("  lock cmpxchg16b (%%rdi)");
+    println("  jnz 1b");
+    return;
+  }
   pop_tmp("%rdi");
   println("  lock xadd %s, (%%rdi)", reg_ax(node->ty->size));
 }
@@ -2747,6 +2837,27 @@ static void gen_add_fetch(Node *node) {
   gen_expr(node->lhs);
   push_tmp();
   gen_expr(node->rhs);
+  if (node->ty->size == 16) {
+    println("  mov %%rax, %%r8"); // val low
+    println("  mov %%rdx, %%r9"); // val high
+    pop_tmp("%rdi"); // addr
+
+    println("  mov (%%rdi), %%rax"); // old low
+    println("  mov 8(%%rdi), %%rdx"); // old high
+
+    println("1:");
+    println("  mov %%rax, %%rbx");
+    println("  add %%r8, %%rbx");
+    println("  mov %%rdx, %%rcx");
+    println("  adc %%r9, %%rcx");
+
+    println("  lock cmpxchg16b (%%rdi)");
+    println("  jnz 1b");
+
+    println("  mov %%rbx, %%rax");
+    println("  mov %%rcx, %%rdx");
+    return;
+  }
   pop_tmp("%rdi");
   println("  mov %%rax, %%rdx");
   println("  lock xadd %s, (%%rdi)", reg_ax(node->ty->size));
@@ -2758,6 +2869,27 @@ static void gen_sub_fetch(Node *node) {
   gen_expr(node->lhs); 
   push_tmp();
   gen_expr(node->rhs);  
+  if (node->ty->size == 16) {
+    println("  mov %%rax, %%r8"); // val low
+    println("  mov %%rdx, %%r9"); // val high
+    pop_tmp("%rdi"); // addr
+
+    println("  mov (%%rdi), %%rax"); // old low
+    println("  mov 8(%%rdi), %%rdx"); // old high
+
+    println("1:");
+    println("  mov %%rax, %%rbx");
+    println("  sub %%r8, %%rbx");
+    println("  mov %%rdx, %%rcx");
+    println("  sbb %%r9, %%rcx");
+
+    println("  lock cmpxchg16b (%%rdi)");
+    println("  jnz 1b");
+
+    println("  mov %%rbx, %%rax");
+    println("  mov %%rcx, %%rdx");
+    return;
+  }
   println("  mov %%rax, %%rdx");
   pop_tmp("%rdi");
   println("  neg %s", reg_ax(node->ty->size));
@@ -2769,6 +2901,24 @@ static void gen_fetchsub(Node *node) {
   gen_expr(node->lhs);
   push_tmp();
   gen_expr(node->rhs);
+  if (node->ty->size == 16) {
+    println("  mov %%rax, %%r8"); // val low
+    println("  mov %%rdx, %%r9"); // val high
+    pop_tmp("%rdi"); // addr
+
+    println("  mov (%%rdi), %%rax"); // old low
+    println("  mov 8(%%rdi), %%rdx"); // old high
+
+    println("1:");
+    println("  mov %%rax, %%rbx");
+    println("  sub %%r8, %%rbx");
+    println("  mov %%rdx, %%rcx");
+    println("  sbb %%r9, %%rcx");
+
+    println("  lock cmpxchg16b (%%rdi)");
+    println("  jnz 1b");
+    return;
+  }
   pop_tmp("%rdi");
   println("  neg %s", reg_ax(node->ty->size));
   println("  lock xadd %s, (%%rdi)", reg_ax(node->ty->size));
@@ -3355,6 +3505,41 @@ static void gen_sse_testnzc(Node *node) {
 }
 
 static void gen_cas(Node *node)   {
+  if (node->cas_addr->ty->base->size == 16) {
+    gen_expr(node->cas_addr);
+    push_tmp();
+    if (node->cas_new->ty->kind == TY_LDOUBLE && node->cas_new->kind == ND_VAR) {
+        gen_addr(node->cas_new);
+        println("  mov 8(%%rax), %%rdx");
+        println("  mov (%%rax), %%rax");
+    } else {
+        gen_expr(node->cas_new);
+        if (node->cas_new->ty->kind == TY_LDOUBLE) {
+             println("  sub $16, %%rsp");
+             println("  fstpt (%%rsp)");
+             println("  pop %%rax");
+             println("  pop %%rdx");
+        }
+    }
+    pushx_tmp();
+    gen_expr(node->cas_old);
+    println("  mov %%rax, %%r8");
+    println("  mov (%%r8), %%rax");
+    println("  mov 8(%%r8), %%rdx");
+    
+    popx_tmp("%rbx", "%rcx"); // new -> rcx:rbx
+    pop_tmp("%rdi"); // addr
+
+    println("  lock cmpxchg16b (%%rdi)");
+    println("  sete %%cl");
+    println("  je 1f");
+    println("  mov %%rax, (%%r8)");
+    println("  mov %%rdx, 8(%%r8)");
+    println("1:");
+    println("  movzbl %%cl, %%eax");
+    return;
+  }
+
   gen_expr(node->cas_addr);
   push_tmp();
   gen_expr(node->cas_new);
@@ -3381,6 +3566,27 @@ static void gen_bool_cas(Node *node) {
   gen_expr(node->cas_ptr);      
   push_tmp();
   gen_expr(node->cas_expected);  
+  if (node->cas_ptr->ty->base->size == 16) {
+    pushx_tmp();
+    gen_expr(node->cas_desired);
+    if (node->cas_desired->ty->kind == TY_LDOUBLE) {
+        println("  sub $16, %%rsp");
+        println("  fstpt (%%rsp)");
+        println("  pop %%rax");
+        println("  pop %%rdx");
+    }
+    
+    println("  mov %%rax, %%rbx");
+    println("  mov %%rdx, %%rcx");
+    
+    popx_tmp("%rax", "%rdx"); // expected -> rdx:rax
+    pop_tmp("%rdi"); // addr
+
+    println("  lock cmpxchg16b (%%rdi)");
+    println("  sete %%al");
+    println("  movzbl %%al, %%eax");
+    return;
+  }
   push_tmp();
   gen_expr(node->cas_desired);   
   push_tmp();
@@ -3398,6 +3604,27 @@ static void  gen_add_and_fetch(Node *node) {
   gen_expr(node->lhs);
   push_tmp();
   gen_expr(node->rhs);
+  if (node->lhs->ty->base->size == 16) {
+    println("  mov %%rax, %%r8"); // val low
+    println("  mov %%rdx, %%r9"); // val high
+    pop_tmp("%rdi"); // addr
+
+    println("  mov (%%rdi), %%rax"); // old low
+    println("  mov 8(%%rdi), %%rdx"); // old high
+
+    println("1:");
+    println("  mov %%rax, %%rbx");
+    println("  add %%r8, %%rbx");
+    println("  mov %%rdx, %%rcx");
+    println("  adc %%r9, %%rcx");
+
+    println("  lock cmpxchg16b (%%rdi)");
+    println("  jnz 1b");
+
+    println("  mov %%rbx, %%rax");
+    println("  mov %%rcx, %%rdx");
+    return;
+  }
   pop_tmp("%rdi");  
   int sz = node->lhs->ty->base->size;
   println("  mov %%rax, %%rcx");           
@@ -3410,6 +3637,27 @@ static void gen_sub_and_fetch(Node *node) {
   gen_expr(node->lhs);    
   push_tmp();
   gen_expr(node->rhs);    
+  if (node->ty->size == 16) {
+    println("  mov %%rax, %%r8"); // val low
+    println("  mov %%rdx, %%r9"); // val high
+    pop_tmp("%rdi"); // addr
+
+    println("  mov (%%rdi), %%rax"); // old low
+    println("  mov 8(%%rdi), %%rdx"); // old high
+
+    println("1:");
+    println("  mov %%rax, %%rbx");
+    println("  sub %%r8, %%rbx");
+    println("  mov %%rdx, %%rcx");
+    println("  sbb %%r9, %%rcx");
+
+    println("  lock cmpxchg16b (%%rdi)");
+    println("  jnz 1b");
+
+    println("  mov %%rbx, %%rax");
+    println("  mov %%rcx, %%rdx");
+    return;
+  }
   push_tmp();
   pop_tmp("%rax");        
   pop_tmp("%rdi");        
@@ -3447,6 +3695,34 @@ static void gen_fetchnand(Node *node) {
     gen_expr(node->lhs);  
     push_tmp();
     gen_expr(node->rhs);  
+    
+    if (node->lhs->ty->base->size == 16) {
+        println("  mov %%rax, %%r8"); // val low
+        println("  mov %%rdx, %%r9"); // val high
+        pop_tmp("%rdi"); // addr
+
+        println("  mov (%%rdi), %%rax"); // old low
+        println("  mov 8(%%rdi), %%rdx"); // old high
+
+        println("1:");
+        println("  mov %%rax, %%rbx");
+        println("  mov %%rdx, %%rcx");
+        
+        println("  and %%r8, %%rbx");
+        println("  and %%r9, %%rcx");
+        println("  not %%rbx");
+        println("  not %%rcx");
+
+        println("  lock cmpxchg16b (%%rdi)");
+        println("  jnz 1b");
+
+        if (node->kind == ND_NANDFETCH) {
+            println("  mov %%rbx, %%rax");
+            println("  mov %%rcx, %%rdx");
+        }
+        return;
+    }
+
     println("  mov %%rax, %%rsi");   
     pop_tmp("%rdi");
     int sz = node->lhs->ty->base->size;
@@ -3476,6 +3752,31 @@ static void gen_cas_n(Node *node)   {
   gen_expr(node->cas_addr);
   push_tmp();
   gen_expr(node->cas_new);  
+  if (node->cas_new->ty->kind == TY_LDOUBLE) {
+      println("  sub $16, %%rsp");
+      println("  fstpt (%%rsp)");
+      println("  pop %%rax");
+      println("  pop %%rdx");
+  }
+  if (node->cas_addr->ty->base->size == 16) {
+    pushx_tmp();
+    gen_expr(node->cas_old);
+    if (node->cas_old->ty->kind == TY_LDOUBLE) {
+        println("  sub $16, %%rsp");
+        println("  fstpt (%%rsp)");
+        println("  pop %%rax");
+        println("  pop %%rdx");
+    }
+    
+    // old is in rdx:rax
+    
+    popx_tmp("%rbx", "%rcx"); // new -> rcx:rbx
+    pop_tmp("%rdi"); // addr
+
+    println("  lock cmpxchg16b (%%rdi)");
+    // result (old value) is in rdx:rax, which is what we want to return
+    return;
+  }
   push_tmp();
   gen_expr(node->cas_old); 
 
@@ -4140,9 +4441,20 @@ static void gen_expr(Node *node)
     gen_expr(node->lhs);
     push_tmp();
     gen_expr(node->rhs);
-    pop_tmp("%rdi");
 
     int sz = node->lhs->ty->base->size;
+    if (sz == 16) {
+      println("  mov %%rax, %%rbx");
+      println("  mov %%rdx, %%rcx");
+      pop_tmp("%rdi");
+      println("  mov (%%rdi), %%rax");
+      println("  mov 8(%%rdi), %%rdx");
+      println("1:");
+      println("  lock cmpxchg16b (%%rdi)");
+      println("  jnz 1b");
+      return;
+    }
+    pop_tmp("%rdi");
     println("  xchg %s, (%%rdi)", reg_ax(sz));
     return;
   }
@@ -4151,6 +4463,23 @@ static void gen_expr(Node *node)
     gen_expr(node->lhs);
     push_tmp();
     gen_expr(node->rhs);    
+    if (node->ty->size == 16) {
+      if (node->rhs->ty->kind == TY_LDOUBLE) {
+          println("  sub $16, %%rsp");
+          println("  fstpt (%%rsp)");
+          println("  pop %%rax");
+          println("  pop %%rdx");
+      }
+      println("  mov %%rax, %%rbx");
+      println("  mov %%rdx, %%rcx");
+      pop_tmp("%rdi");
+      println("  mov (%%rdi), %%rax");
+      println("  mov 8(%%rdi), %%rdx");
+      println("1:");
+      println("  lock cmpxchg16b (%%rdi)");
+      println("  jnz 1b");
+      return;
+    }
     pop_tmp("%rdi");
     println("  xchg %s, (%%rdi)", reg_ax(node->ty->size));
     return;
@@ -4160,6 +4489,20 @@ static void gen_expr(Node *node)
   case ND_TESTANDSETA: {
     gen_expr(node->lhs);
     push_tmp();
+    if (node->ty->size == 16) {
+        pop_tmp("%rdi");
+        println("  mov (%%rdi), %%rax");
+        println("  mov 8(%%rdi), %%rdx");
+        println("1:");
+        println("  mov $1, %%rbx");
+        println("  xor %%rcx, %%rcx");
+        println("  lock cmpxchg16b (%%rdi)");
+        println("  jnz 1b");
+        println("  or %%rdx, %%rax");
+        println("  setne %%al");
+        println("  movzbl %%al, %%eax");
+        return;
+    }
     println("  mov $1, %%eax");    
     pop_tmp("%rdi");
     println("  xchg %s, (%%rdi)", reg_ax(node->ty->size));
@@ -4169,6 +4512,14 @@ static void gen_expr(Node *node)
     gen_expr(node->rhs);
     push_tmp();
     gen_expr(node->lhs);
+    if (node->ty->size == 16) {
+      println("  mov (%%rax), %%rcx");
+      println("  mov 8(%%rax), %%rdx");
+      pop_tmp("%rdi");
+      println("  mov %%rcx, (%%rdi)");
+      println("  mov %%rdx, 8(%%rdi)");
+      return;
+    }
     println("  mov (%%rax), %s", reg_ax(node->ty->size));    
     pop_tmp("%rdi");
     println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
@@ -4176,7 +4527,12 @@ static void gen_expr(Node *node)
   }
   case ND_LOAD_N: {
     gen_expr(node->lhs);
-    println(" mov (%%rax), %s", reg_ax(node->ty->size));
+    if (node->ty->size == 16) {
+      println("  mov 8(%%rax), %%rdx");
+      println("  mov (%%rax), %%rax");
+    } else {
+      println(" mov (%%rax), %s", reg_ax(node->ty->size));
+    }
     if (node->memorder) {
         println("  mfence");
     }
@@ -4187,6 +4543,16 @@ static void gen_expr(Node *node)
     push_tmp();
     gen_expr(node->rhs);    
     pop_tmp("%rdi");
+    if (node->ty->size == 16) {
+      println("  mov (%%rax), %%rcx");
+      println("  mov 8(%%rax), %%rdx");
+      println("  mov %%rcx, (%%rdi)");
+      println("  mov %%rdx, 8(%%rdi)");
+      if (node->memorder) {
+        println("  mfence");
+      }
+      return;
+    }
     println("  mov (%%rax),%s", reg_ax(node->ty->size));
     println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
     if (node->memorder) {
@@ -4198,6 +4564,23 @@ static void gen_expr(Node *node)
     gen_expr(node->lhs);
     push_tmp();
     gen_expr(node->rhs);    
+    if (node->ty->size == 16) {
+      if (node->rhs->ty->kind == TY_LDOUBLE) {
+          println("  sub $16, %%rsp");
+          println("  fstpt (%%rsp)");
+          println("  pop %%rax");
+          println("  pop %%rdx");
+      }
+      println("  mov %%rax, %%rbx");
+      println("  mov %%rdx, %%rcx");
+      pop_tmp("%rdi");
+      println("  mov %%rbx, (%%rdi)");
+      println("  mov %%rcx, 8(%%rdi)");
+      if (node->memorder) {
+        println("  mfence");
+      }
+      return;
+    }
     pop_tmp("%rdi");
     println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
     if (node->memorder) {
@@ -5452,7 +5835,7 @@ static void emit_text(Obj *prog)
         continue;
         
       int offset = var->offset;  
-      if (offset == 0) {
+        if (offset == 0) {
           if (is_omit_fp(fn))
             offset = -16;
           else
