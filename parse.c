@@ -3336,6 +3336,23 @@ static long double eval_double(Node *node)
   error_tok(node->tok, "%s %d: in eval_double : not a compile-time constant %d", PARSE_C, __LINE__, node->kind);
 }
 
+// Check if it is safe to re-evaluate an lvalue without introducing a temp.
+// This intentionally accepts only address-stable forms rooted in variables.
+static bool is_safe_lvalue(Node *node) {
+  if (!node)
+    return false;
+
+  if (node->kind == ND_VAR)
+    return true;
+
+  if (node->kind == ND_DEREF)
+    return node->lhs && node->lhs->kind == ND_VAR;
+
+  if (node->kind == ND_MEMBER && !is_bitfield(node))
+    return is_safe_lvalue(node->lhs);
+
+  return false;
+}
 
 static Node *atomic_op(Node *binary, bool return_old) {
   // ({
@@ -3417,17 +3434,7 @@ static Node *to_assign(Node *binary)
 
   // -O1+: for simple lvalues, avoid creating a hidden pointer temp for op=
   // lowering. This reduces stack-frame pressure in recursive hot paths.
-  if (opt_optimize_level1 && !binary->lhs->ty->is_atomic) {
-    bool safe = false;
-    if (binary->lhs->kind == ND_VAR)
-      safe = true;
-    else if (binary->lhs->lhs && binary->lhs->lhs->kind == ND_VAR) {
-      if (binary->lhs->kind == ND_DEREF)
-        safe = true;
-      else if (binary->lhs->kind == ND_MEMBER && !is_bitfield(binary->lhs))
-        safe = true;
-    }
-    if (safe)
+  if (opt_optimize_level1 && !binary->lhs->ty->is_atomic && is_safe_lvalue(binary->lhs)) {
       return new_binary(ND_ASSIGN, binary->lhs,
                         new_binary(binary->kind, binary->lhs, binary->rhs, tok),
                         tok);
@@ -5474,17 +5481,17 @@ static void chain_expr(Node **lhs, Node *rhs) {
 // }
 static Node *new_inc_dec(Node *node, Token *tok, int addend) {
   add_type(node);
-  enter_scope();
 
   // -O1+: for simple variable postfix inc/dec, avoid hidden pointer temp.
-  if (opt_optimize_level1 && node->kind == ND_VAR && !node->ty->is_atomic) {
-    Obj *tmp = new_lvar("", node->ty, NULL);
-    Node *expr = new_binary(ND_ASSIGN, new_var_node(tmp, tok), node, tok);
-    chain_expr(&expr, to_assign(new_add(node, new_num(addend, tok), tok, false)));
-    chain_expr(&expr, new_var_node(tmp, tok));
-    leave_scope();
-    return expr;
+  // `_Bool` is special: `(b += 1) - 1` does not preserve old value semantics.
+  if (opt_optimize_level1 && !node->ty->is_atomic &&
+      node->ty->kind != TY_BOOL && is_safe_lvalue(node)) {
+    return new_cast(new_add(to_assign(new_add(node, new_num(addend, tok), tok, false)),
+                            new_num(-addend, tok), tok, false),
+                    node->ty);
   }
+
+  enter_scope();
 
   if (is_bitfield(node)) {
     Obj *tmp = new_lvar("", node->ty, NULL);
