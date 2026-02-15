@@ -3414,6 +3414,15 @@ static Node *to_assign(Node *binary)
   add_type(binary->lhs);
   add_type(binary->rhs);
   Token *tok = binary->tok;
+
+  // -O1+: for simple lvalues, avoid creating a hidden pointer temp for op=
+  // lowering. This reduces stack-frame pressure in recursive hot paths.
+  if (opt_optimize_level1 && binary->lhs->kind == ND_VAR &&
+      !binary->lhs->ty->is_atomic) {
+    return new_binary(ND_ASSIGN, binary->lhs,
+                      new_binary(binary->kind, binary->lhs, binary->rhs, tok),
+                      tok);
+  }
     // If A is an atomic type, Convert `A op= B` to
   //
   // ({

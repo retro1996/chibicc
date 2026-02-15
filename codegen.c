@@ -4007,6 +4007,26 @@ static void gen_expr(Node *node)
     gen_addr(node->lhs);
     return;
   case ND_ASSIGN:    
+     // Optimization: Evaluate RHS first for simple scalars to reduce stack usage.
+    // This avoids keeping the address on stack while evaluating RHS (which might involve calls).
+    if (!is_bitfield(node->lhs) && 
+        !is_int128(node->ty) && 
+        !is_vector(node->ty) &&
+        node->ty->kind != TY_STRUCT && node->ty->kind != TY_UNION &&
+        node->ty->kind != TY_FLOAT && node->ty->kind != TY_DOUBLE && node->ty->kind != TY_LDOUBLE) 
+    {
+        gen_expr(node->rhs);
+        push_tmp();
+        gen_addr(node->lhs);
+        pop_tmp("%rdi"); // Value
+
+        if (node->ty->size == 1) println("  mov %%dil, (%%rax)");
+        else if (node->ty->size == 2) println("  mov %%di, (%%rax)");
+        else if (node->ty->size == 4) println("  mov %%edi, (%%rax)");
+        else println("  mov %%rdi, (%%rax)");
+        println("  mov %%rdi, %%rax");
+        return;
+    }
     gen_addr(node->lhs);
     int tmp_offset = push_tmp();
     gen_expr(node->rhs);

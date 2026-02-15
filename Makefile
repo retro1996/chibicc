@@ -108,7 +108,7 @@ vlc:
     make all
 
 cpython:
-	cd ../cpython &&  CC=chibicc CFLAGS="-std=c11" ./configure  \
+	cd ../cpython &&  CC=chibicc CFLAGS="-std=c11 -O3" ./configure  \
 	 --build=x86_64-pc-linux-gnu && make clean && make -j$(nproc) && make -j$(nproc) test
 
 # vlc2:
