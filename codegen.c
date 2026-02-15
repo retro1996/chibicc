@@ -139,33 +139,6 @@ static void pop_tmp(char *arg) {
   println("  mov %d(%s), %s", offset, lvar_ptr, arg);
 }
 
-static void push_tmp128(void) {
-  if (is_omit_fp(current_fn)) {
-    println("  sub $16, %%rsp");
-    println("  mov %%rax, (%%rsp)");
-    println("  mov %%rdx, 8(%%rsp)");
-    depth += 2;
-    return;
-  }
-  int offset_low = push_tmpstack();
-  println("  mov %%rax, %d(%s)", offset_low, lvar_ptr);
-  int offset_high = push_tmpstack();
-  println("  mov %%rdx, %d(%s)", offset_high, lvar_ptr);
-}
-
-static void pop_tmp128(char *low, char *high) {
-  if (is_omit_fp(current_fn)) {
-    println("  mov (%%rsp), %s", low);
-    println("  mov 8(%%rsp), %s", high);
-    println("  add $16, %%rsp");
-    depth -= 2;
-    return;
-  }
-  int offset_high = pop_tmpstack();
-  println("  mov %d(%s), %s", offset_high, lvar_ptr, high);
-  int offset_low = pop_tmpstack();
-  println("  mov %d(%s), %s", offset_low, lvar_ptr, low);
-}
 
 static void push_tmpf(void) {
   if (is_omit_fp(current_fn)) {
@@ -2812,14 +2785,14 @@ static void gen_sub_overflow(Node *node) {
     if (ty->base)
       ty = ty->base;
     gen_expr(node->lhs);
-    if (ty->size == 16) push_tmp128(); else push_tmp();
+    if (ty->size == 16) pushx_tmp(); else push_tmp();
     gen_expr(node->rhs);
-    if (ty->size == 16) push_tmp128(); else push_tmp();
+    if (ty->size == 16) pushx_tmp(); else push_tmp();
     gen_expr(node->builtin_dest);
     push_tmp();
     pop_tmp("%rdx");  
-    if (ty->size == 16) pop_tmp128("%rcx", "%rsi"); else pop_tmp("%rsi");
-    if (ty->size == 16) pop_tmp128("%rax", "%rdi"); else pop_tmp("%rdi");
+    if (ty->size == 16) popx_tmp("%rcx", "%rsi"); else pop_tmp("%rsi");
+    if (ty->size == 16) popx_tmp("%rax", "%rdi"); else pop_tmp("%rdi");
 
     if (ty->size == 1) {
         println("  mov %%dil, %%al");
@@ -3011,15 +2984,15 @@ static void gen_add_overflow(Node *node) {
     ty = ty->base;
 
   gen_expr(node->lhs);
-  if (ty->size == 16) push_tmp128(); else push_tmp();
+  if (ty->size == 16) pushx_tmp(); else push_tmp();
   gen_expr(node->rhs);
-  if (ty->size == 16) push_tmp128(); else push_tmp();
+  if (ty->size == 16) pushx_tmp(); else push_tmp();
   gen_expr(node->builtin_dest);
   push_tmp();
 
   pop_tmp("%rdx");  
-  if (ty->size == 16) pop_tmp128("%rcx", "%rsi"); else pop_tmp("%rsi");
-  if (ty->size == 16) pop_tmp128("%rax", "%rdi"); else pop_tmp("%rdi"); 
+  if (ty->size == 16) popx_tmp("%rcx", "%rsi"); else pop_tmp("%rsi");
+  if (ty->size == 16) popx_tmp("%rax", "%rdi"); else pop_tmp("%rdi"); 
 
   if (ty->size == 1) {
       println("  mov %%dil, %%al");
