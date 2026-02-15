@@ -2039,9 +2039,10 @@ static void gen_cmpxchg(Node *node) {
      
      println("  lock cmpxchg16b (%%rdi)");
      
+     println("  je 1f");
      println("  mov %%rax, (%%rsi)");
      println("  mov %%rdx, 8(%%rsi)");
-     
+     println("1:");
      println("  sete %%al");
      println("  movzbl %%al, %%eax");
      if (node->cas_success || node->cas_failure) {
@@ -2069,7 +2070,9 @@ static void gen_cmpxchg(Node *node) {
     println("  movq (%%rsi), %%rax");
   }
   println("  lock cmpxchg %s, (%%rdi)", reg_cx(sz));
+  println("  je 1f");
   println("  mov %s, (%%rsi)", reg_ax(sz));
+  println("1:");
   println("  sete %%al");
   println("  movzbl %%al, %%eax");
 
@@ -2099,9 +2102,10 @@ static void gen_cmpxchgn(Node *node) {
 
         println("  lock cmpxchg16b (%%rdi)");
 
+        println("  je 1f");
         println("  mov %%rax, (%%rsi)");
         println("  mov %%rdx, 8(%%rsi)");
-
+        println("1:");
         println("  sete %%al");
         println("  movzbl %%al, %%eax");
         if (node->cas_success || node->cas_failure) {
@@ -2128,10 +2132,12 @@ static void gen_cmpxchgn(Node *node) {
         println("  lock cmpxchg %%rcx, (%%rdi)");
     }
     
+    println("  je 1f");
     if (sz == 1) println("  movb %%al, (%%rsi)");
     else if (sz == 2) println("  movw %%ax, (%%rsi)");
     else if (sz == 4) println("  movl %%eax, (%%rsi)");
     else println("  movq %%rax, (%%rsi)");
+    println("1:");
 
     println("  sete %%al");
     println("  movzbl %%al, %%eax");
@@ -3763,8 +3769,6 @@ static void gen_fetchnand(Node *node) {
     println("  mov %%rax, %%rsi");   
     pop_tmp("%rdi");
     int sz = node->lhs->ty->base->size;
-    int label = count();
-    println(".L.fetchnand_loop_%d:", label);
     switch(sz) {
         case 1: println("  movzbl (%%rdi), %%rax"); break;
         case 2: println("  movzwl (%%rdi), %%rax"); break;
@@ -3772,6 +3776,8 @@ static void gen_fetchnand(Node *node) {
         case 8: println("  movq (%%rdi), %%rax");   break;
         default: error("%s %d: in gen_fetchnand : unsupported size %d!", CODEGEN_C, __LINE__, sz); 
     }
+    int label = count();
+    println(".L.fetchnand_loop_%d:", label);
     println("  mov %%rax, %%rdx");  
     println("  and %%rsi, %%rdx");  
     println("  not %%rdx");         
