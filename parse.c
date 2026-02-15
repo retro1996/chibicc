@@ -6684,6 +6684,11 @@ static Node *primary(Token **rest, Token *tok)
     tok = skip(tok->next, "(", ctx);
     node->lhs = assign(&tok, tok); 
     add_type(node->lhs);
+
+    if (opt_omit_frame_pointer && is_const_expr(node->lhs) && eval(node->lhs) > 0) {
+      opt_omit_frame_pointer = false;
+    }
+
     SET_CTX(ctx); 
     *rest = skip(tok, ")", ctx);
     return node;
@@ -6698,11 +6703,12 @@ static Node *primary(Token **rest, Token *tok)
     SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
     node->lhs = assign(&tok, tok);
-    // __builtin_frame_address(0) only needs a frame pointer in the current function.
-    // For levels >0 (or non-constant), keep frame pointers globally in this TU
-    // so caller-chain walking remains available for existing tests.
-    if (!(is_const_expr(node->lhs) && eval(node->lhs) == 0))
+    add_type(node->lhs);
+
+    if (opt_omit_frame_pointer && (!is_const_expr(node->lhs) || eval(node->lhs) > 0)) {
       opt_omit_frame_pointer = false;
+    }
+
     SET_CTX(ctx); 
     *rest = skip(tok, ")", ctx);
     return node;
