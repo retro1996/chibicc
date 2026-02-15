@@ -3417,11 +3417,20 @@ static Node *to_assign(Node *binary)
 
   // -O1+: for simple lvalues, avoid creating a hidden pointer temp for op=
   // lowering. This reduces stack-frame pressure in recursive hot paths.
-  if (opt_optimize_level1 && binary->lhs->kind == ND_VAR &&
-      !binary->lhs->ty->is_atomic) {
-    return new_binary(ND_ASSIGN, binary->lhs,
-                      new_binary(binary->kind, binary->lhs, binary->rhs, tok),
-                      tok);
+  if (opt_optimize_level1 && !binary->lhs->ty->is_atomic) {
+    bool safe = false;
+    if (binary->lhs->kind == ND_VAR)
+      safe = true;
+    else if (binary->lhs->lhs && binary->lhs->lhs->kind == ND_VAR) {
+      if (binary->lhs->kind == ND_DEREF)
+        safe = true;
+      else if (binary->lhs->kind == ND_MEMBER && !is_bitfield(binary->lhs))
+        safe = true;
+    }
+    if (safe)
+      return new_binary(ND_ASSIGN, binary->lhs,
+                        new_binary(binary->kind, binary->lhs, binary->rhs, tok),
+                        tok);
   }
     // If A is an atomic type, Convert `A op= B` to
   //
@@ -5466,6 +5475,16 @@ static void chain_expr(Node **lhs, Node *rhs) {
 static Node *new_inc_dec(Node *node, Token *tok, int addend) {
   add_type(node);
   enter_scope();
+
+  // -O1+: for simple variable postfix inc/dec, avoid hidden pointer temp.
+  if (opt_optimize_level1 && node->kind == ND_VAR && !node->ty->is_atomic) {
+    Obj *tmp = new_lvar("", node->ty, NULL);
+    Node *expr = new_binary(ND_ASSIGN, new_var_node(tmp, tok), node, tok);
+    chain_expr(&expr, to_assign(new_add(node, new_num(addend, tok), tok, false)));
+    chain_expr(&expr, new_var_node(tmp, tok));
+    leave_scope();
+    return expr;
+  }
 
   if (is_bitfield(node)) {
     Obj *tmp = new_lvar("", node->ty, NULL);
