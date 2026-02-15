@@ -139,6 +139,34 @@ static void pop_tmp(char *arg) {
   println("  mov %d(%s), %s", offset, lvar_ptr, arg);
 }
 
+static void push_tmp128(void) {
+  if (is_omit_fp(current_fn)) {
+    println("  sub $16, %%rsp");
+    println("  mov %%rax, (%%rsp)");
+    println("  mov %%rdx, 8(%%rsp)");
+    depth += 2;
+    return;
+  }
+  int offset_low = push_tmpstack();
+  println("  mov %%rax, %d(%s)", offset_low, lvar_ptr);
+  int offset_high = push_tmpstack();
+  println("  mov %%rdx, %d(%s)", offset_high, lvar_ptr);
+}
+
+static void pop_tmp128(char *low, char *high) {
+  if (is_omit_fp(current_fn)) {
+    println("  mov (%%rsp), %s", low);
+    println("  mov 8(%%rsp), %s", high);
+    println("  add $16, %%rsp");
+    depth -= 2;
+    return;
+  }
+  int offset_high = pop_tmpstack();
+  println("  mov %d(%s), %s", offset_high, lvar_ptr, high);
+  int offset_low = pop_tmpstack();
+  println("  mov %d(%s), %s", offset_low, lvar_ptr, low);
+}
+
 static void push_tmpf(void) {
   if (is_omit_fp(current_fn)) {
     println("  sub $8, %%rsp");
@@ -2718,46 +2746,61 @@ static void gen_mul_overflow(Node *node) {
   push_tmp();
   gen_expr(node->builtin_dest);
   push_tmp();
-  pop_tmp("%rdx"); 
+  pop_tmp("%rcx"); // result ptr (moved to rcx to free rdx)
   pop_tmp("%rsi"); 
   pop_tmp("%rdi"); 
   if (size == 1) {
     // For 8-bit values (char)
-    println("  movzbl %%di, %%eax");  
-    println("  movzbl %%si, %%ebx");  
-    println("  imul %%ebx, %%eax");  
-    println("  jo .L.overflowm%d", c);  
-    println("  mov %%al, (%%rdx)");    
+    println("  mov %%dil, %%al");
+    if (ty->is_unsigned)
+      println("  mul %%sil");
+    else
+      println("  imul %%sil");
+    println("  jo .L.overflowm%d", c);
+    println("  mov %%al, (%%rcx)");
     println("  mov $0, %%al");       
     println("  jmp .L.donem%d", c);   
   } else if (size == 2) {
     // For 16-bit values (short)
-    println("  movzwl %%di, %%eax");  
-    println("  movzwl %%si, %%ebx");  
-    println("  imul %%ebx, %%eax");  
+    println("  mov %%di, %%ax");
+    if (ty->is_unsigned)
+      println("  mul %%si");
+    else
+      println("  imul %%si");
     println("  jo .L.overflowm%d", c);
-    println("  mov %%ax, (%%rdx)");    
+    println("  mov %%ax, (%%rcx)");
     println("  mov $0, %%ax");       
     println("  jmp .L.donem%d", c);   
   } else if (size == 4) {
     // For 32-bit values (int)
     println("  mov %%edi, %%eax");   
-    println("  imul %%esi, %%eax");   
+    if (ty->is_unsigned)
+      println("  mul %%esi");
+    else
+      println("  imul %%esi");
     println("  jo .L.overflowm%d", c);  
-    println("  mov %%eax, (%%rdx)");   
+    println("  mov %%eax, (%%rcx)");   
     println("  mov $0, %%eax");       
     println("  jmp .L.donem%d", c);   
   } else if (size == 8) {
     // For 64-bit values (long long)
     println("  mov %%rdi, %%rax");    
-    println("  imul %%rsi, %%rax");   
+    if (ty->is_unsigned)
+      println("  mul %%rsi");
+    else
+      println("  imul %%rsi");
     println("  jo .L.overflowm%d", c);  
-    println("  mov %%rax, (%%rdx)"); 
+    println("  mov %%rax, (%%rcx)"); 
     println("  mov $0, %%rax");       
     println("  jmp .L.donem%d", c);  
   }
   println(".L.overflowm%d:", c);
-  println("  mov %%al, (%%rdx)");      
+  // Store truncated result on overflow
+  if (size == 1) println("  mov %%al, (%%rcx)");
+  else if (size == 2) println("  mov %%ax, (%%rcx)");
+  else if (size == 4) println("  mov %%eax, (%%rcx)");
+  else if (size == 8) println("  mov %%rax, (%%rcx)");
+
   println("  mov $1, %%rax");           
   println(".L.donem%d:", c);
 }
@@ -2769,14 +2812,14 @@ static void gen_sub_overflow(Node *node) {
     if (ty->base)
       ty = ty->base;
     gen_expr(node->lhs);
-    push_tmp();
+    if (ty->size == 16) push_tmp128(); else push_tmp();
     gen_expr(node->rhs);
-    push_tmp();
+    if (ty->size == 16) push_tmp128(); else push_tmp();
     gen_expr(node->builtin_dest);
     push_tmp();
     pop_tmp("%rdx");  
-    pop_tmp("%rsi");  
-    pop_tmp("%rdi"); 
+    if (ty->size == 16) pop_tmp128("%rcx", "%rsi"); else pop_tmp("%rsi");
+    if (ty->size == 16) pop_tmp128("%rax", "%rdi"); else pop_tmp("%rdi");
 
     if (ty->size == 1) {
         println("  mov %%dil, %%al");
@@ -2790,12 +2833,22 @@ static void gen_sub_overflow(Node *node) {
         println("  mov %%edi, %%eax");
         println("  sub %%esi, %%eax");
         println("  mov %%eax, (%%rdx)");
-    } else {
+    } else if (ty->size == 8) {
         println("  mov %%rdi, %%rax");
         println("  sub %%rsi, %%rax");
         println("  mov %%rax, (%%rdx)");
+    } else if (ty->size == 16) { // __int128
+        // lhs in rax:rdi (low:high), rhs in rcx:rsi. rdx is result ptr
+        println("  sub %%rcx, %%rax");        // sub low
+        println("  sbb %%rsi, %%rdi");        // sbb high
+
+        println("  mov %%rax, (%%rdx)");      // store result low
+        println("  mov %%rdi, 8(%%rdx)");     // store result high
     }
-    println("  seto %%al");         
+    if (ty->is_unsigned)
+      println("  setc %%al");
+    else
+      println("  seto %%al");
     println("  movzx %%al, %%eax");  
     println("  cmp $0, %%eax");
     println("  jne .Loverflows%d", c);
@@ -2958,15 +3011,15 @@ static void gen_add_overflow(Node *node) {
     ty = ty->base;
 
   gen_expr(node->lhs);
-  push_tmp();
+  if (ty->size == 16) push_tmp128(); else push_tmp();
   gen_expr(node->rhs);
-  push_tmp();
+  if (ty->size == 16) push_tmp128(); else push_tmp();
   gen_expr(node->builtin_dest);
   push_tmp();
 
   pop_tmp("%rdx");  
-  pop_tmp("%rsi");  
-  pop_tmp("%rdi"); 
+  if (ty->size == 16) pop_tmp128("%rcx", "%rsi"); else pop_tmp("%rsi");
+  if (ty->size == 16) pop_tmp128("%rax", "%rdi"); else pop_tmp("%rdi"); 
 
   if (ty->size == 1) {
       println("  mov %%dil, %%al");
@@ -2980,14 +3033,25 @@ static void gen_add_overflow(Node *node) {
       println("  mov %%edi, %%eax");
       println("  add %%esi, %%eax");
       println("  mov %%eax, (%%rdx)");
-  } else {
+  } else if (ty->size == 8) {
       println("  mov %%rdi, %%rax");
       println("  add %%rsi, %%rax");
       println("  mov %%rax, (%%rdx)");
+  } else if (ty->size == 16) { // __int128
+      // lhs in rax:rdi (low:high), rhs in rcx:rsi. rdx is result ptr
+      println("  add %%rcx, %%rax");        // add low
+      println("  adc %%rsi, %%rdi");        // adc high
+
+      println("  mov %%rax, (%%rdx)");      // store result low
+      println("  mov %%rdi, 8(%%rdx)");     // store result high
   }
 
   // Check for overflow
-  println("  seto %%al");          // Set AL if overflow occurred
+  // Check for overflow
+  if (ty->is_unsigned)
+    println("  setc %%al");
+  else
+    println("  seto %%al");
   println("  movzx %%al, %%eax");  // Zero-extend AL to EAX
 
   // Return 0 if no overflow, 1 if overflow
