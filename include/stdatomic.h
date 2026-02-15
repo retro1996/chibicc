@@ -38,8 +38,8 @@ typedef enum {
 
 #define atomic_init(addr, val) (*(addr) = (val))
 #define kill_dependency(x) (x)
-#define atomic_thread_fence(order)
-#define atomic_signal_fence(order)
+#define atomic_thread_fence(order) __atomic_thread_fence(order)
+#define atomic_signal_fence(order) __atomic_signal_fence(order)
 #define atomic_is_lock_free(x) 1
 
 #define atomic_fetch_add(addr, val) __builtin_atomic_fetch_add(addr, val)
