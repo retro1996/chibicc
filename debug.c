@@ -55,6 +55,76 @@ void print_debug_tokens(char *currentfilename, char *function, Token *tok)
     }
 }
 
+static void emit_base_type_die(int c, char *label, char *name, int encoding, int size) {
+  println(".L.%s%d:", label, c);
+  println("  .uleb128 5");
+  println("  .string \"%s\"", name);
+  println("  .byte %d", encoding);
+  println("  .byte %d", size);
+}
+
+static void emit_var_type_ref(Type *ty, int c) {
+  switch (ty->kind) {
+  case TY_BOOL:
+    println("  .long .L.type_bool%d - .L.debug_info%d", c, c);
+    return;
+  case TY_CHAR:
+    if (ty->is_unsigned) {
+      println("  .long .L.type_uchar%d - .L.debug_info%d", c, c);
+      return;
+    }
+    println("  .long .L.type_char%d - .L.debug_info%d", c, c);
+    return;
+  case TY_SHORT:
+    if (ty->is_unsigned) {
+      println("  .long .L.type_ushort%d - .L.debug_info%d", c, c);
+      return;
+    }
+    println("  .long .L.type_short%d - .L.debug_info%d", c, c);
+    return;
+  case TY_INT:
+    if (ty->is_unsigned) {
+      println("  .long .L.type_uint%d - .L.debug_info%d", c, c);
+      return;
+    }
+    println("  .long .L.type_int%d - .L.debug_info%d", c, c);
+    return;
+  case TY_LONG:
+    if (ty->is_unsigned) {
+      println("  .long .L.type_ulong%d - .L.debug_info%d", c, c);
+      return;
+    }
+    println("  .long .L.type_long%d - .L.debug_info%d", c, c);
+    return;
+  case TY_LLONG:
+    if (ty->is_unsigned) {
+      println("  .long .L.type_ullong%d - .L.debug_info%d", c, c);
+      return;
+    }
+    println("  .long .L.type_llong%d - .L.debug_info%d", c, c);
+    return;
+  case TY_INT128:
+    if (ty->is_unsigned) {
+      println("  .long .L.type_uint128%d - .L.debug_info%d", c, c);
+      return;
+    }
+    println("  .long .L.type_int128%d - .L.debug_info%d", c, c);
+    return;
+  case TY_FLOAT:
+    println("  .long .L.type_float%d - .L.debug_info%d", c, c);
+    return;
+  case TY_DOUBLE:
+    println("  .long .L.type_double%d - .L.debug_info%d", c, c);
+    return;
+  case TY_LDOUBLE:
+    println("  .long .L.type_ldouble%d - .L.debug_info%d", c, c);
+    return;
+  default:
+    println("  .long .L.type_int%d - .L.debug_info%d", c, c);
+    return;
+  }
+}
+
 
 void emit_debug_info(Obj *prog) {
   if (!opt_g)
@@ -159,23 +229,22 @@ void emit_debug_info(Obj *prog) {
   println("  .quad .L.text_end");
 
   // Emit base types
-  println(".L.type_int%d:", c);
-  println("  .uleb128 5");
-  println("  .string \"int\"");
-  println("  .byte 5"); // DW_ATE_signed
-  println("  .byte 4");
-
-  println(".L.type_char%d:", c);
-  println("  .uleb128 5");
-  println("  .string \"char\"");
-  println("  .byte 6"); // DW_ATE_signed_char
-  println("  .byte 1");
-
-  println(".L.type_long%d:", c);
-  println("  .uleb128 5");
-  println("  .string \"long\"");
-  println("  .byte 5"); // DW_ATE_signed
-  println("  .byte 8");
+  emit_base_type_die(c, "type_bool", "_Bool", 2, 1);       // DW_ATE_boolean
+  emit_base_type_die(c, "type_char", "char", 6, 1);        // DW_ATE_signed_char
+  emit_base_type_die(c, "type_uchar", "unsigned char", 8, 1); // DW_ATE_unsigned_char
+  emit_base_type_die(c, "type_short", "short", 5, 2);      // DW_ATE_signed
+  emit_base_type_die(c, "type_ushort", "unsigned short", 7, 2); // DW_ATE_unsigned
+  emit_base_type_die(c, "type_int", "int", 5, 4);          // DW_ATE_signed
+  emit_base_type_die(c, "type_uint", "unsigned int", 7, 4); // DW_ATE_unsigned
+  emit_base_type_die(c, "type_long", "long", 5, 8);        // DW_ATE_signed
+  emit_base_type_die(c, "type_ulong", "unsigned long", 7, 8); // DW_ATE_unsigned
+  emit_base_type_die(c, "type_llong", "long long", 5, 8);  // DW_ATE_signed
+  emit_base_type_die(c, "type_ullong", "unsigned long long", 7, 8); // DW_ATE_unsigned
+  emit_base_type_die(c, "type_int128", "__int128", 5, 16); // DW_ATE_signed
+  emit_base_type_die(c, "type_uint128", "unsigned __int128", 7, 16); // DW_ATE_unsigned
+  emit_base_type_die(c, "type_float", "float", 4, 4);      // DW_ATE_float
+  emit_base_type_die(c, "type_double", "double", 4, 8);    // DW_ATE_float
+  emit_base_type_die(c, "type_ldouble", "long double", 4, 16); // DW_ATE_float
 
   for (Obj *fn = prog; fn; fn = fn->next) {
     if (!fn->is_function || !fn->is_definition)
@@ -202,14 +271,7 @@ void emit_debug_info(Obj *prog) {
         println("  .uleb128 3");
         println("  .string \"%s\"", var->name);
         
-        if (var->ty->kind == TY_INT)
-            println("  .long .L.type_int%d - .L.debug_info%d", c, c);
-        else if (var->ty->kind == TY_CHAR)
-            println("  .long .L.type_char%d - .L.debug_info%d", c, c);
-        else if (var->ty->kind == TY_LONG)
-            println("  .long .L.type_long%d - .L.debug_info%d", c, c);
-        else
-            println("  .long .L.type_int%d - .L.debug_info%d", c, c);
+        emit_var_type_ref(var->ty, c);
 
         int lbl = label_count++;
         println("  .uleb128 .L.loc_end_%d - .L.loc_start_%d", lbl, lbl);
@@ -224,14 +286,7 @@ void emit_debug_info(Obj *prog) {
         println("  .uleb128 4");
         println("  .string \"%s\"", var->name);
         
-        if (var->ty->kind == TY_INT)
-            println("  .long .L.type_int%d - .L.debug_info%d", c, c);
-        else if (var->ty->kind == TY_CHAR)
-            println("  .long .L.type_char%d - .L.debug_info%d", c, c);
-        else if (var->ty->kind == TY_LONG)
-            println("  .long .L.type_long%d - .L.debug_info%d", c, c);
-        else
-            println("  .long .L.type_int%d - .L.debug_info%d", c, c);
+        emit_var_type_ref(var->ty, c);
 
         int lbl = label_count++;
         println("  .uleb128 .L.loc_end_%d - .L.loc_start_%d", lbl, lbl);
