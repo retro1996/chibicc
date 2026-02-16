@@ -133,6 +133,7 @@ chibicc [ -o <path> ] <file>\n"
 typedef struct Type Type;
 typedef struct Node Node;
 typedef struct Member Member;
+typedef struct DebugTypedef DebugTypedef;
 typedef struct Relocation Relocation;
 typedef struct Hideset Hideset;
 
@@ -1106,7 +1107,15 @@ struct Type
   int destructor_priority;
   int constructor_priority;
   bool is_vector;
+  Token *tag_name; // struct/union/enum tag name
 
+};
+
+struct DebugTypedef
+{
+  DebugTypedef *next;
+  char *name;
+  Type *ty;
 };
 
 // Struct member
@@ -1168,6 +1177,8 @@ Type *new_qualified_type(Type *ty);
 bool is_vector(Type *ty);
 bool is_int128(Type *ty);
 bool is_pointer(Type *ty);
+
+extern DebugTypedef *debug_typedefs;
 
 
 char *nodekind2str(NodeKind kind);

@@ -70,6 +70,13 @@ struct DebugTypeInfo {
   DebugTypeInfo *next;
 };
 
+typedef struct EmittedTypedef EmittedTypedef;
+struct EmittedTypedef {
+  char *name;
+  Type *ty;
+  EmittedTypedef *next;
+};
+
 static DebugTypeInfo *find_debug_type(DebugTypeInfo *types, Type *ty) {
   for (DebugTypeInfo *it = types; it; it = it->next)
     if (it->ty == ty)
@@ -207,7 +214,16 @@ static void emit_type_ref(Type *ty, DebugTypeInfo *types, int c) {
   println("  .long .L.type_custom_%d_%d - .L.debug_info%d", c, entry->id, c);
 }
 
-static void emit_struct_name(int id) {
+static void emit_struct_name(Type *ty, int id) {
+  Token *tag = ty ? ty->tag_name : NULL;
+  if (!tag && ty)
+    tag = ty->name;
+
+  if (tag) {
+    println("  .string \"%.*s\"", tag->len, tag->loc);
+    return;
+  }
+
   println("  .string \"type_%d\"", id);
 }
 
@@ -243,7 +259,7 @@ static void emit_custom_type_die(DebugTypeInfo *entry, DebugTypeInfo *types, int
   case TY_STRUCT:
   case TY_UNION: {
     println("  .uleb128 %d", ty->kind == TY_STRUCT ? 9 : 11);
-    emit_struct_name(entry->id);
+    emit_struct_name(ty, entry->id);
     println("  .uleb128 %ld", ty->size);
     int member_idx = 0;
     for (Member *mem = ty->members; mem; mem = mem->next) {
@@ -257,6 +273,35 @@ static void emit_custom_type_die(DebugTypeInfo *entry, DebugTypeInfo *types, int
   }
   default:
     return;
+  }
+}
+
+static bool is_emitted_typedef(EmittedTypedef *head, char *name, Type *ty) {
+  for (EmittedTypedef *it = head; it; it = it->next) {
+    if (it->ty == ty && !strcmp(it->name, name))
+      return true;
+  }
+  return false;
+}
+
+static void emit_typedef_dies(DebugTypeInfo *types, int c) {
+  EmittedTypedef *emitted = NULL;
+
+  for (DebugTypedef *td = debug_typedefs; td; td = td->next) {
+    if (!td->name || !td->ty)
+      continue;
+    if (is_emitted_typedef(emitted, td->name, td->ty))
+      continue;
+
+    EmittedTypedef *entry = calloc(1, sizeof(EmittedTypedef));
+    entry->name = td->name;
+    entry->ty = td->ty;
+    entry->next = emitted;
+    emitted = entry;
+
+    println("  .uleb128 12");
+    println("  .string \"%s\"", td->name);
+    emit_type_ref(td->ty, types, c);
   }
 }
 
@@ -401,6 +446,16 @@ void emit_debug_info(Obj *prog) {
   println("  .byte 0");
   println("  .byte 0");
 
+  println("  .uleb128 12");                   // Abbrev code
+  println("  .uleb128 0x16");                 // DW_TAG_typedef
+  println("  .byte 0");                       // DW_CHILDREN_no
+  println("  .uleb128 0x3");                  // DW_AT_name
+  println("  .uleb128 0x8");                  // DW_FORM_string
+  println("  .uleb128 0x49");                 // DW_AT_type
+  println("  .uleb128 0x13");                 // DW_FORM_ref4
+  println("  .byte 0");
+  println("  .byte 0");
+
   println("  .byte 0");                       // End of abbrevs
 
   println("  .section .debug_info,\"\",@progbits");
@@ -451,8 +506,13 @@ void emit_debug_info(Obj *prog) {
         collect_debug_type(var->ty, &types, &next_type_id);
   }
 
+  for (DebugTypedef *td = debug_typedefs; td; td = td->next)
+    collect_debug_type(td->ty, &types, &next_type_id);
+
   for (DebugTypeInfo *entry = types; entry; entry = entry->next)
     emit_custom_type_die(entry, types, c);
+
+  emit_typedef_dies(types, c);
 
   for (Obj *fn = prog; fn; fn = fn->next) {
     if (!fn->is_function || !fn->is_definition)

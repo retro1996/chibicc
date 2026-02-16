@@ -117,6 +117,7 @@ static char *cont_label;
 static Node *current_switch;
 
 static Obj *builtin_alloca;
+DebugTypedef *debug_typedefs;
 
 extern Context *ctx;
 
@@ -538,6 +539,14 @@ static char *get_ident(Token *tok)
   if (tok->kind != TK_IDENT)
     error_tok(tok, "%s %d: in get_ident : expected an identifier", PARSE_C, __LINE__);
   return strndup(tok->loc, tok->len);
+}
+
+static void record_debug_typedef(Token *tok, Type *ty) {
+  DebugTypedef *entry = calloc(1, sizeof(DebugTypedef));
+  entry->name = get_ident(tok);
+  entry->ty = ty;
+  entry->next = debug_typedefs;
+  debug_typedefs = entry;
 }
 
 static Type *find_typedef(Token *tok)
@@ -5251,6 +5260,7 @@ static Type *struct_union_decl(Token **rest, Token *tok, bool *no_list)
   {
     tag = tok;
     ty->name = tag;
+    ty->tag_name = tag;
     tok = tok->next;
   }
 
@@ -5290,6 +5300,7 @@ static Type *struct_union_decl(Token **rest, Token *tok, bool *no_list)
         t->is_flexible = ty->is_flexible;
         t->is_packed = ty->is_packed;
         t->origin = ty;
+        t->tag_name = ty->tag_name;
       }
       return ty2;
     }
@@ -7148,6 +7159,7 @@ static Node *parse_typedef(Token **rest, Token *tok, Type *basety)
       ty = vector_of(ty, len);
       ty->name = name;
     }
+    record_debug_typedef(ty->name, ty);
     push_scope(get_ident(ty->name))->type_def = ty;    
     node = new_binary(ND_COMMA, node, compute_vla_size(ty, tok), tok);
   }
