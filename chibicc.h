@@ -1184,6 +1184,7 @@ void print_ast(FILE *, Obj *);
 
 char *tokenkind2str(TokenKind kind);
 void print_debug_tokens(char *currentfilename, char *function, Token *tok);
+void emit_debug_info(Obj *prog);
 
 //
 // codegen.c
@@ -1213,6 +1214,7 @@ bool check_register_used(char *regist);
 void check_register_in_template(char *template); 
 void pushreg(const char *arg);
 void gen_fpclassify(FpClassify *);
+void println(char *fmt, ...);
 
 extern bool dont_reuse_stack;
 

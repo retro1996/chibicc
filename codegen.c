@@ -57,7 +57,7 @@ struct {
   int bottom;
 } static tmp_stack;
 
-__attribute__((format(printf, 1, 2))) static void println(char *fmt, ...)
+__attribute__((format(printf, 1, 2))) void println(char *fmt, ...)
 {
   va_list ap;
   va_start(ap, fmt);
@@ -5720,6 +5720,8 @@ static void emit_text(Obj *prog)
 
   }
 
+  println("  .section .text");
+  println(".L.text_start:");
   for (Obj *fn = prog; fn; fn = fn->next)
   {
     // Emit alias if fn->alias_name is set
@@ -5985,12 +5987,13 @@ static void emit_text(Obj *prog)
     if (!is_omit_fp(fn)) 
       println("  .cfi_endproc");
     println("  .size %s, .-%s", fn->name, fn->name);
+    println(".L.end.%s:", fn->name);
   }
+  println(".L.text_end:");
   emit_constructors(); 
   emit_destructors(); 
   
 }
-
 
 void codegen(Obj *prog, FILE *out)
 {
@@ -6003,6 +6006,7 @@ void codegen(Obj *prog, FILE *out)
   assign_lvar_offsets(prog);
   emit_data(prog);
   emit_text(prog);
+  emit_debug_info(prog);
   println("  .section  .note.GNU-stack,\"\",@progbits");
   //print offset for each variable
   if (isDebug)
