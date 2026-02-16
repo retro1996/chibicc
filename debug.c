@@ -63,64 +63,199 @@ static void emit_base_type_die(int c, char *label, char *name, int encoding, int
   println("  .byte %d", size);
 }
 
-static void emit_var_type_ref(Type *ty, int c) {
+typedef struct DebugTypeInfo DebugTypeInfo;
+struct DebugTypeInfo {
+  Type *ty;
+  int id;
+  DebugTypeInfo *next;
+};
+
+static DebugTypeInfo *find_debug_type(DebugTypeInfo *types, Type *ty) {
+  for (DebugTypeInfo *it = types; it; it = it->next)
+    if (it->ty == ty)
+      return it;
+  return NULL;
+}
+
+static bool is_builtin_debug_type(Type *ty) {
+  if (!ty)
+    return true;
+
+  switch (ty->kind) {
+  case TY_BOOL:
+  case TY_ENUM:
+  case TY_CHAR:
+  case TY_SHORT:
+  case TY_INT:
+  case TY_LONG:
+  case TY_LLONG:
+  case TY_INT128:
+  case TY_FLOAT:
+  case TY_DOUBLE:
+  case TY_LDOUBLE:
+    return true;
+  default:
+    return false;
+  }
+}
+
+static bool emit_builtin_type_ref(Type *ty, int c) {
+  if (!ty) {
+    println("  .long .L.type_int%d - .L.debug_info%d", c, c);
+    return true;
+  }
+
   switch (ty->kind) {
   case TY_BOOL:
     println("  .long .L.type_bool%d - .L.debug_info%d", c, c);
-    return;
+    return true;
+  case TY_ENUM:
+    println("  .long .L.type_int%d - .L.debug_info%d", c, c);
+    return true;
   case TY_CHAR:
     if (ty->is_unsigned) {
       println("  .long .L.type_uchar%d - .L.debug_info%d", c, c);
-      return;
+      return true;
     }
     println("  .long .L.type_char%d - .L.debug_info%d", c, c);
-    return;
+    return true;
   case TY_SHORT:
     if (ty->is_unsigned) {
       println("  .long .L.type_ushort%d - .L.debug_info%d", c, c);
-      return;
+      return true;
     }
     println("  .long .L.type_short%d - .L.debug_info%d", c, c);
-    return;
+    return true;
   case TY_INT:
     if (ty->is_unsigned) {
       println("  .long .L.type_uint%d - .L.debug_info%d", c, c);
-      return;
+      return true;
     }
     println("  .long .L.type_int%d - .L.debug_info%d", c, c);
-    return;
+    return true;
   case TY_LONG:
     if (ty->is_unsigned) {
       println("  .long .L.type_ulong%d - .L.debug_info%d", c, c);
-      return;
+      return true;
     }
     println("  .long .L.type_long%d - .L.debug_info%d", c, c);
-    return;
+    return true;
   case TY_LLONG:
     if (ty->is_unsigned) {
       println("  .long .L.type_ullong%d - .L.debug_info%d", c, c);
-      return;
+      return true;
     }
     println("  .long .L.type_llong%d - .L.debug_info%d", c, c);
-    return;
+    return true;
   case TY_INT128:
     if (ty->is_unsigned) {
       println("  .long .L.type_uint128%d - .L.debug_info%d", c, c);
-      return;
+      return true;
     }
     println("  .long .L.type_int128%d - .L.debug_info%d", c, c);
-    return;
+    return true;
   case TY_FLOAT:
     println("  .long .L.type_float%d - .L.debug_info%d", c, c);
-    return;
+    return true;
   case TY_DOUBLE:
     println("  .long .L.type_double%d - .L.debug_info%d", c, c);
-    return;
+    return true;
   case TY_LDOUBLE:
     println("  .long .L.type_ldouble%d - .L.debug_info%d", c, c);
-    return;
+    return true;
   default:
+    return false;
+  }
+}
+
+static void collect_debug_type(Type *ty, DebugTypeInfo **types, int *next_id) {
+  if (is_builtin_debug_type(ty))
+    return;
+
+  if (ty->kind != TY_PTR && ty->kind != TY_ARRAY && ty->kind != TY_STRUCT &&
+      ty->kind != TY_UNION)
+    return;
+
+  if (find_debug_type(*types, ty))
+    return;
+
+  DebugTypeInfo *entry = calloc(1, sizeof(DebugTypeInfo));
+  entry->ty = ty;
+  entry->id = (*next_id)++;
+  entry->next = *types;
+  *types = entry;
+
+  if (ty->kind == TY_PTR || ty->kind == TY_ARRAY) {
+    collect_debug_type(ty->base, types, next_id);
+    return;
+  }
+
+  for (Member *mem = ty->members; mem; mem = mem->next)
+    collect_debug_type(mem->ty, types, next_id);
+}
+
+static void emit_type_ref(Type *ty, DebugTypeInfo *types, int c) {
+  if (emit_builtin_type_ref(ty, c))
+    return;
+
+  DebugTypeInfo *entry = find_debug_type(types, ty);
+  if (!entry) {
     println("  .long .L.type_int%d - .L.debug_info%d", c, c);
+    return;
+  }
+
+  println("  .long .L.type_custom_%d_%d - .L.debug_info%d", c, entry->id, c);
+}
+
+static void emit_struct_name(int id) {
+  println("  .string \"type_%d\"", id);
+}
+
+static void emit_member_name(Member *mem, int idx) {
+  if (!mem->name) {
+    println("  .string \"member_%d\"", idx);
+    return;
+  }
+
+  println("  .string \"%.*s\"", mem->name->len, mem->name->loc);
+}
+
+static void emit_custom_type_die(DebugTypeInfo *entry, DebugTypeInfo *types, int c) {
+  Type *ty = entry->ty;
+  println(".L.type_custom_%d_%d:", c, entry->id);
+
+  switch (ty->kind) {
+  case TY_PTR:
+    println("  .uleb128 6");
+    emit_type_ref(ty->base, types, c);
+    return;
+  case TY_ARRAY: {
+    int64_t count = ty->array_len;
+    if (count < 0)
+      count = 0;
+    println("  .uleb128 7");
+    emit_type_ref(ty->base, types, c);
+    println("  .uleb128 8");
+    println("  .uleb128 %ld", count);
+    println("  .byte 0");
+    return;
+  }
+  case TY_STRUCT:
+  case TY_UNION: {
+    println("  .uleb128 %d", ty->kind == TY_STRUCT ? 9 : 11);
+    emit_struct_name(entry->id);
+    println("  .uleb128 %ld", ty->size);
+    int member_idx = 0;
+    for (Member *mem = ty->members; mem; mem = mem->next) {
+      println("  .uleb128 10");
+      emit_member_name(mem, member_idx++);
+      emit_type_ref(mem->ty, types, c);
+      println("  .uleb128 %d", ty->kind == TY_UNION ? 0 : mem->offset);
+    }
+    println("  .byte 0");
+    return;
+  }
+  default:
     return;
   }
 }
@@ -210,6 +345,62 @@ void emit_debug_info(Obj *prog) {
   println("  .byte 0");
   println("  .byte 0");
 
+  println("  .uleb128 6");                    // Abbrev code
+  println("  .uleb128 0xf");                  // DW_TAG_pointer_type
+  println("  .byte 0");                       // DW_CHILDREN_no
+  println("  .uleb128 0x49");                 // DW_AT_type
+  println("  .uleb128 0x13");                 // DW_FORM_ref4
+  println("  .byte 0");
+  println("  .byte 0");
+
+  println("  .uleb128 7");                    // Abbrev code
+  println("  .uleb128 0x1");                  // DW_TAG_array_type
+  println("  .byte 1");                       // DW_CHILDREN_yes
+  println("  .uleb128 0x49");                 // DW_AT_type
+  println("  .uleb128 0x13");                 // DW_FORM_ref4
+  println("  .byte 0");
+  println("  .byte 0");
+
+  println("  .uleb128 8");                    // Abbrev code
+  println("  .uleb128 0x21");                 // DW_TAG_subrange_type
+  println("  .byte 0");                       // DW_CHILDREN_no
+  println("  .uleb128 0x37");                 // DW_AT_count
+  println("  .uleb128 0xf");                  // DW_FORM_udata
+  println("  .byte 0");
+  println("  .byte 0");
+
+  println("  .uleb128 9");                    // Abbrev code
+  println("  .uleb128 0x13");                 // DW_TAG_structure_type
+  println("  .byte 1");                       // DW_CHILDREN_yes
+  println("  .uleb128 0x3");                  // DW_AT_name
+  println("  .uleb128 0x8");                  // DW_FORM_string
+  println("  .uleb128 0xb");                  // DW_AT_byte_size
+  println("  .uleb128 0xf");                  // DW_FORM_udata
+  println("  .byte 0");
+  println("  .byte 0");
+
+  println("  .uleb128 10");                   // Abbrev code
+  println("  .uleb128 0xd");                  // DW_TAG_member
+  println("  .byte 0");                       // DW_CHILDREN_no
+  println("  .uleb128 0x3");                  // DW_AT_name
+  println("  .uleb128 0x8");                  // DW_FORM_string
+  println("  .uleb128 0x49");                 // DW_AT_type
+  println("  .uleb128 0x13");                 // DW_FORM_ref4
+  println("  .uleb128 0x38");                 // DW_AT_data_member_location
+  println("  .uleb128 0xf");                  // DW_FORM_udata
+  println("  .byte 0");
+  println("  .byte 0");
+
+  println("  .uleb128 11");                   // Abbrev code
+  println("  .uleb128 0x17");                 // DW_TAG_union_type
+  println("  .byte 1");                       // DW_CHILDREN_yes
+  println("  .uleb128 0x3");                  // DW_AT_name
+  println("  .uleb128 0x8");                  // DW_FORM_string
+  println("  .uleb128 0xb");                  // DW_AT_byte_size
+  println("  .uleb128 0xf");                  // DW_FORM_udata
+  println("  .byte 0");
+  println("  .byte 0");
+
   println("  .byte 0");                       // End of abbrevs
 
   println("  .section .debug_info,\"\",@progbits");
@@ -246,6 +437,23 @@ void emit_debug_info(Obj *prog) {
   emit_base_type_die(c, "type_double", "double", 4, 8);    // DW_ATE_float
   emit_base_type_die(c, "type_ldouble", "long double", 4, 16); // DW_ATE_float
 
+  DebugTypeInfo *types = NULL;
+  int next_type_id = 0;
+  for (Obj *fn = prog; fn; fn = fn->next) {
+    if (!fn->is_function || !fn->is_definition || !fn->is_live)
+      continue;
+
+    for (Obj *var = fn->params; var; var = var->next)
+      collect_debug_type(var->ty, &types, &next_type_id);
+
+    for (Obj *var = fn->locals; var; var = var->next)
+      if (!var->is_param)
+        collect_debug_type(var->ty, &types, &next_type_id);
+  }
+
+  for (DebugTypeInfo *entry = types; entry; entry = entry->next)
+    emit_custom_type_die(entry, types, c);
+
   for (Obj *fn = prog; fn; fn = fn->next) {
     if (!fn->is_function || !fn->is_definition)
       continue;
@@ -271,7 +479,7 @@ void emit_debug_info(Obj *prog) {
         println("  .uleb128 3");
         println("  .string \"%s\"", var->name);
         
-        emit_var_type_ref(var->ty, c);
+        emit_type_ref(var->ty, types, c);
 
         int lbl = label_count++;
         println("  .uleb128 .L.loc_end_%d - .L.loc_start_%d", lbl, lbl);
@@ -286,7 +494,7 @@ void emit_debug_info(Obj *prog) {
         println("  .uleb128 4");
         println("  .string \"%s\"", var->name);
         
-        emit_var_type_ref(var->ty, c);
+        emit_type_ref(var->ty, types, c);
 
         int lbl = label_count++;
         println("  .uleb128 .L.loc_end_%d - .L.loc_start_%d", lbl, lbl);
