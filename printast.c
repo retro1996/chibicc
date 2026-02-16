@@ -117,6 +117,8 @@ static struct Visited {
 static void PrintObj(FILE *, int, const char *, Obj *);
 static void PrintNode(FILE *, int, const char *, Node *);
 static void PrintType(FILE *, int, const char *, Type *);
+static void PrintFpClassify(FILE *, int, const char *, FpClassify *);
+static void PrintInitializer(FILE *, int, const char *, Initializer *);
 static void PrintAsm(FILE *f, int l, const char *s, char *a);
 
 
@@ -242,6 +244,10 @@ static void PrintType(FILE *f, int l, const char *s, Type *t) {
       PrintType(f, l + 2, "return_ty: ", t->return_ty);
       PrintType(f, l + 2, "params: ", t->params);
       PrintBool(f, l + 2, "is_variadic: ", t->is_variadic);
+      PrintType(f, l + 2, "pointertype: ", t->pointertype);
+      PrintType(f, l + 2, "origin: ", t->origin);
+      PrintType(f, l + 2, "decl_next: ", t->decl_next);
+      PrintInt(f, l + 2, "min_vector_width: ", t->min_vector_width);
       PrintLine(f, l, "}");
     } else if (t->name) {
       PrintLine(f, l, "%sTY_%s %.*s # %p", s, kTypeKindStr[t->kind],
@@ -256,6 +262,39 @@ static void PrintAsm(FILE *f, int l, const char *s, char * a) {
 if (!a) return;
   PrintLine(f, l, "%sAsm { # %p", s, a);
   PrintStr(f, l + 2, "str: ", a);
+}
+
+static void PrintFpClassify(FILE *f, int l, const char *s, FpClassify *fpc) {
+  if (!fpc) return;
+  PrintLine(f, l, "%sFpClassify { # %p", s, fpc);
+  PrintNode(f, l + 2, "node: ", fpc->node);
+  for (int i = 0; i < 5; ++i) {
+    PrintInt(f, l + 2, "arg: ", fpc->args[i]);
+  }
+  PrintLine(f, l, "}");
+}
+
+static void PrintInitializer(FILE *f, int l, const char *s, Initializer *init) {
+  if (!init) return;
+  PrintLine(f, l, "%sInitializer { # %p", s, init);
+  PrintType(f, l + 2, "ty: ", init->ty);
+  PrintTokStr(f, l + 2, "tok: ", init->tok);
+  PrintBool(f, l + 2, "is_flexible: ", init->is_flexible);
+  PrintNode(f, l + 2, "expr: ", init->expr);
+  if (init->children && init->ty) {
+     int len = 0;
+     if (init->ty->kind == TY_ARRAY || init->ty->kind == TY_VECTOR) len = init->ty->array_len;
+     else if (init->ty->kind == TY_STRUCT || init->ty->kind == TY_UNION) {
+        for (Member *m = init->ty->members; m; m = m->next) len++;
+     }
+     for (int i = 0; i < len; ++i) {
+        if (init->children[i])
+            PrintInitializer(f, l + 2, "child: ", init->children[i]);
+     }
+  }
+  PrintMember(f, l + 2, "mem: ", init->mem);
+  PrintLine(f, l, "}");
+  if (init->next) PrintInitializer(f, l, "next: ", init->next);
 }
 
 static void PrintNode(FILE *f, int l, const char *s, Node *n) {
@@ -316,6 +355,13 @@ static void PrintNode(FILE *f, int l, const char *s, Node *n) {
     if (n->atomic_expr) PrintNode(f, l + 2, "atomic_expr: ", n->atomic_expr);
     if (n->atomic_addr) PrintObj(f, l + 2, "atomic_addr: ", n->atomic_addr);
     PrintBool(f, l + 2, "atomic_fetch: ", n->atomic_fetch);
+    if (n->builtin_val) PrintNode(f, l + 2, "builtin_val: ", n->builtin_val);
+    for (int i = 0; i < n->builtin_nargs; i++) {
+        PrintNode(f, l + 2, "builtin_arg: ", n->builtin_args[i]);
+    }
+    PrintInt(f, l + 2, "builtin_nargs: ", n->builtin_nargs);
+    if (n->fpc) PrintFpClassify(f, l + 2, "fpc: ", n->fpc);
+    PrintBool(f, l + 2, "is_tail: ", n->is_tail);
     PrintBool(f, l + 2, "is_scalar_promoted: ", n->is_scalar_promoted);
     if (n->fval) PrintLine(f, l + 2, "fval: %Lf", n->fval);
     PrintLine(f, l, "}");
@@ -373,6 +419,18 @@ static void PrintObj(FILE *f, int l, const char *s, Obj *o) {
             "is_force_align_arg_pointer: ", o->is_force_align_arg_pointer);
   PrintBool(f, l + 2,
             "is_no_caller_saved_registers: ", o->is_no_caller_saved_registers);
+
+  PrintTokStr(f, l + 2, "tok: ", o->tok);
+  PrintStr(f, l + 2, "ptr: ", o->ptr);
+  PrintBool(f, l + 2, "is_ms_abi: ", o->is_ms_abi);
+  PrintInt(f, l + 2, "stack_offset: ", o->stack_offset);
+  PrintInt(f, l + 2, "stack_align: ", o->stack_align);
+  for (int i = 0; i < o->refs.len; i++) {
+      PrintStr(f, l + 2, "ref: ", o->refs.data[i]);
+  }
+  PrintInitializer(f, l + 2, "init: ", o->init);
+  PrintBool(f, l + 2, "force_frame_pointer: ", o->force_frame_pointer);
+  PrintInt(f, l + 2, "min_vector_width: ", o->min_vector_width);
 
   PrintInt(f, l + 2, "stack_size: ", o->stack_size);
   PrintInt(f, l + 2, "overflow_arg_area: ", o->overflow_arg_area);
