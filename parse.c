@@ -1348,7 +1348,8 @@ static void need_alloca_bottom(void) {
   if (!current_fn) return;
   if (current_fn->alloca_bottom)
     return;
-  opt_omit_frame_pointer = false;
+  //opt_omit_frame_pointer = false;
+  current_fn->force_frame_pointer = true;
   current_fn->alloca_bottom = new_lvar("__alloca_size__", pointer_to(ty_char), current_fn->name);
 }
 
@@ -2481,7 +2482,8 @@ static Node *asm_stmt(Token **rest, Token *tok)
   // extended assembly like asm ( assembler_template: output operands (optional) : input operands (optional) : list of clobbered registers (optional))
   if (equal(tok->next, ":"))
   {
-    need_alloca_bottom();
+    //need_alloca_bottom();
+    opt_omit_frame_pointer = false;
     node->asm_str = extended_asm(node, rest, tok, locals);
     if (!node->asm_str)
       error_tok(tok, "%s %d: in asm_stmt : error during extended_asm function null returned!", PARSE_C, __LINE__);
