@@ -70,6 +70,13 @@ struct DebugTypeInfo {
   DebugTypeInfo *next;
 };
 
+typedef struct DebugQualTypeInfo DebugQualTypeInfo;
+struct DebugQualTypeInfo {
+  Type *ty;
+  int id;
+  DebugQualTypeInfo *next;
+};
+
 typedef struct EmittedTypedef EmittedTypedef;
 struct EmittedTypedef {
   char *name;
@@ -84,11 +91,31 @@ static DebugTypeInfo *find_debug_type(DebugTypeInfo *types, Type *ty) {
   return NULL;
 }
 
+static DebugQualTypeInfo *find_debug_qual_type(DebugQualTypeInfo *types, Type *ty) {
+  for (DebugQualTypeInfo *it = types; it; it = it->next)
+    if (it->ty == ty)
+      return it;
+  return NULL;
+}
+
+static bool has_debug_type_qual(Type *ty) {
+  return ty && (ty->is_const || ty->is_volatile || ty->is_restrict);
+}
+
+static Type *unqual_debug_type(Type *ty) {
+  if (!ty)
+    return NULL;
+  if (ty->origin)
+    return ty->origin;
+  return ty;
+}
+
 static bool is_builtin_debug_type(Type *ty) {
   if (!ty)
     return true;
 
   switch (ty->kind) {
+  case TY_VOID:
   case TY_BOOL:
   case TY_ENUM:
   case TY_CHAR:
@@ -113,6 +140,9 @@ static bool emit_builtin_type_ref(Type *ty, int c) {
   }
 
   switch (ty->kind) {
+  case TY_VOID:
+    println("  .long .L.type_void%d - .L.debug_info%d", c, c);
+    return true;
   case TY_BOOL:
     println("  .long .L.type_bool%d - .L.debug_info%d", c, c);
     return true;
@@ -175,7 +205,30 @@ static bool emit_builtin_type_ref(Type *ty, int c) {
   }
 }
 
-static void collect_debug_type(Type *ty, DebugTypeInfo **types, int *next_id) {
+static void collect_debug_qual_type(Type *ty, DebugQualTypeInfo **types, int *next_id) {
+  if (!has_debug_type_qual(ty))
+    return;
+
+  if (find_debug_qual_type(*types, ty))
+    return;
+
+  DebugQualTypeInfo *entry = calloc(1, sizeof(DebugQualTypeInfo));
+  entry->ty = ty;
+  entry->id = (*next_id)++;
+  entry->next = *types;
+  *types = entry;
+}
+
+static void collect_debug_type(Type *ty, DebugTypeInfo **types, int *next_id,
+                               DebugQualTypeInfo **quals, int *next_qual_id) {
+  if (!ty)
+    return;
+
+  if (has_debug_type_qual(ty))
+    collect_debug_qual_type(ty, quals, next_qual_id);
+
+  ty = unqual_debug_type(ty);
+
   if (is_builtin_debug_type(ty))
     return;
 
@@ -193,15 +246,17 @@ static void collect_debug_type(Type *ty, DebugTypeInfo **types, int *next_id) {
   *types = entry;
 
   if (ty->kind == TY_PTR || ty->kind == TY_ARRAY) {
-    collect_debug_type(ty->base, types, next_id);
+    collect_debug_type(ty->base, types, next_id, quals, next_qual_id);
     return;
   }
 
   for (Member *mem = ty->members; mem; mem = mem->next)
-    collect_debug_type(mem->ty, types, next_id);
+    collect_debug_type(mem->ty, types, next_id, quals, next_qual_id);
 }
 
-static void emit_type_ref(Type *ty, DebugTypeInfo *types, int c) {
+static void emit_unqualified_type_ref(Type *ty, DebugTypeInfo *types, int c) {
+  ty = unqual_debug_type(ty);
+
   if (emit_builtin_type_ref(ty, c))
     return;
 
@@ -212,6 +267,27 @@ static void emit_type_ref(Type *ty, DebugTypeInfo *types, int c) {
   }
 
   println("  .long .L.type_custom_%d_%d - .L.debug_info%d", c, entry->id, c);
+}
+
+static char *qual_outer_label(DebugQualTypeInfo *entry, int c) {
+  Type *ty = entry->ty;
+  if (ty->is_const)
+    return format(".L.type_const_%d_%d", c, entry->id);
+  if (ty->is_volatile)
+    return format(".L.type_volatile_%d_%d", c, entry->id);
+  return format(".L.type_restrict_%d_%d", c, entry->id);
+}
+
+static void emit_type_ref(Type *ty, DebugTypeInfo *types, DebugQualTypeInfo *quals, int c) {
+  if (has_debug_type_qual(ty)) {
+    DebugQualTypeInfo *entry = find_debug_qual_type(quals, ty);
+    if (entry) {
+      println("  .long %s - .L.debug_info%d", qual_outer_label(entry, c), c);
+      return;
+    }
+  }
+
+  emit_unqualified_type_ref(ty, types, c);
 }
 
 static void emit_struct_name(Type *ty, int id) {
@@ -243,14 +319,14 @@ static void emit_custom_type_die(DebugTypeInfo *entry, DebugTypeInfo *types, int
   switch (ty->kind) {
   case TY_PTR:
     println("  .uleb128 6");
-    emit_type_ref(ty->base, types, c);
+    emit_unqualified_type_ref(ty->base, types, c);
     return;
   case TY_ARRAY: {
     int64_t count = ty->array_len;
     if (count < 0)
       count = 0;
     println("  .uleb128 7");
-    emit_type_ref(ty->base, types, c);
+    emit_unqualified_type_ref(ty->base, types, c);
     println("  .uleb128 8");
     println("  .uleb128 %ld", count);
     println("  .byte 0");
@@ -265,7 +341,7 @@ static void emit_custom_type_die(DebugTypeInfo *entry, DebugTypeInfo *types, int
     for (Member *mem = ty->members; mem; mem = mem->next) {
       println("  .uleb128 10");
       emit_member_name(mem, member_idx++);
-      emit_type_ref(mem->ty, types, c);
+      emit_unqualified_type_ref(mem->ty, types, c);
       println("  .uleb128 %d", ty->kind == TY_UNION ? 0 : mem->offset);
     }
     println("  .byte 0");
@@ -273,6 +349,38 @@ static void emit_custom_type_die(DebugTypeInfo *entry, DebugTypeInfo *types, int
   }
   default:
     return;
+  }
+}
+
+static void emit_qual_type_dies(DebugQualTypeInfo *quals, DebugTypeInfo *types, int c) {
+  for (DebugQualTypeInfo *entry = quals; entry; entry = entry->next) {
+    Type *ty = entry->ty;
+
+    if (ty->is_restrict) {
+      println(".L.type_restrict_%d_%d:", c, entry->id);
+      println("  .uleb128 16");
+      emit_unqualified_type_ref(ty, types, c);
+    }
+
+    if (ty->is_volatile) {
+      println(".L.type_volatile_%d_%d:", c, entry->id);
+      println("  .uleb128 15");
+      if (ty->is_restrict)
+        println("  .long .L.type_restrict_%d_%d - .L.debug_info%d", c, entry->id, c);
+      else
+        emit_unqualified_type_ref(ty, types, c);
+    }
+
+    if (ty->is_const) {
+      println(".L.type_const_%d_%d:", c, entry->id);
+      println("  .uleb128 14");
+      if (ty->is_volatile)
+        println("  .long .L.type_volatile_%d_%d - .L.debug_info%d", c, entry->id, c);
+      else if (ty->is_restrict)
+        println("  .long .L.type_restrict_%d_%d - .L.debug_info%d", c, entry->id, c);
+      else
+        emit_unqualified_type_ref(ty, types, c);
+    }
   }
 }
 
@@ -284,7 +392,7 @@ static bool is_emitted_typedef(EmittedTypedef *head, char *name, Type *ty) {
   return false;
 }
 
-static void emit_typedef_dies(DebugTypeInfo *types, int c) {
+static void emit_typedef_dies(DebugTypeInfo *types, DebugQualTypeInfo *quals, int c) {
   EmittedTypedef *emitted = NULL;
 
   for (DebugTypedef *td = debug_typedefs; td; td = td->next) {
@@ -301,7 +409,7 @@ static void emit_typedef_dies(DebugTypeInfo *types, int c) {
 
     println("  .uleb128 12");
     println("  .string \"%s\"", td->name);
-    emit_type_ref(td->ty, types, c);
+    emit_type_ref(td->ty, types, quals, c);
   }
 }
 
@@ -456,6 +564,48 @@ void emit_debug_info(Obj *prog) {
   println("  .byte 0");
   println("  .byte 0");
 
+  println("  .uleb128 13");                   // Abbrev code
+  println("  .uleb128 0x34");                 // DW_TAG_variable
+  println("  .byte 0");                       // DW_CHILDREN_no
+  println("  .uleb128 0x3");                  // DW_AT_name
+  println("  .uleb128 0x8");                  // DW_FORM_string
+  println("  .uleb128 0x49");                 // DW_AT_type
+  println("  .uleb128 0x13");                 // DW_FORM_ref4
+  println("  .uleb128 0x3a");                 // DW_AT_decl_file
+  println("  .uleb128 0x15");                 // DW_FORM_udata
+  println("  .uleb128 0x3b");                 // DW_AT_decl_line
+  println("  .uleb128 0x15");                 // DW_FORM_udata
+  println("  .uleb128 0x3f");                 // DW_AT_external
+  println("  .uleb128 0xc");                  // DW_FORM_flag
+  println("  .uleb128 0x2");                  // DW_AT_location
+  println("  .uleb128 0x18");                 // DW_FORM_exprloc
+  println("  .byte 0");
+  println("  .byte 0");
+
+  println("  .uleb128 14");                   // Abbrev code
+  println("  .uleb128 0x26");                 // DW_TAG_const_type
+  println("  .byte 0");                       // DW_CHILDREN_no
+  println("  .uleb128 0x49");                 // DW_AT_type
+  println("  .uleb128 0x13");                 // DW_FORM_ref4
+  println("  .byte 0");
+  println("  .byte 0");
+
+  println("  .uleb128 15");                   // Abbrev code
+  println("  .uleb128 0x35");                 // DW_TAG_volatile_type
+  println("  .byte 0");                       // DW_CHILDREN_no
+  println("  .uleb128 0x49");                 // DW_AT_type
+  println("  .uleb128 0x13");                 // DW_FORM_ref4
+  println("  .byte 0");
+  println("  .byte 0");
+
+  println("  .uleb128 16");                   // Abbrev code
+  println("  .uleb128 0x37");                 // DW_TAG_restrict_type
+  println("  .byte 0");                       // DW_CHILDREN_no
+  println("  .uleb128 0x49");                 // DW_AT_type
+  println("  .uleb128 0x13");                 // DW_FORM_ref4
+  println("  .byte 0");
+  println("  .byte 0");
+
   println("  .byte 0");                       // End of abbrevs
 
   println("  .section .debug_info,\"\",@progbits");
@@ -475,6 +625,7 @@ void emit_debug_info(Obj *prog) {
   println("  .quad .L.text_end");
 
   // Emit base types
+  emit_base_type_die(c, "type_void", "void", 0, 0);
   emit_base_type_die(c, "type_bool", "_Bool", 2, 1);       // DW_ATE_boolean
   emit_base_type_die(c, "type_char", "char", 6, 1);        // DW_ATE_signed_char
   emit_base_type_die(c, "type_uchar", "unsigned char", 8, 1); // DW_ATE_unsigned_char
@@ -493,26 +644,35 @@ void emit_debug_info(Obj *prog) {
   emit_base_type_die(c, "type_ldouble", "long double", 4, 16); // DW_ATE_float
 
   DebugTypeInfo *types = NULL;
+  DebugQualTypeInfo *quals = NULL;
   int next_type_id = 0;
+  int next_qual_id = 0;
   for (Obj *fn = prog; fn; fn = fn->next) {
     if (!fn->is_function || !fn->is_definition || !fn->is_live)
       continue;
 
     for (Obj *var = fn->params; var; var = var->next)
-      collect_debug_type(var->ty, &types, &next_type_id);
+      collect_debug_type(var->ty, &types, &next_type_id, &quals, &next_qual_id);
 
     for (Obj *var = fn->locals; var; var = var->next)
       if (!var->is_param)
-        collect_debug_type(var->ty, &types, &next_type_id);
+        collect_debug_type(var->ty, &types, &next_type_id, &quals, &next_qual_id);
+  }
+
+  for (Obj *var = prog; var; var = var->next) {
+    if (var->is_function || !var->is_definition || !var->name)
+      continue;
+    collect_debug_type(var->ty, &types, &next_type_id, &quals, &next_qual_id);
   }
 
   for (DebugTypedef *td = debug_typedefs; td; td = td->next)
-    collect_debug_type(td->ty, &types, &next_type_id);
+    collect_debug_type(td->ty, &types, &next_type_id, &quals, &next_qual_id);
 
   for (DebugTypeInfo *entry = types; entry; entry = entry->next)
     emit_custom_type_die(entry, types, c);
 
-  emit_typedef_dies(types, c);
+  emit_qual_type_dies(quals, types, c);
+  emit_typedef_dies(types, quals, c);
 
   for (Obj *fn = prog; fn; fn = fn->next) {
     if (!fn->is_function || !fn->is_definition)
@@ -539,7 +699,7 @@ void emit_debug_info(Obj *prog) {
         println("  .uleb128 3");
         println("  .string \"%s\"", var->name);
         
-        emit_type_ref(var->ty, types, c);
+        emit_type_ref(var->ty, types, quals, c);
 
         int lbl = label_count++;
         println("  .uleb128 .L.loc_end_%d - .L.loc_start_%d", lbl, lbl);
@@ -554,7 +714,7 @@ void emit_debug_info(Obj *prog) {
         println("  .uleb128 4");
         println("  .string \"%s\"", var->name);
         
-        emit_type_ref(var->ty, types, c);
+        emit_type_ref(var->ty, types, quals, c);
 
         int lbl = label_count++;
         println("  .uleb128 .L.loc_end_%d - .L.loc_start_%d", lbl, lbl);
@@ -565,6 +725,23 @@ void emit_debug_info(Obj *prog) {
     }
 
     println("  .byte 0"); // End of children
+  }
+
+  for (Obj *var = prog; var; var = var->next) {
+    if (var->is_function || !var->is_definition || !var->name)
+      continue;
+
+    println("  .uleb128 13");
+    println("  .string \"%s\"", var->name);
+    emit_type_ref(var->ty, types, quals, c);
+    println("  .uleb128 %d", var->file_no);
+    println("  .uleb128 %d", var->line_no);
+    println("  .byte %d", !var->is_static);
+
+    // DW_OP_addr <symbol>
+    println("  .byte 9");
+    println("  .byte 0x3");
+    println("  .quad %s", var->name);
   }
 
   println("  .byte 0");
