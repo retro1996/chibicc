@@ -21,3 +21,4 @@ compare.txt
 **/*.diff
 AGENTS.md
 /.continue
+gdb_help.txt
