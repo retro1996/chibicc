@@ -2194,9 +2194,10 @@ static void gen_builtin(Node *node, const char *insn, const char *reg) {
 }
 
 static void gen_vec_init_v2si(Node *node) {
-  gen_expr(node->lhs); 
-  println("  movl %%eax, %%edx"); 
-  gen_expr(node->rhs);            
+  gen_expr(node->lhs);
+  push_tmp();
+  gen_expr(node->rhs);
+  pop_tmp("%rdx");
   println("  shl $32, %%rax");    
   println("  or %%rdx, %%rax");  
   println("  movq %%rax, %%xmm0");
@@ -2204,30 +2205,36 @@ static void gen_vec_init_v2si(Node *node) {
 
 
 static void gen_vec_ext(Node *node) {
-    gen_expr(node->lhs); 
-    gen_expr(node->rhs); 
-    println("  mov %%eax, %%ebx");  
-    static int idx = 0;
-    static int label_id = 0;
-    int lbl_zero = label_id++;
-    int lbl_done = label_id++;
-    println("  cmpl $0, %%ebx");
-    println("  je .Lvec_ext_zero_%d", lbl_zero);
-    println("  psrldq $%d, %%xmm0", 4 * idx); 
-    idx++; 
-    println("  movd %%xmm0, %%eax");
-    println("  jmp .Lvec_ext_done_%d", lbl_done);
-    println(".Lvec_ext_zero_%d:", lbl_zero);
-    println("  movd %%xmm0, %%eax");   
-    println(".Lvec_ext_done_%d:", lbl_done);
+  gen_expr(node->lhs); 
+  push_xmm(0);
+  gen_expr(node->rhs); 
+  println("  mov %%eax, %%ebx");  
+  pop_xmm(0);
+  static int idx = 0;
+  static int label_id = 0;
+  int lbl_zero = label_id++;
+  int lbl_done = label_id++;
+  println("  cmpl $0, %%ebx");
+  println("  je .Lvec_ext_zero_%d", lbl_zero);
+  println("  psrldq $%d, %%xmm0", 4 * idx); 
+  idx++; 
+  println("  movd %%xmm0, %%eax");
+  println("  jmp .Lvec_ext_done_%d", lbl_done);
+  println(".Lvec_ext_zero_%d:", lbl_zero);
+  println("  movd %%xmm0, %%eax");   
+  println(".Lvec_ext_done_%d:", lbl_done);
 }
 
 static void gen_vec_init_binop(Node *node, const char *insn) {
   for (int i = 0; i < node->builtin_nargs; i++) {
-    gen_expr(node->builtin_args[i]);  // result in %eax
     if (i == 0) {
+        gen_expr(node->builtin_args[i]);  // result in %eax
         println("  movd %%eax, %%xmm0");
     } else {
+        // Preserve previously packed lanes across arg evaluation.
+        push_xmm(0);
+        gen_expr(node->builtin_args[i]);  // result in %eax
+        pop_xmm(0);
         println("  %s $%d, %%eax, %%xmm0", insn, i);
     }
   } 
@@ -2242,15 +2249,17 @@ static void gen_pshufd(Node *node) {
 
 static void gen_shuf_binop(Node *node, const char *insn) {
   gen_expr(node->rhs);
-  println("  movups %%xmm0, %%xmm1");      
+  push_xmm(0);
   gen_expr(node->lhs);
+  pop_xmm(1);
   println("  %s $%ld, %%xmm1, %%xmm0", insn, node->rhs->val);
 }
 
 static void gen_psll_binop(Node *node, const char *insn) {
   gen_expr(node->lhs);
-  println("  movups %%xmm0, %%xmm1");      
+  push_xmm(0);
   gen_expr(node->rhs);
+  pop_xmm(1);
   if (node->rhs->kind == ND_NUM)
     println("  %s $%ld, %%xmm1", insn, node->rhs->val);
   else {
@@ -2411,10 +2420,12 @@ static void gen_cvtpi2ps(Node *node) {
 
 static void gen_loadhps(Node *node) {
   gen_expr(node->lhs);
-  println("  movups (%%rax), %%xmm0");  
+  println("  movups (%%rax), %%xmm0");
+  push_xmm(0);
   gen_expr(node->rhs);
-  println("  movq (%%rax), %%xmm1");   
-  println("  movlhps %%xmm1, %%xmm0"); 
+  println("  movq (%%rax), %%xmm1");
+  pop_xmm(0);
+  println("  movlhps %%xmm1, %%xmm0");
 }
 
 static void gen_packss128_binop(Node *node, const char *insn) {
@@ -2958,13 +2969,17 @@ static void gen_fetchsub(Node *node) {
 
 static void gen_store_binop(Node *node, const char *insn) {
   gen_expr(node->rhs);
+  push_xmm(0);
   gen_expr(node->lhs);
+  pop_xmm(0);
   println("  %s %%xmm0, (%%rax)", insn); 
 }
 
 static void gen_loadlps(Node *node) {
-  gen_expr(node->lhs);  
-  gen_expr(node->rhs);  
+  gen_expr(node->lhs);
+  push_xmm(0);
+  gen_expr(node->rhs);
+  pop_xmm(0);
   println("  movlps (%%rax), %%xmm0");
 }
 
@@ -3230,22 +3245,26 @@ static void gen_movq128(Node *node) {
 }
 
 static void gen_movnti(Node *node) {
+  gen_expr(node->lhs);
+  push_tmp();
   gen_expr(node->rhs);
   if (node->rhs->kind == ND_NUM)
     println("  mov $%ld, %%ecx", node->rhs->val);
   else 
     println("  movq (%%rax), %%rcx");
-  gen_expr(node->lhs);
+  pop_tmp("%rax");
   println("  movnti %%ecx, (%%rax)"); 
 }
 
 static void gen_movnti64(Node *node) {
+  gen_expr(node->lhs);
+  push_tmp();
   gen_expr(node->rhs);
   if (node->rhs->kind == ND_NUM)
     println("  mov $%ld, %%rcx", node->rhs->val);
   else 
     println("  movq (%%rax), %%rcx");
-  gen_expr(node->lhs);
+  pop_tmp("%rax");
   println("  movnti %%rcx, (%%rax)"); 
 }
 
@@ -3336,16 +3355,18 @@ static void gen_sse_binop2(Node *node, const char *insn, const char *reg, bool r
 
 static void gen_sse_binop3(Node *node, const char *insn, bool rhs_is_imm) {
   gen_expr(node->rhs);
-  println("  movups %%xmm0, %%xmm1"); 
+  push_xmm(0);
   gen_expr(node->lhs);
+  pop_xmm(1);
   println("  %s %%xmm1, %%xmm0", insn);
 }
 
 
 static void gen_sse_binop4(Node *node, const char *insn, const char *insn2) {
   gen_expr(node->lhs);
-  println("  movups %%xmm0, %%xmm1");
+  push_xmm(0);
   gen_expr(node->rhs);
+  pop_xmm(1);
   println("  %s %%xmm0, %%xmm1", insn); 
   println("  %s %%al", insn2);
   println("  movzx %%al, %%eax");
@@ -3354,8 +3375,9 @@ static void gen_sse_binop4(Node *node, const char *insn, const char *insn2) {
 
 static void gen_sse_binop5(Node *node, const char *insn, const char *insn2) {
   gen_expr(node->lhs);
-  println("  movups %%xmm0, %%xmm1");
+  push_xmm(0);
   gen_expr(node->rhs);
+  pop_xmm(1);
   println("  %s %%xmm1, %%xmm0", insn); 
   println("  %s %%al", insn2);
   println("  movzx %%al, %%eax");
@@ -3363,8 +3385,9 @@ static void gen_sse_binop5(Node *node, const char *insn, const char *insn2) {
 
 static void gen_sse_binop6(Node *node, const char *insn, const char *insn2) {
   gen_expr(node->lhs);
-  println("  movups %%xmm0, %%xmm1");
+  push_xmm(0);
   gen_expr(node->rhs);
+  pop_xmm(1);
   println("  %s %%xmm0, %%xmm1", insn); 
   println("  setnp %%dl");
   println("  %s %%al", insn2);
@@ -3374,8 +3397,9 @@ static void gen_sse_binop6(Node *node, const char *insn, const char *insn2) {
 
 static void gen_sse_binop7(Node *node, const char *insn) {
   gen_expr(node->lhs);
-  println("  movups %%xmm0, %%xmm1");  
+  push_xmm(0);
   gen_expr(node->rhs);
+  pop_xmm(1);
   println("  %s %%xmm0, %%xmm1", insn);  
   println("  movdqa %%xmm1, %%xmm0");  
 }
@@ -3389,8 +3413,9 @@ static void gen_sse_binop8(Node *node, const char *insn, const char *reg) {
 
 static void gen_sse_binop9(Node *node, const char *insn) {
   gen_expr(node->lhs);  
-  println("  movups %%xmm0, %%xmm1");
+  push_xmm(0);
   gen_expr(node->rhs); 
+  pop_xmm(1);
   println("  %s %%xmm1, %%xmm0", insn);
 }
 
@@ -3456,8 +3481,10 @@ static void gen_cvt_mmx_binop(Node *node, const char *insn) {
   }
 
 static void gen_cvt_sse_binop2(Node *node, const char *insn, const char *reg, bool is_address) {  
-  gen_expr(node->lhs);  
-  gen_expr(node->rhs);  
+  gen_expr(node->lhs);
+  push_xmm(0);
+  gen_expr(node->rhs);
+  pop_xmm(0);
   if (is_address)
     println("  %s (%%%s), %%xmm0", insn, reg);
   else 
@@ -3516,8 +3543,9 @@ static void gen_mmx_binop1(Node *node, const char *insn) {
 
 static void gen_sse_testz(Node *node) {
     gen_expr(node->lhs);   // %xmm0 = M
-    println("  movups %%xmm0, %%xmm1");
+    push_xmm(0);
     gen_expr(node->rhs);   // %xmm0 = V
+    pop_xmm(1);
     // ptest performs V & M
     println("  ptest %%xmm0, %%xmm1");  // sets ZF and CF
     println("  setz %%al");             // AL = 1 if ZF=1
@@ -3526,8 +3554,9 @@ static void gen_sse_testz(Node *node) {
 
 static void gen_sse_testc(Node *node) {
     gen_expr(node->lhs);              // %xmm0 = M
-    println("  movups %%xmm0, %%xmm1"); // copy M to xmm1
+    push_xmm(0);
     gen_expr(node->rhs);              // %xmm0 = V
+    pop_xmm(1);
     // ptest xmm1, xmm0 → sets ZF/CF
     println("  ptest %%xmm0, %%xmm1"); // CF = ((V & M) != M)
     // set result based on CF
@@ -3537,8 +3566,9 @@ static void gen_sse_testc(Node *node) {
 
 static void gen_sse_testnzc(Node *node) {              
     gen_expr(node->rhs);   
-    println("  movups %%xmm0, %%xmm1"); 
+    push_xmm(0);
     gen_expr(node->lhs);             
+    pop_xmm(1);
     println("  ptest %%xmm1, %%xmm0");  
     // ptestnzc returns 1 if ZF==0 AND CF==0 (not zero and not carry)
     println("  setnz %%al");            // al = 1 if ZF==0
