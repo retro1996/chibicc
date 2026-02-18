@@ -23,3 +23,5 @@ AGENTS.md
 /.continue
 gdb_help.txt
 .cache/
+**/*.log
+**/*.env
