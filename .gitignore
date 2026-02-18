@@ -16,3 +16,10 @@
 pyproject.toml
 uv.lock
 **/*.py
+build.log
+compare.txt
+**/*.diff
+AGENTS.md
+/.continue
+gdb_help.txt
+.cache/

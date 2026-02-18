@@ -42,21 +42,51 @@ static void rehash(HashMap *map)
   assert(cap > 0);
 
   // Create a new hashmap and copy all key-values.
-  HashMap map2 = {};
-  map2.buckets = calloc(cap, sizeof(HashEntry));
-  if (map2.buckets == NULL)
-    error("%s: %s:%d: error: in rehash map2.buckets is null!", HASHMAP_C, __FILE__, __LINE__);
-  map2.capacity = cap;
+  // HashMap map2 = {};
+  // map2.buckets = calloc(cap, sizeof(HashEntry));
+  // if (map2.buckets == NULL)
+  //   error("%s: %s:%d: error: in rehash map2.buckets is null!", HASHMAP_C, __FILE__, __LINE__);
+  // map2.capacity = cap;
+  // Allocate new buckets
+  HashEntry *buckets2 = calloc(cap, sizeof(HashEntry));
+  if (buckets2 == NULL)
+    error("%s: %s:%d: error: in rehash buckets2 is null!", HASHMAP_C, __FILE__, __LINE__);
+  
+  // Rehash all valid entries
+  int nkeys2 = 0;
 
   for (int i = 0; i < map->capacity; i++)
   {
     HashEntry *ent = &map->buckets[i];
     if (ent->key && ent->key != TOMBSTONE)
-      hashmap_put2(&map2, ent->key, ent->keylen, ent->val);
+      //hashmap_put2(&map2, ent->key, ent->keylen, ent->val);
+  //}
+
+  //assert(map2.used == nkeys);
+  //*map = map2;
+   {
+      uint64_t hash = fnv_hash(ent->key, ent->keylen);
+
+      for (int j = 0; j < cap; j++)
+      {
+        HashEntry *new_ent = &buckets2[(hash + j) % cap];
+        if (new_ent->key == NULL)
+        {
+          *new_ent = *ent;
+          nkeys2++;
+          break;
+        }
+      }
+    }
   }
 
-  assert(map2.used == nkeys);
-  *map = map2;
+  assert(nkeys2 == nkeys);
+
+  // Replace old buckets with new buckets
+  free(map->buckets);
+  map->buckets = buckets2;
+  map->capacity = cap;
+  map->used = nkeys2;
 }
 
 static bool match(HashEntry *ent, char *key, int keylen)
@@ -142,6 +172,8 @@ void hashmap_put(HashMap *map, char *key, void *val)
 
 void hashmap_put2(HashMap *map, char *key, int keylen, void *val)
 {
+  if (map->buckets && ((map->used * 100) / map->capacity >= HIGH_WATERMARK))
+    rehash(map);
   HashEntry *ent = get_or_insert_entry(map, key, keylen);
   ent->val = val;
 }
@@ -187,5 +219,6 @@ void hashmap_test(void)
     hashmap_put(map, format("key %d", i), (void *)(size_t)i);
 
   assert(hashmap_get(map, "no such key") == NULL);
+  printf("OK\n");
   free(map);
 }

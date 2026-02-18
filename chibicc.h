@@ -47,11 +47,12 @@
 #endif
 
 #define PRODUCT "chibicc"
-#define VERSION "1.0.23.2"
+#define VERSION "1.0.23.3"
 #define MAXLEN 1001
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 #define MAX_BUILTIN_ARGS 8
 #define MAX_WEAK 20
+#define MAX_GLOBAL_VAR 100000
 
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
@@ -125,11 +126,14 @@ this " PRODUCT " contains only some differences for now like new parameters\n"
 -mmmx to allow mmx instructions and builtin functions linked to mmx like __builtin_packuswb... \n \
 -print-search-dirs prints minimal information on install dir. \n \
 -Werror any warning is sent as an error and stops the compile \n \
+-f-omit-frame-pointer omits frame pointer and uses rsp-relative addressing. Minimal stack usage \n \
+-f-no-omit-frame-pointer always keeps frame pointer (default) \n \
 chibicc [ -o <path> ] <file>\n"
 
 typedef struct Type Type;
 typedef struct Node Node;
 typedef struct Member Member;
+typedef struct DebugTypedef DebugTypedef;
 typedef struct Relocation Relocation;
 typedef struct Hideset Hideset;
 
@@ -142,6 +146,13 @@ typedef struct
 } Context;
 
 typedef Context Context;
+
+struct FpClassify {
+  Node *node;
+  int args[5];
+};
+typedef struct FpClassify FpClassify;
+
 
 //
 // strings.c
@@ -282,6 +293,7 @@ struct Obj
 
   // Local variable
   int offset;
+  char *ptr;
   int order;
   int nbparm;
   // Global variable or function
@@ -304,6 +316,7 @@ struct Obj
   char *visibility;
   char *asmname;
   bool is_inline;
+  int min_vector_width;
 
   //from COSMOPOLITAN adding is_aligned, is_noreturn, is_destructor, is_constructor, is_ms_abi, is_no_instrument_function, is_force_align_arg_pointer, is_no_caller_saved_registers
   bool is_aligned;
@@ -318,7 +331,7 @@ struct Obj
   bool is_no_caller_saved_registers;
   
   // Function calls vfork returns twice unsafe with stack frames
-  bool vfork_used;
+
 
   Obj *params;
   Node *body;
@@ -328,6 +341,8 @@ struct Obj
   int stack_size;
   int overflow_arg_area; 
   bool pass_by_stack; 
+  int stack_offset;
+  int stack_align;
 
   // Static inline function
   bool is_live;
@@ -341,6 +356,7 @@ struct Obj
   Initializer *init;
   bool is_address_used;
   bool is_param;
+  bool force_frame_pointer;
 };
 
 // Global variable can be initialized either by a constant expression
@@ -425,6 +441,7 @@ typedef enum
   ND_FETCHOR,      // Atomic fetch and or
   ND_SUBFETCH,     // Atomic sub and fetch
   ND_SYNC,      //atomic synchronize
+  ND_MEMBARRIER, // atomic thread/signal fence
   ND_BUILTIN_MEMCPY, //builtin memcpy
   ND_BUILTIN_MEMSET, //builtin memset
   ND_BUILTIN_CLZ, //builtin clz
@@ -824,6 +841,65 @@ typedef enum
   ND_ADD_AND_FETCH,   
   ND_SUB_AND_FETCH,   
   ND_BOOL_CAS,        
+  ND_PREFETCH,
+  ND_RDTSC,
+  ND_READEFLAGS_U64,
+  ND_RDSSPQ,
+  ND_SAVEPREVSSP,
+  ND_SETSSBSY,
+  ND_SLWPCB,
+  ND_RDPKRU,
+  ND_XBEGIN,
+  ND_XEND,
+  ND_SERIALIZE,
+  ND_XSUSLDTRK,
+  ND_XRESLDTRK,
+  ND_CLUI,
+  ND_STUI,
+  ND_TESTUI,
+  ND_WBNOINVD,
+  ND_XTEST,
+  ND_WBINVD,
+  ND_RDPID,
+  ND_RDFSBASE32,
+  ND_RDFSBASE64,
+  ND_RDGSBASE32,
+  ND_RDGSBASE64,
+  ND_VZEROALL,
+  ND_VZEROUPPER,
+  ND_FEMMS,
+  ND_BSRSI,
+  ND_RDPMC,
+  ND_RDTSCP,
+  ND_ROLQI,
+  ND_ROLHI,
+  ND_RORQI,
+  ND_RORHI,
+  ND_BSRDI, 
+  ND_WRITEEFLAGS_U64,
+  ND_INCSSPQ,
+  ND_RSTORSSP,
+  ND_WRSSD,
+  ND_WRSSQ,
+  ND_WRUSSD,
+  ND_WRUSSQ,
+  ND_CLRSSBSY,
+  ND_SBB_U32,
+  ND_ADDCARRYX_U32,
+  ND_SBB_U64,
+  ND_ADDCARRYX_U64,
+  ND_TZCNT_U16,
+  ND_BEXTR_U32,
+  ND_ADDFETCH,  
+  ND_ORFETCH,
+  ND_ANDFETCH,
+  ND_XORFETCH,
+  ND_NANDFETCH,
+  ND_FPCLASSIFY,   // floating point classify
+  ND_ISUNORDERED,
+  ND_SIGNBIT,
+  ND_SIGNBITF,
+  ND_SIGNBITL,
 } NodeKind;
 
 // AST node type
@@ -858,6 +934,7 @@ Node
   Type *func_ty;
   Node *args;
   bool pass_by_stack;
+  int stack_offset;       // Offset for stack-passed arguments during function calls
   bool realign_stack;
   Obj *ret_buffer;
 
@@ -909,9 +986,11 @@ Node
   // Numeric literal
   int64_t val;
   long double fval;
+  FpClassify *fpc;
   // for dot diagram
   int unique_number;
   bool is_scalar_promoted;  
+  bool is_tail;
 };
 
 typedef struct
@@ -1014,7 +1093,7 @@ struct Type
   bool is_weak;
   char *visibility;
   bool is_inline;
-
+  int min_vector_width;
   bool is_compound_lit; // Flag to indicate if this type is a compound literal
   // Function type
   Type *return_ty;
@@ -1028,7 +1107,15 @@ struct Type
   int destructor_priority;
   int constructor_priority;
   bool is_vector;
+  Token *tag_name; // struct/union/enum tag name
 
+};
+
+struct DebugTypedef
+{
+  DebugTypedef *next;
+  char *name;
+  Type *ty;
 };
 
 // Struct member
@@ -1091,6 +1178,8 @@ bool is_vector(Type *ty);
 bool is_int128(Type *ty);
 bool is_pointer(Type *ty);
 
+extern DebugTypedef *debug_typedefs;
+
 
 char *nodekind2str(NodeKind kind);
 
@@ -1106,6 +1195,7 @@ void print_ast(FILE *, Obj *);
 
 char *tokenkind2str(TokenKind kind);
 void print_debug_tokens(char *currentfilename, char *function, Token *tok);
+void emit_debug_info(Obj *prog);
 
 //
 // codegen.c
@@ -1134,6 +1224,10 @@ char *specific_register_available(char *regist);
 bool check_register_used(char *regist);
 void check_register_in_template(char *template); 
 void pushreg(const char *arg);
+void gen_fpclassify(FpClassify *);
+void println(char *fmt, ...);
+
+extern bool dont_reuse_stack;
 
 //
 // unicode.c
@@ -1216,6 +1310,11 @@ extern char *weak_symbols[MAX_WEAK];
 extern int weak_count;
 extern bool opt_implicit;
 extern bool opt_werror;
+extern bool opt_optimize;
+extern bool opt_optimize_level1;
+extern bool opt_optimize_level2;
+extern bool opt_optimize_level3;
+extern bool opt_omit_frame_pointer;
 
 //
 // extended_asm.c

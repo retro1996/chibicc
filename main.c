@@ -36,6 +36,11 @@ bool opt_c89;
 bool opt_c23;
 bool opt_implicit;
 bool opt_werror;
+bool opt_omit_frame_pointer = false;
+bool opt_optimize = false;
+bool opt_optimize_level1 = false;
+bool opt_optimize_level2 = false;
+bool opt_optimize_level3 = false;
 
 static FileType opt_x;
 static StringArray opt_include;
@@ -834,6 +839,7 @@ static void parse_args(int argc, char **argv)
     }
 
     if (!strncmp(argv[i], "-g", 2)) {
+      opt_omit_frame_pointer = false;      
       if (argv[i][2] == '0')
         opt_g = false;
       else
@@ -852,6 +858,48 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
+    if (!strcmp(argv[i], "-fomit-frame-pointer")) {
+      opt_omit_frame_pointer = true;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-fno-omit-frame-pointer")) {
+      opt_omit_frame_pointer = false;
+      continue;
+    }
+
+
+    if (!strcmp(argv[i], "-O0") || !strcmp(argv[i], "-O")) {
+      opt_omit_frame_pointer = false;
+      opt_optimize = false;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-O1")) {
+      opt_omit_frame_pointer = true;
+      opt_optimize = true;
+      opt_optimize_level1 = true;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-O2")) {
+      opt_omit_frame_pointer = true;
+      opt_optimize = true;
+      opt_optimize_level1 = true;
+      opt_optimize_level2 = true;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-O3")) {
+      opt_omit_frame_pointer = true;
+      opt_optimize = true;
+      opt_optimize_level1 = true;
+      opt_optimize_level2 = true;
+      opt_optimize_level3 = true;
+      continue;
+    }
+
+
     if (!strcmp(argv[i], "-fstack-protector") || !strcmp(argv[i], "-fstack-protector-strong") || !strcmp(argv[i], "-fstack-clash-protection") ) {
       opt_fstack_protector = true;
       continue;
@@ -864,10 +912,10 @@ static void parse_args(int argc, char **argv)
       exit(0);
     }      
 
-    if (!strcmp(argv[i], "-fp-model")) {
-      i++; 
-      continue;
-    }
+    // if (!strcmp(argv[i], "-fp-model")) {
+    //   i++; 
+    //   continue;
+    // }
 
     if (!strcmp(argv[i], "-isystem")) {
     char *path;
@@ -882,15 +930,21 @@ static void parse_args(int argc, char **argv)
     continue;
     }
 
+    if (!strcmp(argv[i], "-Werror=invalid-command-line-argument")) {
+      error("%s : %s:%d: error: in parse_args : argument not accepted : -Werror=invalid-command-line-argument", MAIN_C, __FILE__, __LINE__); 
+    }
+
+    if (!strcmp(argv[i], "-Werror=unknown-warning-option")) {
+      error("%s : %s:%d: error: in parse_args : argument not accepted : -Werror=unknown-warning-option", MAIN_C, __FILE__, __LINE__); 
+    }
+
     // These options are ignored for now.
-    if (startsWith(argv[i], "-O") ||
-        !strcmp(argv[i], "-P") || 
+    if (!strcmp(argv[i], "-P") || 
         !strcmp(argv[i], "-Wall") || 
         !strcmp(argv[i], "-Wextra") || 
         !strcmp(argv[i], "-Wpedantic") || 
         !strcmp(argv[i], "-Wno-switch") || 
         !strcmp(argv[i], "-Wno-clobbered") ||
-        !strcmp(argv[i], "-Wduplicated-cond") || 
         !strcmp(argv[i], "-Wno-unused-variable") ||
         !strcmp(argv[i], "-Wno-unused-parameter") ||  
         !strcmp(argv[i], "-Wno-sign-compare") ||
@@ -907,8 +961,6 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-funsafe-math-optimizations") ||  
         !strcmp(argv[i], "-funroll-loops") ||
         !strcmp(argv[i], "-ffreestanding") ||
-        !strcmp(argv[i], "-fno-omit-frame-pointer") ||
-        !strcmp(argv[i], "-fomit-frame-pointer") ||   
         !strcmp(argv[i], "-funwind-tables") ||   
         !strcmp(argv[i], "-fno-stack-protector") ||
         !strcmp(argv[i], "-fno-strict-aliasing") ||
@@ -939,11 +991,7 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-fdiagnostics-show-option") || 
         !strcmp(argv[i], "-fasynchronous-unwind-tables") || 
         !strcmp(argv[i], "-fexceptions") || 
-        !strcmp(argv[i], "-fdiagnostics-show-option") || 
-        !strcmp(argv[i], "-Xc") ||
-        !strcmp(argv[i], "-Aa") ||
         !strcmp(argv[i], "-w") ||
-        !strcmp(argv[i], "-w2") ||        
         !strcmp(argv[i], "--param=ssp-buffer-size=4") ||
         !strcmp(argv[i], "-fno-lto") ||
         !strcmp(argv[i], "-fdiagnostics-color=always")  ||
@@ -952,7 +1000,6 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-fdata-sections")    ||  
         !strcmp(argv[i], "-fprofile-arcs")    ||          
         !strcmp(argv[i], "-ftest-coverage")    ||       
-        !strcmp(argv[i], "-ansi_alias")       ||
         !strcmp(argv[i], "-ffat-lto-objects")       ||       
         !strcmp(argv[i], "-static-libstdc++")       ||    
         !strcmp(argv[i], "-static-libgcc")       ||    
@@ -964,6 +1011,18 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-fexcess-precision=standard") ||
         !strcmp(argv[i], "-Wno-shadow") ||
         !strcmp(argv[i], "-Wno-unreachable-code") ||
+        !strcmp(argv[i], "-mpku") ||
+        !strcmp(argv[i], "-mshstk") ||
+        !strcmp(argv[i], "-mlwp") ||
+        !strcmp(argv[i], "-mrtm") ||
+        !strcmp(argv[i], "-mserialize") ||        
+        !strcmp(argv[i], "-mtsxldtrk") ||
+        !strcmp(argv[i], "-muintr") ||
+        !strcmp(argv[i], "-mwbnoinvd") ||
+        !strcmp(argv[i], "-mrdpid") ||
+        !strcmp(argv[i], "-mfsgsbase") ||
+        !strcmp(argv[i], "-mavx") ||
+        !strcmp(argv[i], "-m3dnow") ||
         startswith(argv[i], "-W")     
         )
       continue;
@@ -1241,6 +1300,9 @@ static void print_dependencies(void)
       fprintf(out, "%s:\n\n", quote_makefile(files[i]->name));
     }
   }
+
+  if (out != stdout)
+    fclose(out);
 }
 
 static Token *must_tokenize_file(char *path)

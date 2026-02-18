@@ -1,0 +1,643 @@
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0x0000789817b2a072 in epoll_wait (epfd=3, events=0x10cefcc0, maxevents=32, timeout=1000)
+    at ../sysdeps/unix/sysv/linux/epoll_wait.c:30
+
+warning: 30     ../sysdeps/unix/sysv/linux/epoll_wait.c: No such file or directory
+  Id   Target Id                                            Frame
+* 1    Thread 0x789817c55740 (LWP 236085) "memcached-debug" 0x0000789817b2a072 in epoll_wait (epfd=3,
+    events=0x10cefcc0, maxevents=32, timeout=1000) at ../sysdeps/unix/sysv/linux/epoll_wait.c:30
+  2    Thread 0x7897e3fff6c0 (LWP 236098) "mc-slabmaint"    slab_rebalance_prep () at slabs_mover.c:158
+  3    Thread 0x7897fcff96c0 (LWP 236097) "mc-lrumaint"     0x0000789817aecadf in __GI___clock_nanosleep (
+    clock_id=clock_id@entry=0, flags=flags@entry=0, req=req@entry=0x7897fcff8c00, rem=rem@entry=0x0)
+    at ../sysdeps/unix/sysv/linux/clock_nanosleep.c:78
+  4    Thread 0x7897fd7fa6c0 (LWP 236096) "mc-ext-write"    0x00000000004deb93 in crc32c_hw () at crc32c.c:214
+  5    Thread 0x7897fdffb6c0 (LWP 236095) "mc-ext-compact"  0x0000789817a98d71 in __futex_abstimed_wait_common64 (
+    private=0, cancel=true, abstime=0x0, op=393, expected=0, futex_word=0x59c438) at ./nptl/futex-internal.c:57
+  6    Thread 0x7897fe7fc6c0 (LWP 236094) "mc-itemcrawler"  0x0000789817a98d71 in __futex_abstimed_wait_common64 (
+    private=25, cancel=true, abstime=0x0, op=393, expected=0, futex_word=0x53bb14 <lru_crawler_cond+44>)
+    at ./nptl/futex-internal.c:57
+  7    Thread 0x7897feffd6c0 (LWP 236093) "mc-assocmaint"   0x0000789817a98d71 in __futex_abstimed_wait_common64 (
+    private=0, cancel=true, abstime=0x0, op=393, expected=0, futex_word=0x523338 <maintenance_cond+40>)
+    at ./nptl/futex-internal.c:57
+  8    Thread 0x7897ff7fe6c0 (LWP 236092) "mc-worker"       0x0000789817b2a072 in epoll_wait (epfd=24,
+    events=0x10d0bc80, maxevents=32, timeout=-1) at ../sysdeps/unix/sysv/linux/epoll_wait.c:30
+  9    Thread 0x7897fffff6c0 (LWP 236091) "mc-worker"       0x0000789817b2a072 in epoll_wait (epfd=19,
+    events=0x10d0b4b0, maxevents=32, timeout=-1) at ../sysdeps/unix/sysv/linux/epoll_wait.c:30
+  10   Thread 0x789804c536c0 (LWP 236090) "mc-worker"       0x0000789817b2a072 in epoll_wait (epfd=14,
+    events=0x10d0ace0, maxevents=32, timeout=-1) at ../sysdeps/unix/sysv/linux/epoll_wait.c:30
+  11   Thread 0x7898054756c0 (LWP 236089) "mc-worker"       futex_wait (private=0, expected=2,
+    futex_word=0x789817c39fa8) at ../sysdeps/nptl/futex-internal.h:146
+  12   Thread 0x789815d766c0 (LWP 236088) "mc-ext-bgio"     0x0000789817a98d71 in __futex_abstimed_wait_common64 (
+    private=30872, cancel=true, abstime=0x0, op=393, expected=0, futex_word=0x10d02bf0) at ./nptl/futex-internal.c:57
+  13   Thread 0x7898165776c0 (LWP 236087) "mc-ext-io"       0x0000789817a98d71 in __futex_abstimed_wait_common64 (
+    private=30872, cancel=true, abstime=0x0, op=393, expected=0, futex_word=0x10d02a50) at ./nptl/futex-internal.c:57
+  14   Thread 0x7898179ff6c0 (LWP 236086) "mc-log"          0x0000789817a98d71 in __futex_abstimed_wait_common64 (
+    private=0, cancel=true, abstime=0x0, op=393, expected=0, futex_word=0x537068 <logger_stack_cond+40>)
+    at ./nptl/futex-internal.c:57
+
+Thread 14 (Thread 0x7898179ff6c0 (LWP 236086) "mc-log"):
+#0  0x0000789817a98d71 in __futex_abstimed_wait_common64 (private=0, cancel=true, abstime=0x0, op=393, expected=0, futex_word=0x537068 <logger_stack_cond+40>) at ./nptl/futex-internal.c:57
+        sc_cancel_oldtype = 0
+        sc_ret = <optimized out>
+        resultvar = <optimized out>
+        __arg6 = <optimized out>
+        __arg5 = <optimized out>
+        __arg4 = <optimized out>
+        __arg3 = <optimized out>
+        __arg2 = <optimized out>
+        __arg1 = <optimized out>
+        _a6 = <optimized out>
+        _a5 = <optimized out>
+        _a4 = <optimized out>
+        _a3 = <optimized out>
+        _a2 = <optimized out>
+        _a1 = <optimized out>
+#1  __futex_abstimed_wait_common (cancel=true, private=0, abstime=0x0, clockid=0, expected=0, futex_word=0x537068 <logger_stack_cond+40>) at ./nptl/futex-internal.c:87
+        err = <optimized out>
+        clockbit = 256
+        op = 393
+        err = <optimized out>
+        clockbit = <optimized out>
+        op = <optimized out>
+#2  __GI___futex_abstimed_wait_cancelable64 (futex_word=futex_word@entry=0x537068 <logger_stack_cond+40>, expected=expected@entry=0, clockid=clockid@entry=0, abstime=abstime@entry=0x0, private=private@entry=0) at ./nptl/futex-internal.c:139
+No locals.
+#3  0x0000789817a9b7ed in __pthread_cond_wait_common (abstime=0x0, clockid=0, mutex=0x537098 <logger_stack_lock>, cond=0x537040 <logger_stack_cond>) at ./nptl/pthread_cond_wait.c:503
+        spin = 0
+        buffer = {__routine = 0x789817a9b4b0 <__condvar_cleanup_waiting>, __arg = 0x7898179fede0, __canceltype = 396359360, __prev = 0x0}
+        cbuffer = {wseq = 0, cond = 0x537040 <logger_stack_cond>, mutex = 0x537098 <logger_stack_lock>, private = 0}
+        err = <optimized out>
+        g = 0
+        flags = <optimized out>
+        g1_start = <optimized out>
+        maxspin = 0
+        signals = <optimized out>
+        result = 0
+        wseq = 0
+        seq = 0
+        private = 0
+        maxspin = <optimized out>
+        err = <optimized out>
+        result = <optimized out>
+        wseq = <optimized out>
+        g = <optimized out>
+        seq = <optimized out>
+        flags = <optimized out>
+        private = <optimized out>
+        signals = <optimized out>
+        done = <optimized out>
+        g1_start = <optimized out>
+        spin = <optimized out>
+        buffer = <optimized out>
+        cbuffer = <optimized out>
+        s = <optimized out>
+#4  ___pthread_cond_wait (cond=0x537040 <logger_stack_cond>, mutex=0x537098 <logger_stack_lock>) at ./nptl/pthread_cond_wait.c:627
+No locals.
+#5  0x00000000004887b9 in logger_thread () at logger.c:922
+No locals.
+#6  0x0000789817a9caa4 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:447
+        ret = <optimized out>
+        pd = <optimized out>
+        out = <optimized out>
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {132594626721472, 7430365092118190537, 132594626721472, -120, 0, 140731918841248, 7430365092072053193, 7430365176658975177}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        not_first_call = <optimized out>
+#7  0x0000789817b29c6c in clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+No locals.
+
+Thread 13 (Thread 0x7898165776c0 (LWP 236087) "mc-ext-io"):
+#0  0x0000789817a98d71 in __futex_abstimed_wait_common64 (private=30872, cancel=true, abstime=0x0, op=393, expected=0, futex_word=0x10d02a50) at ./nptl/futex-internal.c:57
+        sc_cancel_oldtype = 0
+        sc_ret = <optimized out>
+        resultvar = <optimized out>
+        __arg6 = <optimized out>
+        __arg5 = <optimized out>
+        __arg4 = <optimized out>
+        __arg3 = <optimized out>
+        __arg2 = <optimized out>
+        __arg1 = <optimized out>
+        _a6 = <optimized out>
+        _a5 = <optimized out>
+        _a4 = <optimized out>
+        _a3 = <optimized out>
+        _a2 = <optimized out>
+        _a1 = <optimized out>
+#1  __futex_abstimed_wait_common (cancel=true, private=30872, abstime=0x0, clockid=0, expected=0, futex_word=0x10d02a50) at ./nptl/futex-internal.c:87
+        err = <optimized out>
+        clockbit = 256
+        op = 393
+        err = <optimized out>
+        clockbit = <optimized out>
+        op = <optimized out>
+#2  __GI___futex_abstimed_wait_cancelable64 (futex_word=futex_word@entry=0x10d02a50, expected=expected@entry=0, clockid=clockid@entry=0, abstime=abstime@entry=0x0, private=private@entry=0) at ./nptl/futex-internal.c:139
+No locals.
+#3  0x0000789817a9b7ed in __pthread_cond_wait_common (abstime=0x0, clockid=0, mutex=0x10d02a00, cond=0x10d02a28) at ./nptl/pthread_cond_wait.c:503
+        spin = 0
+        buffer = {__routine = 0x789817a9b4b0 <__condvar_cleanup_waiting>, __arg = 0x789816576d80, __canceltype = 0, __prev = 0x0}
+        cbuffer = {wseq = 0, cond = 0x10d02a28, mutex = 0x10d02a00, private = 0}
+        err = <optimized out>
+        g = 0
+        flags = <optimized out>
+        g1_start = <optimized out>
+        maxspin = 0
+        signals = <optimized out>
+        result = 0
+        wseq = 0
+        seq = 0
+        private = 0
+        maxspin = <optimized out>
+        err = <optimized out>
+        result = <optimized out>
+        wseq = <optimized out>
+        g = <optimized out>
+        seq = <optimized out>
+        flags = <optimized out>
+        private = <optimized out>
+        signals = <optimized out>
+        done = <optimized out>
+        g1_start = <optimized out>
+        spin = <optimized out>
+        buffer = <optimized out>
+        cbuffer = <optimized out>
+        s = <optimized out>
+#4  ___pthread_cond_wait (cond=0x10d02a28, mutex=0x10d02a00) at ./nptl/pthread_cond_wait.c:627
+No locals.
+#5  0x00000000004d72f1 in extstore_io_thread () at extstore.c:846
+No locals.
+#6  0x0000789817a9caa4 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:447
+        ret = <optimized out>
+        pd = <optimized out>
+        out = <optimized out>
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {132594605192896, 7430365714888448457, 132594605192896, -120, 0, 140731918840944, 7430365714842311113, 7430365176658975177}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        not_first_call = <optimized out>
+#7  0x0000789817b29c6c in clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+No locals.
+
+Thread 12 (Thread 0x789815d766c0 (LWP 236088) "mc-ext-bgio"):
+#0  0x0000789817a98d71 in __futex_abstimed_wait_common64 (private=30872, cancel=true, abstime=0x0, op=393, expected=0, futex_word=0x10d02bf0) at ./nptl/futex-internal.c:57
+        sc_cancel_oldtype = 0
+        sc_ret = <optimized out>
+        resultvar = <optimized out>
+        __arg6 = <optimized out>
+        __arg5 = <optimized out>
+        __arg4 = <optimized out>
+        __arg3 = <optimized out>
+        __arg2 = <optimized out>
+        __arg1 = <optimized out>
+        _a6 = <optimized out>
+        _a5 = <optimized out>
+        _a4 = <optimized out>
+        _a3 = <optimized out>
+        _a2 = <optimized out>
+        _a1 = <optimized out>
+#1  __futex_abstimed_wait_common (cancel=true, private=30872, abstime=0x0, clockid=0, expected=0, futex_word=0x10d02bf0) at ./nptl/futex-internal.c:87
+        err = <optimized out>
+        clockbit = 256
+        op = 393
+        err = <optimized out>
+        clockbit = <optimized out>
+        op = <optimized out>
+#2  __GI___futex_abstimed_wait_cancelable64 (futex_word=futex_word@entry=0x10d02bf0, expected=expected@entry=0, clockid=clockid@entry=0, abstime=abstime@entry=0x0, private=private@entry=0) at ./nptl/futex-internal.c:139
+No locals.
+#3  0x0000789817a9b7ed in __pthread_cond_wait_common (abstime=0x0, clockid=0, mutex=0x10d02ba0, cond=0x10d02bc8) at ./nptl/pthread_cond_wait.c:503
+        spin = 0
+        buffer = {__routine = 0x789817a9b4b0 <__condvar_cleanup_waiting>, __arg = 0x789815d75d80, __canceltype = 0, __prev = 0x0}
+        cbuffer = {wseq = 0, cond = 0x10d02bc8, mutex = 0x10d02ba0, private = 0}
+        err = <optimized out>
+        g = 0
+        flags = <optimized out>
+        g1_start = <optimized out>
+        maxspin = 0
+        signals = <optimized out>
+        result = 0
+        wseq = 0
+        seq = 0
+        private = 0
+        maxspin = <optimized out>
+        err = <optimized out>
+        result = <optimized out>
+        wseq = <optimized out>
+        g = <optimized out>
+        seq = <optimized out>
+        flags = <optimized out>
+        private = <optimized out>
+        signals = <optimized out>
+        done = <optimized out>
+        g1_start = <optimized out>
+        spin = <optimized out>
+        buffer = <optimized out>
+        cbuffer = <optimized out>
+        s = <optimized out>
+#4  ___pthread_cond_wait (cond=0x10d02bc8, mutex=0x10d02ba0) at ./nptl/pthread_cond_wait.c:627
+No locals.
+#5  0x00000000004d72f1 in extstore_io_thread () at extstore.c:846
+No locals.
+#6  0x0000789817a9caa4 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:447
+        ret = <optimized out>
+        pd = <optimized out>
+        out = <optimized out>
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {132594596800192, 7430360215719696841, 132594596800192, -120, 0, 140731918840944, 7430360215673559497, 7430365176658975177}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        not_first_call = <optimized out>
+#7  0x0000789817b29c6c in clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+No locals.
+
+Thread 11 (Thread 0x7898054756c0 (LWP 236089) "mc-worker"):
+#0  futex_wait (private=0, expected=2, futex_word=0x789817c39fa8) at ../sysdeps/nptl/futex-internal.h:146
+        __ret = -512
+        err = <optimized out>
+        err = <optimized out>
+        __ret = <optimized out>
+        resultvar = <optimized out>
+        __arg4 = <optimized out>
+        __arg3 = <optimized out>
+        __arg2 = <optimized out>
+        __arg1 = <optimized out>
+        _a4 = <optimized out>
+        _a3 = <optimized out>
+        _a2 = <optimized out>
+        _a1 = <optimized out>
+#1  __GI___lll_lock_wait (futex=futex@entry=0x789817c39fa8, private=0) at ./nptl/lowlevellock.c:49
+No locals.
+#2  0x0000789817aa0101 in lll_mutex_lock_optimized (mutex=0x789817c39fa8) at ./nptl/pthread_mutex_lock.c:48
+        __futex = 0x789817c39fa8
+        private = <optimized out>
+        private = <optimized out>
+        __futex = <optimized out>
+#3  ___pthread_mutex_lock (mutex=0x789817c39fa8) at ./nptl/pthread_mutex_lock.c:93
+        type = <optimized out>
+        __PRETTY_FUNCTION__ = "___pthread_mutex_lock"
+        id = <optimized out>
+#4  0x000000000047cffd in item_lock () at ./memcached.h:963
+No locals.
+#5  0x000000000047d4ac in item_get () at thread.c:882
+No locals.
+#6  0x000000000043c552 in limited_get () at memcached.c:2193
+No locals.
+#7  0x00000000004c1188 in process_get_command () at proto_text.c:579
+No locals.
+#8  0x00000000004c56ef in process_command_ascii () at proto_text.c:2945
+No locals.
+#9  0x00000000004c840e in try_read_command_ascii () at proto_text.c:492
+No locals.
+#10 0x000000000043175c in drive_machine () at memcached.c:3098
+No locals.
+#11 0x000000000042dfbd in event_handler () at memcached.c:3381
+No locals.
+#12 0x0000789817c78b3c in ?? () from /lib/x86_64-linux-gnu/libevent-2.1.so.7
+No symbol table info available.
+#13 0x0000789817c7a48f in event_base_loop () from /lib/x86_64-linux-gnu/libevent-2.1.so.7
+No symbol table info available.
+#14 0x0000000000476ab8 in worker_libevent () at thread.c:525
+No locals.
+#15 0x0000789817a9caa4 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:447
+        ret = <optimized out>
+        pd = <optimized out>
+        out = <optimized out>
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {132594318923456, 7430323794933897673, 132594318923456, -120, 0, 140731918841056, 7430323794887760329, 7430365176658975177}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        not_first_call = <optimized out>
+#16 0x0000789817b29c6c in clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+No locals.
+
+Thread 10 (Thread 0x789804c536c0 (LWP 236090) "mc-worker"):
+#0  0x0000789817b2a072 in epoll_wait (epfd=14, events=0x10d0ace0, maxevents=32, timeout=-1) at ../sysdeps/unix/sysv/linux/epoll_wait.c:30
+        sc_ret = -4
+        sc_cancel_oldtype = 0
+        sc_ret = <optimized out>
+#1  0x0000789817c82645 in ?? () from /lib/x86_64-linux-gnu/libevent-2.1.so.7
+No symbol table info available.
+#2  0x0000789817c7a288 in event_base_loop () from /lib/x86_64-linux-gnu/libevent-2.1.so.7
+No symbol table info available.
+#3  0x0000000000476ab8 in worker_libevent () at thread.c:525
+No locals.
+#4  0x0000789817a9caa4 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:447
+        ret = <optimized out>
+        pd = <optimized out>
+        out = <optimized out>
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {132594310395584, 7430327075215169993, 132594310395584, -120, 0, 140731918841056, 7430327075169032649, 7430365176658975177}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        not_first_call = <optimized out>
+#5  0x0000789817b29c6c in clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+No locals.
+
+Thread 9 (Thread 0x7897fffff6c0 (LWP 236091) "mc-worker"):
+#0  0x0000789817b2a072 in epoll_wait (epfd=19, events=0x10d0b4b0, maxevents=32, timeout=-1) at ../sysdeps/unix/sysv/linux/epoll_wait.c:30
+        sc_ret = -4
+        sc_cancel_oldtype = 0
+        sc_ret = <optimized out>
+#1  0x0000789817c82645 in ?? () from /lib/x86_64-linux-gnu/libevent-2.1.so.7
+No symbol table info available.
+#2  0x0000789817c7a288 in event_base_loop () from /lib/x86_64-linux-gnu/libevent-2.1.so.7
+No symbol table info available.
+#3  0x0000000000476ab8 in worker_libevent () at thread.c:525
+No locals.
+#4  0x0000789817a9caa4 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:447
+        ret = <optimized out>
+        pd = <optimized out>
+        out = <optimized out>
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {132594230359744, 7422536294450518473, 132594230359744, -120, 0, 140731918841056, 7422536294404381129, 7430365176658975177}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        not_first_call = <optimized out>
+#5  0x0000789817b29c6c in clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+No locals.
+
+Thread 8 (Thread 0x7897ff7fe6c0 (LWP 236092) "mc-worker"):
+#0  0x0000789817b2a072 in epoll_wait (epfd=24, events=0x10d0bc80, maxevents=32, timeout=-1) at ../sysdeps/unix/sysv/linux/epoll_wait.c:30
+        sc_ret = -4
+        sc_cancel_oldtype = 0
+        sc_ret = <optimized out>
+#1  0x0000789817c82645 in ?? () from /lib/x86_64-linux-gnu/libevent-2.1.so.7
+No symbol table info available.
+#2  0x0000789817c7a288 in event_base_loop () from /lib/x86_64-linux-gnu/libevent-2.1.so.7
+No symbol table info available.
+#3  0x0000000000476ab8 in worker_libevent () at thread.c:525
+No locals.
+#4  0x0000789817a9caa4 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:447
+        ret = <optimized out>
+        pd = <optimized out>
+        out = <optimized out>
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {132594221967040, 7422535193328277961, 132594221967040, -120, 0, 140731918841056, 7422535193282140617, 7430365176658975177}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        not_first_call = <optimized out>
+#5  0x0000789817b29c6c in clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+No locals.
+
+Thread 7 (Thread 0x7897feffd6c0 (LWP 236093) "mc-assocmaint"):
+#0  0x0000789817a98d71 in __futex_abstimed_wait_common64 (private=0, cancel=true, abstime=0x0, op=393, expected=0, futex_word=0x523338 <maintenance_cond+40>) at ./nptl/futex-internal.c:57
+        sc_cancel_oldtype = 0
+        sc_ret = <optimized out>
+        resultvar = <optimized out>
+        __arg6 = <optimized out>
+        __arg5 = <optimized out>
+        __arg4 = <optimized out>
+        __arg3 = <optimized out>
+        __arg2 = <optimized out>
+        __arg1 = <optimized out>
+        _a6 = <optimized out>
+        _a5 = <optimized out>
+        _a4 = <optimized out>
+        _a3 = <optimized out>
+        _a2 = <optimized out>
+        _a1 = <optimized out>
+#1  __futex_abstimed_wait_common (cancel=true, private=0, abstime=0x0, clockid=0, expected=0, futex_word=0x523338 <maintenance_cond+40>) at ./nptl/futex-internal.c:87
+        err = <optimized out>
+        clockbit = 256
+        op = 393
+        err = <optimized out>
+        clockbit = <optimized out>
+        op = <optimized out>
+#2  __GI___futex_abstimed_wait_cancelable64 (futex_word=futex_word@entry=0x523338 <maintenance_cond+40>, expected=expected@entry=0, clockid=clockid@entry=0, abstime=abstime@entry=0x0, private=private@entry=0) at ./nptl/futex-internal.c:139
+No locals.
+#3  0x0000789817a9b7ed in __pthread_cond_wait_common (abstime=0x0, clockid=0, mutex=0x5232b8 <maintenance_lock>, cond=0x523310 <maintenance_cond>) at ./nptl/pthread_cond_wait.c:503
+        spin = 0
+        buffer = {__routine = 0x789817a9b4b0 <__condvar_cleanup_waiting>, __arg = 0x7897feffcdd0, __canceltype = 0, __prev = 0x0}
+        cbuffer = {wseq = 0, cond = 0x523310 <maintenance_cond>, mutex = 0x5232b8 <maintenance_lock>, private = 0}
+        err = <optimized out>
+        g = 0
+        flags = <optimized out>
+        g1_start = <optimized out>
+        maxspin = 0
+        signals = <optimized out>
+        result = 0
+        wseq = 0
+        seq = 0
+        private = 0
+        maxspin = <optimized out>
+        err = <optimized out>
+        result = <optimized out>
+        wseq = <optimized out>
+        g = <optimized out>
+        seq = <optimized out>
+        flags = <optimized out>
+        private = <optimized out>
+        signals = <optimized out>
+        done = <optimized out>
+        g1_start = <optimized out>
+        spin = <optimized out>
+        buffer = <optimized out>
+        cbuffer = <optimized out>
+        s = <optimized out>
+#4  ___pthread_cond_wait (cond=0x523310 <maintenance_cond>, mutex=0x5232b8 <maintenance_lock>) at ./nptl/pthread_cond_wait.c:627
+No locals.
+#5  0x0000000000474492 in assoc_maintenance_thread () at assoc.c:247
+No locals.
+#6  0x0000789817a9caa4 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:447
+        ret = <optimized out>
+        pd = <optimized out>
+        out = <optimized out>
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {132594213574336, 7422538492400032201, 132594213574336, -120, 0, 140731918841280, 7422538492353894857, 7430365176658975177}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        not_first_call = <optimized out>
+#7  0x0000789817b29c6c in clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+No locals.
+
+Thread 6 (Thread 0x7897fe7fc6c0 (LWP 236094) "mc-itemcrawler"):
+#0  0x0000789817a98d71 in __futex_abstimed_wait_common64 (private=25, cancel=true, abstime=0x0, op=393, expected=0, futex_word=0x53bb14 <lru_crawler_cond+44>) at ./nptl/futex-internal.c:57
+        sc_cancel_oldtype = 0
+        sc_ret = <optimized out>
+        resultvar = <optimized out>
+        __arg6 = <optimized out>
+        __arg5 = <optimized out>
+        __arg4 = <optimized out>
+        __arg3 = <optimized out>
+        __arg2 = <optimized out>
+        __arg1 = <optimized out>
+        _a6 = <optimized out>
+        _a5 = <optimized out>
+        _a4 = <optimized out>
+        _a3 = <optimized out>
+        _a2 = <optimized out>
+        _a1 = <optimized out>
+#1  __futex_abstimed_wait_common (cancel=true, private=25, abstime=0x0, clockid=0, expected=0, futex_word=0x53bb14 <lru_crawler_cond+44>) at ./nptl/futex-internal.c:87
+        err = <optimized out>
+        clockbit = 256
+        op = 393
+        err = <optimized out>
+        clockbit = <optimized out>
+        op = <optimized out>
+#2  __GI___futex_abstimed_wait_cancelable64 (futex_word=futex_word@entry=0x53bb14 <lru_crawler_cond+44>, expected=expected@entry=0, clockid=clockid@entry=0, abstime=abstime@entry=0x0, private=private@entry=0) at ./nptl/futex-internal.c:139
+No locals.
+#3  0x0000789817a9b7ed in __pthread_cond_wait_common (abstime=0x0, clockid=0, mutex=0x53bb40 <lru_crawler_lock>, cond=0x53bae8 <lru_crawler_cond>) at ./nptl/pthread_cond_wait.c:503
+        spin = 0
+        buffer = {__routine = 0x789817a9b4b0 <__condvar_cleanup_waiting>, __arg = 0x7897fe7fbda0, __canceltype = 82008, __prev = 0x0}
+        cbuffer = {wseq = 11, cond = 0x53bae8 <lru_crawler_cond>, mutex = 0x53bb40 <lru_crawler_lock>, private = 0}
+        err = <optimized out>
+        g = 1
+        flags = <optimized out>
+        g1_start = <optimized out>
+        maxspin = 0
+        signals = <optimized out>
+        result = 0
+        wseq = 11
+        seq = 5
+        private = 0
+        maxspin = <optimized out>
+        err = <optimized out>
+        result = <optimized out>
+        wseq = <optimized out>
+        g = <optimized out>
+        seq = <optimized out>
+        flags = <optimized out>
+        private = <optimized out>
+        signals = <optimized out>
+        done = <optimized out>
+        g1_start = <optimized out>
+        spin = <optimized out>
+        buffer = <optimized out>
+        cbuffer = <optimized out>
+        s = <optimized out>
+#4  ___pthread_cond_wait (cond=0x53bae8 <lru_crawler_cond>, mutex=0x53bb40 <lru_crawler_lock>) at ./nptl/pthread_cond_wait.c:627
+No locals.
+#5  0x0000000000494223 in item_crawler_thread () at crawler.c:603
+No locals.
+#6  0x0000789817a9caa4 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:447
+        ret = <optimized out>
+        pd = <optimized out>
+        out = <optimized out>
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {132594205181632, 7422537391277791689, 132594205181632, -120, 0, 140731918841280, 7422537391231654345, 7430365176658975177}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        not_first_call = <optimized out>
+#7  0x0000789817b29c6c in clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+No locals.
+
+Thread 5 (Thread 0x7897fdffb6c0 (LWP 236095) "mc-ext-compact"):
+#0  0x0000789817a98d71 in __futex_abstimed_wait_common64 (private=0, cancel=true, abstime=0x0, op=393, expected=0, futex_word=0x59c438) at ./nptl/futex-internal.c:57
+        sc_cancel_oldtype = 0
+        sc_ret = <optimized out>
+        resultvar = <optimized out>
+        __arg6 = <optimized out>
+        __arg5 = <optimized out>
+        __arg4 = <optimized out>
+        __arg3 = <optimized out>
+        __arg2 = <optimized out>
+        __arg1 = <optimized out>
+        _a6 = <optimized out>
+        _a5 = <optimized out>
+        _a4 = <optimized out>
+        _a3 = <optimized out>
+        _a2 = <optimized out>
+        _a1 = <optimized out>
+#1  __futex_abstimed_wait_common (cancel=true, private=0, abstime=0x0, clockid=0, expected=0, futex_word=0x59c438) at ./nptl/futex-internal.c:87
+        err = <optimized out>
+        clockbit = 256
+        op = 393
+        err = <optimized out>
+        clockbit = <optimized out>
+        op = <optimized out>
+#2  __GI___futex_abstimed_wait_cancelable64 (futex_word=futex_word@entry=0x59c438, expected=expected@entry=0, clockid=clockid@entry=0, abstime=abstime@entry=0x0, private=private@entry=0) at ./nptl/futex-internal.c:139
+No locals.
+#3  0x0000789817a9b7ed in __pthread_cond_wait_common (abstime=0x0, clockid=0, mutex=0x59c468, cond=0x59c410) at ./nptl/pthread_cond_wait.c:503
+        spin = 0
+        buffer = {__routine = 0x789817a9b4b0 <__condvar_cleanup_waiting>, __arg = 0x7897fdffad60, __canceltype = -33575536, __prev = 0x0}
+        cbuffer = {wseq = 48, cond = 0x59c410, mutex = 0x59c468, private = 0}
+        err = <optimized out>
+        g = 0
+        flags = <optimized out>
+        g1_start = <optimized out>
+        maxspin = 0
+        signals = <optimized out>
+        result = 0
+        wseq = 48
+        seq = 24
+        private = 0
+        maxspin = <optimized out>
+        err = <optimized out>
+        result = <optimized out>
+        wseq = <optimized out>
+        g = <optimized out>
+        seq = <optimized out>
+        flags = <optimized out>
+        private = <optimized out>
+        signals = <optimized out>
+        done = <optimized out>
+        g1_start = <optimized out>
+        spin = <optimized out>
+        buffer = <optimized out>
+        cbuffer = <optimized out>
+        s = <optimized out>
+#4  ___pthread_cond_wait (cond=0x59c410, mutex=0x59c468) at ./nptl/pthread_cond_wait.c:627
+No locals.
+#5  0x00000000004e24df in storage_compact_thread () at storage.c:1131
+No locals.
+#6  0x0000789817a9caa4 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:447
+        ret = <optimized out>
+        pd = <optimized out>
+        out = <optimized out>
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {132594196788928, 7422531894256523721, 132594196788928, -120, 0, 140731918841280, 7422531894210386377, 7430365176658975177}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        not_first_call = <optimized out>
+#7  0x0000789817b29c6c in clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+No locals.
+
+Thread 4 (Thread 0x7897fd7fa6c0 (LWP 236096) "mc-ext-write"):
+#0  0x00000000004deb93 in crc32c_hw () at crc32c.c:214
+No locals.
+#1  0x00000000004e8e81 in storage_write () at storage.c:568
+No locals.
+#2  0x00000000004e7582 in storage_write_thread () at storage.c:687
+No locals.
+#3  0x0000789817a9caa4 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:447
+        ret = <optimized out>
+        pd = <optimized out>
+        out = <optimized out>
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {132594188396224, 7422530793134283209, 132594188396224, -120, 0, 140731918841280, 7422530793088145865, 7430365176658975177}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        not_first_call = <optimized out>
+#4  0x0000789817b29c6c in clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+No locals.
+
+Thread 3 (Thread 0x7897fcff96c0 (LWP 236097) "mc-lrumaint"):
+#0  0x0000789817aecadf in __GI___clock_nanosleep (clock_id=clock_id@entry=0, flags=flags@entry=0, req=req@entry=0x7897fcff8c00, rem=rem@entry=0x0) at ../sysdeps/unix/sysv/linux/clock_nanosleep.c:78
+        sc_cancel_oldtype = 0
+        sc_ret = <optimized out>
+        r = <optimized out>
+#1  0x0000789817af9a27 in __GI___nanosleep (req=req@entry=0x7897fcff8c00, rem=rem@entry=0x0) at ../sysdeps/unix/sysv/linux/nanosleep.c:25
+        ret = <optimized out>
+#2  0x0000789817b2975c in usleep (useconds=<optimized out>) at ../sysdeps/posix/usleep.c:31
+        ts = {tv_sec = 0, tv_nsec = 797221000}
+#3  0x000000000045da2a in lru_maintainer_thread () at items.c:1576
+No locals.
+#4  0x0000789817a9caa4 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:447
+        ret = <optimized out>
+        pd = <optimized out>
+        out = <optimized out>
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {132594180003520, 7422534092206037449, 132594180003520, -120, 0, 140731918841280, 7422534092159900105, 7430365176658975177}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        not_first_call = <optimized out>
+#5  0x0000789817b29c6c in clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+No locals.
+
+Thread 2 (Thread 0x7897e3fff6c0 (LWP 236098) "mc-slabmaint"):
+#0  slab_rebalance_prep () at slabs_mover.c:158
+No locals.
+#1  0x000000000049f243 in slab_rebalance_thread () at slabs_mover.c:629
+No locals.
+#2  0x0000789817a9caa4 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:447
+        ret = <optimized out>
+        pd = <optimized out>
+        out = <optimized out>
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {132593760597696, 7422527498357496265, 132593760597696, -120, 0, 140731918841264, 7422527498311358921, 7430365176658975177}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        not_first_call = <optimized out>
+#3  0x0000789817b29c6c in clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+No locals.
+
+Thread 1 (Thread 0x789817c55740 (LWP 236085) "memcached-debug"):
+#0  0x0000789817b2a072 in epoll_wait (epfd=3, events=0x10cefcc0, maxevents=32, timeout=1000) at ../sysdeps/unix/sysv/linux/epoll_wait.c:30
+        sc_ret = -4
+        sc_cancel_oldtype = 0
+        sc_ret = <optimized out>
+#1  0x0000789817c82645 in ?? () from /lib/x86_64-linux-gnu/libevent-2.1.so.7
+No symbol table info available.
+#2  0x0000789817c7a288 in event_base_loop () from /lib/x86_64-linux-gnu/libevent-2.1.so.7
+No symbol table info available.
+#3  0x000000000040f13a in main () at memcached.c:6177
+No locals.
+[Switching to thread 1 (Thread 0x789817c55740 (LWP 236085))]
+#0  0x0000789817b2a072 in epoll_wait (epfd=3, events=0x10cefcc0, maxevents=32, timeout=1000)
+    at ../sysdeps/unix/sysv/linux/epoll_wait.c:30
+30      in ../sysdeps/unix/sysv/linux/epoll_wait.c
+#3  0x000000000040f13a in main () at memcached.c:6177
+6177            if (event_base_loop(main_base, EVLOOP_ONCE) != 0) {
+6172        /* Initialize the uriencode lookup table. */
+6173        uriencode_init();
+6174
+6175        /* enter the event loop */
+6176        while (!stop_main_loop) {
+6177            if (event_base_loop(main_base, EVLOOP_ONCE) != 0) {
+6178                retval = EXIT_FAILURE;
+6179                break;
+6180            }
+6181        }
+A debugging session is active.
+
+        Inferior 1 [process 236085] will be detached.

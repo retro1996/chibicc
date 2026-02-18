@@ -81,6 +81,8 @@ or
         -mmmx to allow mmx instructions and builtin functions linked to mmx like __builtin_packuswb... 
         -print-search-dirs prints minimal information on install dir.
         -Werror any warning is sent as an error and stops the compile
+        -f-omit-frame-pointer omits frame pointer and uses rsp-relative addressing. Minimal stack usage 
+        -f-no-omit-frame-pointer always keeps frame pointer (default) 
         chibicc [ -o <path> ] <file>
 
 ## compile
@@ -220,8 +222,7 @@ it means that if you don't use the ld linker or ld.lld probably some options sho
 ## options ignored
 
 List of options ignored :
-
-    "-O"
+  
     "-P"
     "-Wall"
     "-Wextra"
@@ -245,8 +246,6 @@ List of options ignored :
     "-funsafe-math-optimizations"
     "-funroll-loops"
     "-ffreestanding"
-    "-fno-omit-frame-pointer"
-    "-fomit-frame-pointer"
     "-funwind-tables"
     "-fno-stack-protector"
     "-fno-strict-aliasing"
@@ -269,7 +268,6 @@ List of options ignored :
     "-Wformat"
     "-Wformat-security"
     "-Wduplicated-branches"
-    "-Wduplicated-cond"
     "-Wbad-function-cast"
     "-Wwrite-strings"
     "-Wlogical-op"
@@ -283,17 +281,11 @@ List of options ignored :
     "-fexceptions"
     "-fprofile-arcs"
     "-ftest-coverage"
-    "-fdiagnostics-show-option"
-    "-Xc"
-    "-Aa"
     "-w"
-    "-w2"
     "--param=ssp-buffer-size=4"
     "-fno-lto"
-    "-fp-model"
     "-fprofile-arcs"
     "-ftest-coverage"
-    "-ansi_alias"
     "-ffat-lto-objects"
     "-static-libstdc++"
     "-static-libgcc"
@@ -303,6 +295,20 @@ List of options ignored :
     "-fno-fast-math"
     "-fno-strict-overflow"
     "-fexcess-precision=standard"
+    "-Wno-shadow"
+    "-mpku"
+    "-mshstk"
+    "-mlwp"
+    "-mrtm"        
+    "-mserialize"
+    "-mtsxldtrk"
+    "-muintr"
+    "-mwbnoinvd"
+    "-mrdpid"
+    "-mfsgsbase"
+    "-mavx"
+    "-m3dnow"
+    "-Wno-unreachable-code"
 
 ## Dockerfile and devcontainer
 
@@ -452,6 +458,10 @@ memcached: https://github.com/memcached/memcached.git
     CC=chibicc CFLAGS=-fpic LDFLAGS=-fpic ./configure
     make
     make test
+    All tests successful.
+    Files=113, Tests=180224, 224 wallclock secs (19.91 usr  1.86 sys + 49.12 cusr 22.93 csys = 93.82 CPU)
+    Result: PASS
+    
 
 nmap : https://github.com/nmap/nmap
 
@@ -481,24 +491,32 @@ lxc: https://github.com/lxc/lxc.git
     CC=chibicc CFLAGS="-fpic" meson build && cd build && meson compile
 
 
+  
+
 ## Limits
 
 Some C projects doesn't compile for now or crash after being compiled with chibicc. It helps to find some bugs and to try to fix them!
 
-
-   
-cpython: git clone https://github.com/python/cpython.git
+cpython: git clone https://github.com/python/cpython.git 
         
-        CC=chibicc ./configure  --host=x86_64-pc-linux-gnu ac_cv_have_lchflags=no ac_cv_have_chflags=no
+        CC=chibicc CFLAGS="-std=c11"  ./configure  --host=x86_64-pc-linux-gnu 
         make && make test
-        failure with : 
-        ./python -E ./Tools/build/generate-build-details.py cat pybuilddir.txt/build-details.json
-        ./python -E -m test --fast-ci -u-gui --timeout=
-        ./python -u -W error -bb -E -m test --fast-ci -u-gui --timeout= --dont-add-python-opts
-        == CPython 3.15.0a0 (heads/main:fd8f42d3d10, Dec 6 2025, 20:15:20) [GCC 1.0.23.2]
-        Fatal Python error: PyOS_AfterFork_Child: the function must be called with the GIL held, after Python initialization and before Python finalization, but the GIL is released (the current Python thread state is NULL)
-        Python runtime state: initialized
+        some tests failed 
+        test_recursion_limit (test.test_marshal.BugsTestCase.test_recursion_limit) ... Fatal Python error: Segmentation fault
+        test_repr_deep (test.test_userlist.UserListTest.test_repr_deep) ... Fatal Python error: Segmentation fault
 
+        27 tests skipped:
+        3 tests skipped (resource denied):
+        5 re-run tests:
+        4 tests failed:
+            test.test_gdb.test_pretty_print test_call test_faulthandler
+            test_frame_pointer_unwind
+        466 tests OK.
+
+        Total duration: 34 min 51 sec
+        Total tests: run=47,247 failures=44 skipped=2,658
+        Total test files: run=502/500 failed=4 skipped=27 resource_denied=3 rerun=5
+        Result: FAILURE then FAILURE
 
 
 postgres: https://github.com/postgres/postgres.git  (in case of bad network use git clone --filter=blob:none --depth=1 https://github.com/postgres/postgres.git --branch master)
@@ -513,15 +531,15 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
 
     - some extended assembly syntax taken in account (only when on macro body they are failing)
     - adding basic support on int128 (probably some operations are still not supported)
-    - adding vector management and scalar promotion to vector
+    - adding vector management and scalar promotion to vector    
 
  
 ## TODO
 
 - trying to compile other C projects from source to see what is missing or which bug we have with chibicc.
-- Trying to find the root cause of segmentation fault with postgres initdb command.
-- Need to change the system of push/pops to solve issue with postgres(stack corruption)/cpython(vfork) probably using virtual stack like @fuhsnn/slimcc.
-- manage builtin memcpy/memset when defining inside a source it causes duplicated symbol during linkage (due to the .set defined)
+- trying to fix issue with postgres tests
+- trying to rewrite extended assembly to be more robust
+- trying to improve chibicc by reporting tests from slimcc to see what is missing/need to be fixed.
 
 
 ## issues and pull requests fixed
@@ -532,10 +550,10 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
 ## known issues
 
     postgres execution : ko
-    git 2 tests failed
-    memcached test stuck at t/binary-extstore.t ......... 5947/?
-    vim: compile OK, tests OK except one test on  test_channel.vim (Test_error_callback_terminal).
-    cpython : compile OK, test execution failed due to fork/vfork probably.
+    git 2 tests failed    
+    vim: compile OK, tests OK except one test : on test_channel.vim (Test_error_callback_terminal).
+    cpython : compile OK, some tests ko (4 on 500)
+           
 
 ## projects compiled successfully with chibicc
 
@@ -544,7 +562,8 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     zlib: compile OK, tests OK
     nmap: compile OK, tests OK    
     openssh-portable : compile OK, tests OK
-    vlc: compile OK
+    vlc: compile OK  
+    memcached : compile OK, tests OK  
 
 
 ## debug
@@ -575,7 +594,10 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23.2    Managing -Werror (reporting from @fuhsnn/slimcc). Adding decay array/vla to pointer in ND_COND, ND_COMMA. Merging pull request from @Superstart64 removing hard-coding on includes and Makefile. Managing builtin_memcpy and builtin_memset. Fixing issue on some bitfield operations (bitfield2 testcase). Ignoring -pedantic-errors and all warnings that starts with -W. Adding llrint in math.h. Ignoring gnu attribute \__noescape\__ and \__common\__.  Ignoring some arguments found during ruby compile. Reporting fix from @fuhsnn/slimcc da9d04c077357ac39f80acf2b9d6b5a47cd50cfc to fix setjmp issue. Adding some missing builtin_ia32_xxx from pmmintrin.h. Fixing issue with vfork (ISS-196). Adding other builtin_ia32_phxxx from tmmintrin.h.m and immintrin.h. Adding lots of missing builtin from smmintrin.h. Fixing old release notes typo. Adding -mcrc32 in managed argument. Fixing issue with undefined reference when static function used as initializer for a struct's field (ISS-197). Adding some atomic functions missing. Reversing change commit 92f079c that causes issue with curl test 1452 and refixing issue ISS-199. Refixing issue ISS-200 vim test failed (due to commit 76786d4). 
+1.0.23.3    Forbiding two arguments that cause failure with g++ when compiling vlc (-Werror=invalid-command-line-argument and -Werror=unknown-warning-option). Temporary fix for -A that causes infinite loop (ISS-194). Fixing attributes found in struct member. Updating GNUC from 2 to 3. Reporting commit 11d0bff from slimcc (new_inc_dec) and removing commit 2e138bb. Adding builtin_prefetch found with memcached (ISS-202). Reporting partial commit 32dbd2b from slimcc(initializer2). Reporting commit 6478f56 from slimcc (Change eval_double to long double, fix narrowing cast). Fixing issue with variadic and double/float/int mixed struct. Fixing assembly issue found at VIM (after a git pull). Adding enum_extensibility attribute support found during ruby compile. Adding some builtin functions found during ruby compile. Managing two forms of builtin_shuffle. Reporting commit ac2296c from slimcc and eb2bb49 from s311354 (issue 154 from rui314/chibicc). Reporting commit 2654b20 from slimcc (about global variables and removing scan_globals). Reporting commit 577a4f8 from slimcc (local stack alignment). Fixing -S that doesn't take in account the output directory. Fixing issue with alignment. Fixing issue with cpython tests (due to vfork hack using the parent frame). Fixing issue with popcount found during cpython tests. Fixing issue with segfault on cpython (ISS-204 partially). Fixing issue with variadic (function6.c). Adding FPCLASSIFY builtin from cosmopolitan. Adding builtin signbit from cosmopolitan. Optimizing the alloca_size to be used only when necessary to reduce the stack size consumption. Fixing also a bug in atomics found during cpython tests. Adding -fomit-frame-pointer and -fno-omit-frame-pointer support. Implementing basic tail call optimization. Implementing basic debug information (dwarf). Reviewing builtins to avoid register cloberring that solves the memcached issue with binary-extstore.t test.
+Fixing issue on extended_asm with wrong usage of snprintf that causes offset truncation.
+
+
 
 
 ## old release notes

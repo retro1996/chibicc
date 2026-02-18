@@ -208,10 +208,10 @@ int struct_test131(G g0,G g1,G g2,G g3,G g4,F f0,F f1,F f2,F f3,F f4,F f5, int i
   va_list ap;
   va_start(ap, i1);
   long double ret = i0 + i1;
-    ret += va_arg(ap, long double);
-    /* Use int instead of extremely-aligned type to avoid psABI warnings
-      about passing 1024-byte aligned parameters (GCC 4.6 note). */
-    ret += va_arg(ap, int);
+  ret += va_arg(ap, long double);
+  /* Use int instead of extremely-aligned type to avoid psABI warnings
+    about passing 1024-byte aligned parameters (GCC 4.6 note). */
+  ret += va_arg(ap, int);
   ret += va_arg(ap, int);
   ret += va_arg(ap, double);
   ret += va_arg(ap, double);

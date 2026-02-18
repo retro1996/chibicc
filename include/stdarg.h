@@ -22,10 +22,10 @@ extern int printf(const char *fmt, ...);
 //but we need a more robust way to manage alignment and activate here the correct alignment. 
 static void *__va_arg_mem(__va_elem *ap, int sz, int align) {  
   void *p = ap->overflow_arg_area;
-  // if (align > 16) {
+  if (align > 8) {
     
-  //   p = (void *)(((uintptr_t)p + align - 1) & ~(align - 1));
-  // }
+    p = (void *)(((uintptr_t)p + align - 1) & ~(align - 1));
+  }
   ap->overflow_arg_area = (void *)(((unsigned long)p + sz + 7) / 8 * 8);
   
   return p;

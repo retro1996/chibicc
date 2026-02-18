@@ -40,34 +40,48 @@ void myprintf(const char *format, ...)
         if (match(&s, "%hfa21")) {
             struct hfa21 x = va_arg(ap, struct hfa21);
             printf("%.1f,%.1f", x.a, x.a);
+            ASSERT(21.1, x.a);
         }
         else if (match(&s, "%hfa22")) {
             struct hfa22 x = va_arg(ap, struct hfa22);
             printf("%.1f,%.1f", x.a, x.b);
+            ASSERT(22.1, x.a);
+            ASSERT(22.2, x.b);
         }
         else if (match(&s, "%hfa23")) {
             struct hfa23 x = va_arg(ap, struct hfa23);
             printf("%.1f,%.1f", x.a, x.c);
+            ASSERT(23.1, x.a);
+            ASSERT(23.3, x.c);
         }
         else if (match(&s, "%hfa24")) {
             struct hfa24 x = va_arg(ap, struct hfa24);
             printf("%.1f,%.1f", x.a, x.d);
+            ASSERT(24.1, x.a);
+            ASSERT(24.4, x.d);
         }
         else if (match(&s, "%hfa31")) {
             struct hfa31 x = va_arg(ap, struct hfa31);
             printf("%.1Lf,%.1Lf", x.a, x.a);
+            ASSERT(31.1L, x.a);
         }
         else if (match(&s, "%hfa32")) {
             struct hfa32 x = va_arg(ap, struct hfa32);
             printf("%.1Lf,%.1Lf", x.a, x.b);
+            ASSERT(32.1L, x.a);
+            ASSERT(32.2L, x.b);
         }
         else if (match(&s, "%hfa33")) {
             struct hfa33 x = va_arg(ap, struct hfa33);
             printf("%.1Lf,%.1Lf", x.a, x.c);
+            ASSERT(33.1L, x.a);
+            ASSERT(33.3L, x.c);
         }
         else if (match(&s, "%hfa34")) {
             struct hfa34 x = va_arg(ap, struct hfa34);
             printf("%.1Lf,%.1Lf", x.a, x.d);
+            ASSERT(34.1L, x.a);
+            ASSERT(34.4L, x.d);
         }
         else
             putchar(*s);

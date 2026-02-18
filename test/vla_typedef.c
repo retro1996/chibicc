@@ -33,4 +33,5 @@ int main(void){
   fn(5);
 
   printf("OK\n");
+  return 0;
 }

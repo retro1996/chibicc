@@ -5,6 +5,9 @@ GCC_VERSION!=gcc -dumpversion
 CC=gcc
 CFLAGS =-std=c11 -g -fno-common -Wall -Wno-switch -DPREFIX=\"$(PREFIX)\" -DGCC_VERSION=\"$(GCC_VERSION)\"
 CFLAGS_DIAG= -std=c11 
+CFLAGS_SPE = -fomit-frame-pointer -O3
+TEST_JOBS ?=
+TEST_TIMEOUT ?= 30
 OBJECT=chibicc
 OBJECTLIB=libchibicc
 SRCS=$(wildcard *.c)
@@ -13,6 +16,7 @@ OBJS=$(SRCS:.c=.o)
 TEST_SRCS=$(wildcard test/*.c)
 TESTS=$(TEST_SRCS:.c=.exe)
 ISSUES_SRCS=$(wildcard issues/*.c)
+TESTS_SPE = $(TESTS:test/%=test_spe/%)
 #PNG=$(TEST_SRCS:.c=.tmp)
 #PNG2=$(ISSUES_SRCS:.c=.tmp)
 
@@ -30,9 +34,17 @@ test/%.exe: $(OBJECT) test/%.c
 	
 
 test: $(TESTS) 
-	for i in $^; do echo $$i; ./$$i || exit 1; echo; done
+	TEST_JOBS="$(TEST_JOBS)" TEST_TIMEOUT="$(TEST_TIMEOUT)" ./test/run_tests.sh $(addprefix ./,$^)
 	test/driver.sh ./$(OBJECT)
 
+test_spe/%.exe: $(OBJECT) test/%.c
+	mkdir -p test_spe
+	./$(OBJECT) $(CFLAGS_DIAG) $(CFLAGS_SPE) -Iinclude -Itest \
+		-c -o test_spe/$*.o test/$*.c
+	$(CC) -pthread -o $@ test_spe/$*.o -xc test/common -lm
+
+test_spe: $(TESTS_SPE)
+	TEST_JOBS="$(TEST_JOBS)" TEST_TIMEOUT="$(TEST_TIMEOUT)" ./test/run_tests.sh $(addprefix ./,$^)
 
 # #for managing dot diagram
 # test-png: $(TESTS)
@@ -54,7 +66,7 @@ stage2/test/%.exe: stage2/$(OBJECT) test/%.c
 	$(CC) -pthread -o $@ stage2/test/$*.o -xc test/common
 
 test-stage2: $(TESTS:test/%=stage2/test/%)
-	for i in $^; do echo $$i; ./$$i || exit 1; echo; done
+	TEST_JOBS="$(TEST_JOBS)" TEST_TIMEOUT="$(TEST_TIMEOUT)" ./test/run_tests.sh $(addprefix ./,$^)
 	test/driver.sh ./stage2/$(OBJECT)
 
 projects-all: projects projects-oth lxc vlc git memcached cpython openssl
@@ -65,25 +77,25 @@ projects: zlib util-linux nginx
 
 
 curl:
-	cd ../curl && make clean && CC=chibicc  CFLAGS="-std=c11" ./configure --with-openssl && make && make test
+	cd ../curl && make clean && CC=chibicc  CFLAGS="-std=c11" ./configure --with-openssl && make -j$(nproc) && make -j$(nproc) test
 
 zlib:
 	cd ../zlib && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make && make test
 
 nmap:
-	cd ../nmap && make clean && CC=chibicc  CFLAGS="-fPIC -std=c11" LIBS="-ldbus-1 -latomic -libverbs -lrdmacm" ./configure --with-dbus && make && make check
+	cd ../nmap && make clean && CC=chibicc  CFLAGS="-fPIC -std=c11" LIBS="-ldbus-1 -latomic -libverbs -lrdmacm" ./configure --with-dbus && make -j$(nproc) && make check
 
 openssl:
 	cd ../openssl && make clean && CC=chibicc CFLAGS="-std=c11" ./Configure && make 
 
 util-linux:
-	cd ../util-linux && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make && make check-programs && cd tests && ./run.sh
+	cd ../util-linux && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make -j$(nproc) && make check-programs && cd tests && ./run.sh
 
 nginx:
 	cd ../nginx && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./auto/configure --with-http_ssl_module && make
 
 vim:
-	cd ../vim && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make && make test
+	cd ../vim && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make -j$(nproc) &&  make -j$(nproc) test 
 
 lxc:
 	cd ../lxc && rm -rf build && CC=gcc \
@@ -96,8 +108,8 @@ vlc:
     make all
 
 cpython:
-	cd ../cpython &&  CC=chibicc ./configure \
-	 --build=x86_64-pc-linux-gnu ac_cv_have_lchflags=no ac_cv_have_chflags=no && make && make test
+	cd ../cpython &&  CC=chibicc CFLAGS="-std=c11 -O3" ./configure  \
+	 --build=x86_64-pc-linux-gnu && make clean && make -j$(nproc) && make -j$(nproc) test
 
 # vlc2:
 # 	cd ../vlc && rm -rf build && mymeson setup build && cd build && mymeson compile
@@ -107,7 +119,11 @@ git:
 	cd ../git && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make && make test
 
 memcached:
-	cd ../memcached && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make && make test
+	cd ../memcached && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make -j$$(nproc) && \
+	MC_TIMEDRUN=$${MC_TIMEDRUN:-600}; \
+	MC_TEST_JOBS=$${MC_TEST_JOBS:-2}; \
+	FAST_TESTS=$$(cd t && ls *.t | sed 's|^|t/|'); \
+	MC_TIMEDRUN=$$MC_TIMEDRUN prove -j $$MC_TEST_JOBS $$FAST_TESTS 
 
 openssh-portable:
 	cd ../openssh-portable && make clean && CC=chibicc CFLAGS="-std=c11" ./configure && make && make tests
@@ -123,7 +139,7 @@ libchibicc.so: $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ -shared
 
 clean:
-	rm -rf $(OBJECT) tmp* $(TESTS) issues/*.s issues/*.exe issues/*.dot test/*.s test/*.exe stage2 diagram/*.png test/*.dot $(OBJECTLIB)
+	rm -rf $(OBJECT) tmp* $(TESTS) issues/*.s issues/*.exe issues/*.dot test/*.s test/*.exe test_spe/*.exe stage2 diagram/*.png test/*.dot $(OBJECTLIB)
 	find * -type f '(' -name '*~' -o -name '*.o' ')' -exec rm {} ';'
 
 install: $(OBJECT)
@@ -134,4 +150,4 @@ uninstall:
 	rm -f $(PREFIX)/bin/chibicc
 	rm -f $(PREFIX)/include/x86_64-linux-gnu/chibicc/*
 
-.PHONY: test clean test-stage2 libchibicc projects projects-all  projects-oth test-all install uninstall
+.PHONY: test clean test-stage2 libchibicc projects projects-all  projects-oth test-all install uninstall test_spe
