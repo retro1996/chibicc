@@ -1640,8 +1640,8 @@ char *subst_asm(char *template, char *output_str, char *input_str)
 // generic string replace function
 char *string_replace(char *str, char *oldstr, char *newstr)
 {
-
-    char bstr[strlen(str)];
+    size_t cap = 10000;
+    char bstr[10000];
     memset(bstr, 0, sizeof(bstr));
     int i;
     for (i = 0; i < strlen(str); i++)
@@ -1655,6 +1655,8 @@ char *string_replace(char *str, char *oldstr, char *newstr)
         {
             strncat(bstr, str + i, 1);
         }
+        if (strlen(bstr) + 2 >= cap)
+            error("%s: %s:%d: error: in string_replace : not enough memory!", EXTASM_C, __FILE__, __LINE__);
     }
 
     strncpy(str, bstr, strlen(bstr) + 1);
@@ -1780,7 +1782,7 @@ char *generate_output_asm(char *output_str)
             strncat(tmp, ", (%rsi)\n", 11);
         else {
             strncat(tmp, ", ", 3);
-            snprintf(tmp2, sizeof(asmExt->output[nbOutput]->offset), "%d", asmExt->output[nbOutput]->offset);
+            snprintf(tmp2, 100, "%d", asmExt->output[nbOutput]->offset);
             strncat(tmp2, "(%rsi)\n", 9); //to have example 4(%rsi) for index 1, 8(%rsi) for index 2...
             strncat(tmp, tmp2, strlen(tmp2));
         }
@@ -1802,7 +1804,7 @@ char *generate_output_asm(char *output_str)
             strncat(tmp, ", (%rsi)\n", 11);
         else {
             strncat(tmp, ", ", 3);
-            snprintf(tmp2, sizeof(asmExt->output[nbOutput]->offsetStruct), "%d", asmExt->output[nbOutput]->offsetStruct);
+            snprintf(tmp2, 100, "%d", asmExt->output[nbOutput]->offsetStruct);
             strncat(tmp2, "(%rsi)\n", 9); //to have example 4(%rsi) for index 1, 8(%rsi) for index 2...
             strncat(tmp, tmp2, strlen(tmp2));
         }
@@ -1852,7 +1854,7 @@ char *load_variable(int offset)
     //     error("%s %s %d : error: in load_variable : incorrect offset %d or not managed yet!", EXTASM_C, __FILE__, __LINE__, offset);
     char *targetaddr = calloc(20, sizeof(char));
     
-    int length = snprintf(targetaddr, sizeof(offset), "%d", offset);
+    int length = snprintf(targetaddr, 20, "%d", offset);
     if (length < 0)
         error("%s %s %d : error:in load_variable : error during snprintf function! offset=%d length=%d", EXTASM_C, __FILE__, __LINE__, offset, length);
     strncat(targetaddr, "(%rbp)", 7);
@@ -1949,7 +1951,7 @@ char * retrieveVariableNumber(int index)
     char *variableNumberStr = calloc(20, sizeof(char));
     char *indexstr = calloc(20, sizeof(char));
     strncat(variableNumberStr, "%", 2);
-    int length = snprintf(indexstr, sizeof(index), "%d", index);
+    int length = snprintf(indexstr, 20, "%d", index);
     if (length < 0)
         error("%s %s %d : error: in retrieveVariableNumber : error during snprintf function! index=%d length=%d", EXTASM_C, __FILE__, __LINE__, index, length);
     strncat(variableNumberStr, indexstr, strlen(indexstr));
