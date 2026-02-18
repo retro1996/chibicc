@@ -126,11 +126,14 @@ this " PRODUCT " contains only some differences for now like new parameters\n"
 -mmmx to allow mmx instructions and builtin functions linked to mmx like __builtin_packuswb... \n \
 -print-search-dirs prints minimal information on install dir. \n \
 -Werror any warning is sent as an error and stops the compile \n \
+-f-omit-frame-pointer omits frame pointer and uses rsp-relative addressing. Minimal stack usage \n \
+-f-no-omit-frame-pointer always keeps frame pointer (default) \n \
 chibicc [ -o <path> ] <file>\n"
 
 typedef struct Type Type;
 typedef struct Node Node;
 typedef struct Member Member;
+typedef struct DebugTypedef DebugTypedef;
 typedef struct Relocation Relocation;
 typedef struct Hideset Hideset;
 
@@ -353,6 +356,7 @@ struct Obj
   Initializer *init;
   bool is_address_used;
   bool is_param;
+  bool force_frame_pointer;
 };
 
 // Global variable can be initialized either by a constant expression
@@ -437,6 +441,7 @@ typedef enum
   ND_FETCHOR,      // Atomic fetch and or
   ND_SUBFETCH,     // Atomic sub and fetch
   ND_SYNC,      //atomic synchronize
+  ND_MEMBARRIER, // atomic thread/signal fence
   ND_BUILTIN_MEMCPY, //builtin memcpy
   ND_BUILTIN_MEMSET, //builtin memset
   ND_BUILTIN_CLZ, //builtin clz
@@ -891,6 +896,10 @@ typedef enum
   ND_XORFETCH,
   ND_NANDFETCH,
   ND_FPCLASSIFY,   // floating point classify
+  ND_ISUNORDERED,
+  ND_SIGNBIT,
+  ND_SIGNBITF,
+  ND_SIGNBITL,
 } NodeKind;
 
 // AST node type
@@ -981,6 +990,7 @@ Node
   // for dot diagram
   int unique_number;
   bool is_scalar_promoted;  
+  bool is_tail;
 };
 
 typedef struct
@@ -1097,7 +1107,15 @@ struct Type
   int destructor_priority;
   int constructor_priority;
   bool is_vector;
+  Token *tag_name; // struct/union/enum tag name
 
+};
+
+struct DebugTypedef
+{
+  DebugTypedef *next;
+  char *name;
+  Type *ty;
 };
 
 // Struct member
@@ -1160,6 +1178,8 @@ bool is_vector(Type *ty);
 bool is_int128(Type *ty);
 bool is_pointer(Type *ty);
 
+extern DebugTypedef *debug_typedefs;
+
 
 char *nodekind2str(NodeKind kind);
 
@@ -1175,6 +1195,7 @@ void print_ast(FILE *, Obj *);
 
 char *tokenkind2str(TokenKind kind);
 void print_debug_tokens(char *currentfilename, char *function, Token *tok);
+void emit_debug_info(Obj *prog);
 
 //
 // codegen.c
@@ -1203,12 +1224,10 @@ char *specific_register_available(char *regist);
 bool check_register_used(char *regist);
 void check_register_in_template(char *template); 
 void pushreg(const char *arg);
+void gen_fpclassify(FpClassify *);
+void println(char *fmt, ...);
 
 extern bool dont_reuse_stack;
-
-
-
-void gen_fpclassify(FpClassify *);
 
 //
 // unicode.c
@@ -1291,6 +1310,11 @@ extern char *weak_symbols[MAX_WEAK];
 extern int weak_count;
 extern bool opt_implicit;
 extern bool opt_werror;
+extern bool opt_optimize;
+extern bool opt_optimize_level1;
+extern bool opt_optimize_level2;
+extern bool opt_optimize_level3;
+extern bool opt_omit_frame_pointer;
 
 //
 // extended_asm.c

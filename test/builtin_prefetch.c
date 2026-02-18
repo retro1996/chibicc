@@ -2,9 +2,13 @@
 
 int main() {
     char buffer[64];
+    int rw = 0;
+    int locality = 2;
     
     // Prefetch the first 32 bytes of buffer into cache
-    __builtin_prefetch(buffer, 0, 3);
+    __builtin_prefetch(buffer, rw++, ++locality);
+    ASSERT(1, rw);
+    ASSERT(3, locality);
 
     // Write some data to buffer
     for (int i = 0; i < 32; i++) {

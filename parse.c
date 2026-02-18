@@ -117,6 +117,7 @@ static char *cont_label;
 static Node *current_switch;
 
 static Obj *builtin_alloca;
+DebugTypedef *debug_typedefs;
 
 extern Context *ctx;
 
@@ -210,6 +211,8 @@ static char *token_to_string(Token *tok);
 static Node *ParseAtomicFetch(NodeKind kind, Token *tok, Token **rest);
 static Node *ParseSyncFetch(NodeKind kind, Token *tok, Token **rest);
 static Node *ParseAtomicBitwise(NodeKind kind, Token *tok, Token **rest);
+static Node *ParseAtomicFence(NodeKind kind, Token *tok, Token **rest);
+static Node *ParseAtomicClear(NodeKind kind, Token *tok, Token **rest);
 
 static int align_down(int n, int align)
 {
@@ -536,6 +539,14 @@ static char *get_ident(Token *tok)
   if (tok->kind != TK_IDENT)
     error_tok(tok, "%s %d: in get_ident : expected an identifier", PARSE_C, __LINE__);
   return strndup(tok->loc, tok->len);
+}
+
+static void record_debug_typedef(Token *tok, Type *ty) {
+  DebugTypedef *entry = calloc(1, sizeof(DebugTypedef));
+  entry->name = get_ident(tok);
+  entry->ty = ty;
+  entry->next = debug_typedefs;
+  debug_typedefs = entry;
 }
 
 static Type *find_typedef(Token *tok)
@@ -1333,8 +1344,18 @@ static Node *compute_vla_size(Type *ty, Token *tok)
   return new_binary(ND_COMMA, node, expr, tok);
 }
 
+static void need_alloca_bottom(void) {
+  if (!current_fn) return;
+  if (current_fn->alloca_bottom)
+    return;
+  //opt_omit_frame_pointer = false;
+  current_fn->force_frame_pointer = true;
+  current_fn->alloca_bottom = new_lvar("__alloca_size__", pointer_to(ty_char), current_fn->name);
+}
+
 static Node *new_alloca(Node *sz, int align)
 {
+  need_alloca_bottom();
   if (!builtin_alloca) {
     // Fallback implementation for alloca
     Node *node = new_node(ND_ALLOC, sz->tok);
@@ -2444,6 +2465,9 @@ static bool is_typename(Token *tok)
 // asm-stmt = "asm" ("volatile" | "inline")* "(" string-literal ")"
 static Node *asm_stmt(Token **rest, Token *tok)
 {
+  if (current_fn) {
+    current_fn->force_frame_pointer = true;
+  }
   Node *node = new_node(ND_ASM, tok);
   tok = tok->next;
 
@@ -2458,6 +2482,8 @@ static Node *asm_stmt(Token **rest, Token *tok)
   // extended assembly like asm ( assembler_template: output operands (optional) : input operands (optional) : list of clobbered registers (optional))
   if (equal(tok->next, ":"))
   {
+    //need_alloca_bottom();
+    opt_omit_frame_pointer = false;
     node->asm_str = extended_asm(node, rest, tok, locals);
     if (!node->asm_str)
       error_tok(tok, "%s %d: in asm_stmt : error during extended_asm function null returned!", PARSE_C, __LINE__);
@@ -3321,6 +3347,23 @@ static long double eval_double(Node *node)
   error_tok(node->tok, "%s %d: in eval_double : not a compile-time constant %d", PARSE_C, __LINE__, node->kind);
 }
 
+// Check if it is safe to re-evaluate an lvalue without introducing a temp.
+// This intentionally accepts only address-stable forms rooted in variables.
+static bool is_safe_lvalue(Node *node) {
+  if (!node)
+    return false;
+
+  if (node->kind == ND_VAR)
+    return true;
+
+  if (node->kind == ND_DEREF)
+    return node->lhs && node->lhs->kind == ND_VAR;
+
+  if (node->kind == ND_MEMBER && !is_bitfield(node))
+    return is_safe_lvalue(node->lhs);
+
+  return false;
+}
 
 static Node *atomic_op(Node *binary, bool return_old) {
   // ({
@@ -3399,6 +3442,14 @@ static Node *to_assign(Node *binary)
   add_type(binary->lhs);
   add_type(binary->rhs);
   Token *tok = binary->tok;
+
+  // -O1+: for simple lvalues, avoid creating a hidden pointer temp for op=
+  // lowering. This reduces stack-frame pressure in recursive hot paths.
+  if (opt_optimize_level1 && !binary->lhs->ty->is_atomic && is_safe_lvalue(binary->lhs)) {
+      return new_binary(ND_ASSIGN, binary->lhs,
+                        new_binary(binary->kind, binary->lhs, binary->rhs, tok),
+                        tok);
+  }
     // If A is an atomic type, Convert `A op= B` to
   //
   // ({
@@ -3931,6 +3982,13 @@ static Node *cast(Token **rest, Token *tok)
   return unary(rest, tok);
 }
 
+static void mark_var_address_taken(Node *node) {
+  while (node->kind == ND_MEMBER)
+    node = node->lhs;
+  if (node->kind == ND_VAR && node->var)
+    node->var->is_address_used = true;
+}
+
 // unary = ("+" | "-" | "*" | "&" | "!" | "~") cast
 //       | ("++" | "--") unary
 //       | "&&" ident
@@ -3956,6 +4014,7 @@ static Node *unary(Token **rest, Token *tok)
     if (lhs->kind == ND_VAR && lhs->var && lhs->var->is_function) {
         lhs->var->is_address_used = true;
     }
+    mark_var_address_taken(lhs);
 
     return new_unary(ND_ADDR, lhs, tok);
   }
@@ -5203,6 +5262,7 @@ static Type *struct_union_decl(Token **rest, Token *tok, bool *no_list)
   {
     tag = tok;
     ty->name = tag;
+    ty->tag_name = tag;
     tok = tok->next;
   }
 
@@ -5242,6 +5302,7 @@ static Type *struct_union_decl(Token **rest, Token *tok, bool *no_list)
         t->is_flexible = ty->is_flexible;
         t->is_packed = ty->is_packed;
         t->origin = ty;
+        t->tag_name = ty->tag_name;
       }
       return ty2;
     }
@@ -5433,6 +5494,16 @@ static void chain_expr(Node **lhs, Node *rhs) {
 // }
 static Node *new_inc_dec(Node *node, Token *tok, int addend) {
   add_type(node);
+
+  // -O1+: for simple variable postfix inc/dec, avoid hidden pointer temp.
+  // `_Bool` is special: `(b += 1) - 1` does not preserve old value semantics.
+  if (opt_optimize_level1 && !node->ty->is_atomic &&
+      node->ty->kind != TY_BOOL && is_safe_lvalue(node)) {
+    return new_cast(new_add(to_assign(new_add(node, new_num(addend, tok), tok, false)),
+                            new_num(-addend, tok), tok, false),
+                    node->ty);
+  }
+
   enter_scope();
 
   if (is_bitfield(node)) {
@@ -5599,12 +5670,24 @@ static char *token_to_string(Token *tok) {
   return buf;
 }
 
+static bool is_returned_twice(char *name) {
+  return !strcmp(name, "setjmp") || !strcmp(name, "_setjmp") ||
+         !strcmp(name, "sigsetjmp") || !strcmp(name, "__sigsetjmp") ||
+         !strcmp(name, "__builtin_setjmp") ||
+         !strcmp(name, "savectx") || !strcmp(name, "vfork") ||
+         !strcmp(name, "getcontext");
+}
+
+
 
 // funcall = (assign ("," assign)*)? ")"
 static Node *funcall(Token **rest, Token *tok, Node *fn)
 {
   add_type(fn);
   
+  if (fn->kind == ND_VAR && (!strcmp(fn->var->name, "alloca") || !strcmp(fn->var->name, "__builtin_alloca")))
+    need_alloca_bottom();
+
   if (fn->ty->kind != TY_FUNC &&
       (fn->ty->kind != TY_PTR || fn->ty->base->kind != TY_FUNC))
     error_tok(fn->tok, "%s %d: in funcall : not a function %d %s", PARSE_C, __LINE__, fn->ty->kind, tok->loc);
@@ -6568,6 +6651,53 @@ static Node *primary(Token **rest, Token *tok)
   }
 
 
+  if (equal(tok, "__builtin_isunordered")) {
+    Node *node = new_node(ND_ISUNORDERED, tok);
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok); 
+    add_type(node->lhs);
+    SET_CTX(ctx); 
+    tok = skip(tok, ",", ctx);
+    node->rhs = assign(&tok, tok); 
+    add_type(node->rhs);
+    SET_CTX(ctx); 
+    *rest = skip(tok, ")", ctx);    
+    return node;
+  }
+
+  if (equal(tok, "__builtin_signbit")) {
+    Node *node = new_node(ND_SIGNBIT, tok);
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok); 
+    add_type(node->lhs);
+    SET_CTX(ctx); 
+    *rest = skip(tok, ")", ctx);    
+    return node;
+  }
+
+  if (equal(tok, "__builtin_signbitf")) {
+    Node *node = new_node(ND_SIGNBITF, tok);
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok); 
+    add_type(node->lhs);
+    SET_CTX(ctx); 
+    *rest = skip(tok, ")", ctx);    
+    return node;
+  }
+
+  if (equal(tok, "__builtin_signbitl")) {
+    Node *node = new_node(ND_SIGNBITL, tok);
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok); 
+    add_type(node->lhs);
+    SET_CTX(ctx); 
+    *rest = skip(tok, ")", ctx);    
+    return node;
+  }
 
   if (equal(tok, "__builtin_expect")) {
     Node *node = new_node(ND_EXPECT, tok);
@@ -6595,11 +6725,18 @@ static Node *primary(Token **rest, Token *tok)
 
 
   if (equal(tok, "__builtin_return_address")) {
+    if (current_fn)
+      current_fn->force_frame_pointer = true;
     Node *node = new_node(ND_RETURN_ADDR, tok);
     SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
     node->lhs = assign(&tok, tok); 
     add_type(node->lhs);
+
+    if (opt_omit_frame_pointer && is_const_expr(node->lhs) && eval(node->lhs) > 0) {
+      opt_omit_frame_pointer = false;
+    }
+
     SET_CTX(ctx); 
     *rest = skip(tok, ")", ctx);
     return node;
@@ -6607,11 +6744,19 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "__builtin_frame_address"))
   {
+    if (current_fn)
+      current_fn->force_frame_pointer = true;
     Node *node = new_node(ND_BUILTIN_FRAME_ADDRESS, tok);
     add_type(node);
     SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
-    node->lhs = assign(&tok, tok); 
+    node->lhs = assign(&tok, tok);
+    add_type(node->lhs);
+
+    if (opt_omit_frame_pointer && (!is_const_expr(node->lhs) || eval(node->lhs) > 0)) {
+      opt_omit_frame_pointer = false;
+    }
+
     SET_CTX(ctx); 
     *rest = skip(tok, ")", ctx);
     return node;
@@ -6677,10 +6822,10 @@ static Node *primary(Token **rest, Token *tok)
     return ParseAtomicCompareExchangeN(ND_CMPEXCH_N, tok, rest);
   }
 
-  if (equal(tok, "__builtin_atomic_load")) {
+  if (equal(tok, "__builtin_atomic_load") || equal(tok, "__atomic_load")) {
     return ParseAtomic3(ND_LOAD, tok, rest);
   }
-  if (equal(tok, "__builtin_atomic_store")) {
+  if (equal(tok, "__builtin_atomic_store") || equal(tok, "__atomic_store")) {
     return ParseAtomic3(ND_STORE, tok, rest);
   }
   if (equal(tok, "__builtin_atomic_load_n") || equal(tok, "__atomic_load_n")) {
@@ -6738,6 +6883,14 @@ static Node *primary(Token **rest, Token *tok)
     return ParseAtomic2(ND_TESTANDSETA, tok, rest);
   }
 
+  if (equal(tok, "__atomic_test_and_set")) {
+    return ParseAtomic2(ND_TESTANDSETA, tok, rest);
+  }
+
+  if (equal(tok, "__atomic_clear")) {
+    return ParseAtomicClear(ND_CLEAR, tok, rest);
+  }
+
   if (equal(tok, "__sync_add_and_fetch")) {
       return ParseAtomic3(ND_ADD_AND_FETCH, tok, rest);
   }
@@ -6758,6 +6911,15 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "__builtin_atomic_clear")) {
     return ParseAtomic2(ND_CLEAR, tok, rest);
   }
+
+  if (equal(tok, "__atomic_thread_fence")) {
+    return ParseAtomicFence(ND_MEMBARRIER, tok, rest);
+  }
+
+  if (equal(tok, "__atomic_signal_fence")) {
+    return ParseAtomicFence(ND_MEMBARRIER, tok, rest);
+  }
+
   if (equal(tok, "__sync_lock_test_and_set")) {
     Node *node = new_node(ND_TESTANDSET, tok);
     SET_CTX(ctx); 
@@ -6888,9 +7050,11 @@ static Node *primary(Token **rest, Token *tok)
 
       char *name = sc->var->name;
      
-      if (strstr(name, "setjmp") || strstr(name, "savectx") ||
-          strstr(name, "vfork") || strstr(name, "getcontext"))
+      if (is_returned_twice(name)) {
         dont_reuse_stack = true;
+        if (current_fn)
+          current_fn->force_frame_pointer = true;
+      }
     
     }
 
@@ -6997,6 +7161,7 @@ static Node *parse_typedef(Token **rest, Token *tok, Type *basety)
       ty = vector_of(ty, len);
       ty->name = name;
     }
+    record_debug_typedef(ty->name, ty);
     push_scope(get_ident(ty->name))->type_def = ty;    
     node = new_binary(ND_COMMA, node, compute_vla_size(ty, tok), tok);
   }
@@ -7070,6 +7235,42 @@ static void mark_live(Obj *var)
     Obj *fn = find_func(var->refs.data[i]);
     if (fn)
       mark_live(fn);
+  }
+}
+
+//implementing tail call optimization. Marking tails calls.
+static void mark_tail_calls(Node *node) {
+  if (!node)
+    return;
+
+  switch (node->kind) {
+  case ND_BLOCK:
+    if (!node->body)
+      return;
+    Node *last = node->body;
+    while (last->next)
+      last = last->next;
+    mark_tail_calls(last);
+    break;
+  case ND_IF:
+    mark_tail_calls(node->then);
+    mark_tail_calls(node->els);
+    break;
+  case ND_RETURN:
+    mark_tail_calls(node->lhs);
+    break;
+  case ND_EXPR_STMT:
+    mark_tail_calls(node->lhs);
+    break;
+  case ND_CAST:
+    mark_tail_calls(node->lhs);
+    break;
+  case ND_COMMA:
+    mark_tail_calls(node->rhs);
+    break;
+  case ND_FUNCALL:
+    node->is_tail = true;
+    break;
   }
 }
 
@@ -7162,7 +7363,6 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   fn->params = locals;
   if (ty->is_variadic)
     fn->va_area = new_lvar("__va_area__", array_of(ty_char, 200), name_str);
-  fn->alloca_bottom = new_lvar("__alloca_size__", pointer_to(ty_char), name_str);
 
   //from COSMOPOLITAN adding other GNUC attributes
   tok = attribute_list(tok, ty, type_attributes);
@@ -7190,6 +7390,8 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   push_scope("__FUNCTION__")->var =
       new_string_literal(fn->name, array_of(ty_char, strlen(fn->name) + 1));
   fn->body = compound_stmt(&tok, tok, NULL);
+  //implementing tail call optimization.
+  mark_tail_calls(fn->body);
   fn->locals = locals;  
   order = 0;
   leave_scope();
@@ -7528,7 +7730,7 @@ char *nodekind2str(NodeKind kind)
   case ND_GOTO_EXPR: return "GOTO_EXPR"; 
   case ND_LABEL: return "LABEL"; 
   case ND_LABEL_VAL: return "LABEL_VAL";
-  case ND_FUNCALL: return "FUNCCALL";
+  case ND_FUNCALL: return "FUNCALL";
   case ND_EXPR_STMT: return "EXPRSTMR";
   case ND_STMT_EXPR: return "STMTEXPR"; 
   case ND_VAR: return "VAR"; 
@@ -7557,7 +7759,8 @@ char *nodekind2str(NodeKind kind)
   case ND_FETCHAND: return "FETCHAND";    
   case ND_FETCHOR: return "FETCHOR";
   case ND_SUBFETCH: return "SUBFETCH";
-  case ND_SYNC: return "SYNC";    
+  case ND_SYNC: return "SYNC";   
+  case ND_MEMBARRIER: return "MEMBARRIER"; 
   case ND_BUILTIN_MEMCPY: return "MEMCPY";  
   case ND_BUILTIN_MEMSET: return "MEMSET";  
   case ND_BUILTIN_CLZ: return "CLZ";   
@@ -8005,6 +8208,10 @@ char *nodekind2str(NodeKind kind)
   case ND_BEXTR_U32: return "BEXTR_U32";
   case ND_ADDFETCH: return "ADDFETCH";
   case ND_FPCLASSIFY: return "FPCLASSIFY";
+  case ND_ISUNORDERED: return "ISUNORDERED";
+  case ND_SIGNBIT: return "SIGNBIT";
+  case ND_SIGNBITF: return "SIGNBITF";
+  case ND_SIGNBITL: return "SIGNBITL";
   default: return "UNREACHABLE"; 
   }
 }
@@ -8265,6 +8472,35 @@ static Node *parse_memset(Token *tok, Token **rest) {
     node->builtin_size = assign(&tok, tok);
     add_type(node->builtin_size); 
     SET_CTX(ctx); 
+    *rest = skip(tok, ")", ctx);
+    return node;
+}
+
+static Node *ParseAtomicFence(NodeKind kind, Token *tok, Token **rest) {
+    Node *node = new_node(kind, tok);
+    SET_CTX(ctx);
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok); // memory order
+    add_type(node->lhs);
+    SET_CTX(ctx);
+    *rest = skip(tok, ")", ctx);
+    return node;
+}
+
+static Node *ParseAtomicClear(NodeKind kind, Token *tok, Token **rest) {
+    Node *node = new_node(kind, tok);
+    SET_CTX(ctx);
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok); // pointer
+    add_type(node->lhs);
+    node->ty = node->lhs->ty->base;
+    // __atomic_clear has a second argument for memory order
+    if (equal(tok, ",")) {
+        SET_CTX(ctx);
+        tok = skip(tok, ",", ctx);
+        node->memorder = const_expr(&tok, tok);
+    }
+    SET_CTX(ctx);
     *rest = skip(tok, ")", ctx);
     return node;
 }

@@ -818,7 +818,6 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 asmExt->output[nbOutput]->size = sc->var->ty->size;
                 if (!asmExt->output[nbOutput]->reg)
                     error_tok(tok, "%s %d: in output_asm function : reg is null extended assembly not managed yet", EXTASM_C, __LINE__);
-                asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                 asmExt->output[nbOutput]->isVariable = true;
                 asmExt->output[nbOutput]->output = tok;
                 asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
@@ -920,6 +919,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     return;
                 }
 
+                asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                 // skip the variable to go to next token that should be a ")"
                 // tok = tok->next;
                 tok = tok->next;                
@@ -1419,7 +1419,6 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 } 
                 if (!asmExt->input[nbInput]->reg) 
                     error_tok(tok, "%s : %s:%d: error: in input_asm function input_asm :reg is null! %d", EXTASM_C, __FILE__, __LINE__, nbInput);
-                asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
 
                 //managing specific case of arrays
                 if (sc->var->ty->kind == TY_ARRAY) {
@@ -1507,6 +1506,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     return;
                 }
 
+                asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
                 tok = tok->next;
                 SET_CTX(ctx);
                 *rest = skip(tok, ")", ctx);
@@ -1640,8 +1640,8 @@ char *subst_asm(char *template, char *output_str, char *input_str)
 // generic string replace function
 char *string_replace(char *str, char *oldstr, char *newstr)
 {
-
-    char bstr[strlen(str)];
+    size_t cap = 10000;
+    char bstr[10000];
     memset(bstr, 0, sizeof(bstr));
     int i;
     for (i = 0; i < strlen(str); i++)
@@ -1655,6 +1655,8 @@ char *string_replace(char *str, char *oldstr, char *newstr)
         {
             strncat(bstr, str + i, 1);
         }
+        if (strlen(bstr) + 2 >= cap)
+            error("%s: %s:%d: error: in string_replace : not enough memory!", EXTASM_C, __FILE__, __LINE__);
     }
 
     strncpy(str, bstr, strlen(bstr) + 1);
@@ -1780,7 +1782,7 @@ char *generate_output_asm(char *output_str)
             strncat(tmp, ", (%rsi)\n", 11);
         else {
             strncat(tmp, ", ", 3);
-            snprintf(tmp2, sizeof(asmExt->output[nbOutput]->offset), "%d", asmExt->output[nbOutput]->offset);
+            snprintf(tmp2, 100, "%d", asmExt->output[nbOutput]->offset);
             strncat(tmp2, "(%rsi)\n", 9); //to have example 4(%rsi) for index 1, 8(%rsi) for index 2...
             strncat(tmp, tmp2, strlen(tmp2));
         }
@@ -1802,7 +1804,7 @@ char *generate_output_asm(char *output_str)
             strncat(tmp, ", (%rsi)\n", 11);
         else {
             strncat(tmp, ", ", 3);
-            snprintf(tmp2, sizeof(asmExt->output[nbOutput]->offsetStruct), "%d", asmExt->output[nbOutput]->offsetStruct);
+            snprintf(tmp2, 100, "%d", asmExt->output[nbOutput]->offsetStruct);
             strncat(tmp2, "(%rsi)\n", 9); //to have example 4(%rsi) for index 1, 8(%rsi) for index 2...
             strncat(tmp, tmp2, strlen(tmp2));
         }
@@ -1852,7 +1854,7 @@ char *load_variable(int offset)
     //     error("%s %s %d : error: in load_variable : incorrect offset %d or not managed yet!", EXTASM_C, __FILE__, __LINE__, offset);
     char *targetaddr = calloc(20, sizeof(char));
     
-    int length = snprintf(targetaddr, sizeof(offset), "%d", offset);
+    int length = snprintf(targetaddr, 20, "%d", offset);
     if (length < 0)
         error("%s %s %d : error:in load_variable : error during snprintf function! offset=%d length=%d", EXTASM_C, __FILE__, __LINE__, offset, length);
     strncat(targetaddr, "(%rbp)", 7);
@@ -1888,7 +1890,7 @@ void update_offset(char *funcname, Obj *locals)
     if (fn) {
         //fixing ====ISS-161 issue with some locals missing in fn->locals
         //if (!fn->locals)
-        fn->locals = locals;
+        fn->locals = locals;        
         assign_lvar_offsets(fn);
     }
 
@@ -1915,13 +1917,13 @@ char *update_register_size(char *reg, int size)
     else if (!strncmp(reg, "%rsi", strlen(reg)) || !strncmp(reg, "%esi", strlen(reg)) || !strncmp(reg, "%si", strlen(reg)) || !strncmp(reg, "%sih", strlen(reg)) || !strncmp(reg, "%sil", strlen(reg)))
         return reg_si(size);       
     else if (!strncmp(reg, "%r8", strlen(reg)) || !strncmp(reg, "%r8d", strlen(reg)) || !strncmp(reg, "%r8w", strlen(reg)) || !strncmp(reg, "%r8h", strlen(reg)) || !strncmp(reg, "%r8b", strlen(reg)))
-        return reg_si(size);                    
+        return reg_r8w(size);                    
     else if (!strncmp(reg, "%r9", strlen(reg)) || !strncmp(reg, "%r9d", strlen(reg)) || !strncmp(reg, "%r9w", strlen(reg)) || !strncmp(reg, "%r9h", strlen(reg)) || !strncmp(reg, "%r9b", strlen(reg)))
-        return reg_si(size);    
+        return reg_r9w(size);    
     else if (!strncmp(reg, "%r10", strlen(reg)) || !strncmp(reg, "%r10d", strlen(reg)) || !strncmp(reg, "%r10w", strlen(reg)) || !strncmp(reg, "%r10h", strlen(reg)) || !strncmp(reg, "%r10b", strlen(reg)))
-        return reg_si(size); 
+        return reg_r10w(size); 
     else if (!strncmp(reg, "%r11", strlen(reg)) || !strncmp(reg, "%r11d", strlen(reg)) || !strncmp(reg, "%r11w", strlen(reg)) || !strncmp(reg, "%r11h", strlen(reg)) || !strncmp(reg, "%r11b", strlen(reg)))
-        return reg_si(size);                               
+        return reg_r11w(size);                               
     else
         return reg;
 }
@@ -1949,7 +1951,7 @@ char * retrieveVariableNumber(int index)
     char *variableNumberStr = calloc(20, sizeof(char));
     char *indexstr = calloc(20, sizeof(char));
     strncat(variableNumberStr, "%", 2);
-    int length = snprintf(indexstr, sizeof(index), "%d", index);
+    int length = snprintf(indexstr, 20, "%d", index);
     if (length < 0)
         error("%s %s %d : error: in retrieveVariableNumber : error during snprintf function! index=%d length=%d", EXTASM_C, __FILE__, __LINE__, index, length);
     strncat(variableNumberStr, indexstr, strlen(indexstr));

@@ -64,12 +64,12 @@ static const char kTypeKindStr[17][8] = {
 };
 
 
-static const char kNodeKindStr[521][21] = {
+static const char kNodeKindStr[526][21] = {
     "NULL_EXPR", "ADD", "SUB", "MUL", "DIV", "NEG", "MOD", "BITAND",  "BITOR", "BITXOR", "SHL", "SHR", "EQ", "NE",
     "LT", "LE", "ASSIGN", "COND", "COMMA", "MEMBER", "ADDR", "DEREF", "NOT", "BITNOT", "LOGAND", "LOGOR", "RETURN",
     "IF", "FOR", "DO", "SWITCH", "CASE", "BLOCK", "GOTO", "GOTO_EXPR", "LABEL", "LABEL_VAL",  "FUNCALL", "EXPR_STMT", "STMT_EXPR", "VAR", "VLA_PTR", "NUM", "CAST", "MEMZERO",
     "ASM", "CAS", "EXCH", "CAS_N", "EXCH_N", "CMPEXCH", "CMPEXCH_N", "LOAD", "LOAD_N", "STORE", "STORE_N", "TESTANDSET", "TESTANDSETA", "CLEAR", "RELEASE", "FETCHADD", "FETCHSUB", "FETCHXOR", "FETCHAND",  
-    "FETCHOR", "SUBFETCH", "SYNC", "BUILTIN_MEMCPY",  "BUILTIN_MEMSET", "BUILTIN_CLZ", "BUILTIN_CLZL", "BUILTIN_CLZLL", "BUILTIN_CTZ", "BUILTIN_CTZL", "BUILTIN_CTZLL", "POPCOUNT",    
+    "FETCHOR", "SUBFETCH", "SYNC", "MEMBARRIER", "BUILTIN_MEMCPY",  "BUILTIN_MEMSET", "BUILTIN_CLZ", "BUILTIN_CLZL", "BUILTIN_CLZLL", "BUILTIN_CTZ", "BUILTIN_CTZL", "BUILTIN_CTZLL", "POPCOUNT",    
     "EXPECT", "ABORT", "RETURN_ADDR", "BUILTIN_ADD_OVERFLOW", "BUILTIN_SUB_OVERFLOW",  "BUILTIN_MUL_OVERFLOW", "UNREACHABLE", "ALLOCA", "BUILTIN_INFF", 
     "BUILTIN_INF", "BUILTIN_NAN", "BUILTIN_NANF", "BUILTIN_NANL", "BUILTIN_ISNAN", "BUILTIN_HUGE_VALL", "BUILTIN_HUGE_VALF", "BUILTIN_HUGE_VAL",
     "BSWAP16", "BSWAP32", "BSWAP64", "FRAME_ADDRESS", "EMMS", "SFENCE", "LFENCE", "MFENCE", "PAUSE", "STMXCSR", "CVTPI2PS", "CVTPS2PI", "CLFLUSH", 
@@ -105,7 +105,7 @@ static const char kNodeKindStr[521][21] = {
     "XRESLDTRK", "CLUI", "STUI", "TESTUI", "WBNOINVD", "XTEST", "WBINVD", "RDPID", "RDFSBASE32", "RDFSBASE64", "RDGSBASE32", "RDGSBASE64",
     "VZEROALL", "VZEROUPPER", "FEMMS", "BSRSI", "RDPMC", "RDTSCP", "ROLQI", "ROLHI", "RORQI", "RORHI", "BSRDI", "WRITEEFLAGS_U64", "INCSSPQ", "RSTORSSP",
     "WRSSD", "WRSSQ", "WRUSSD", "WRUSSQ", "CLRSSBSY", "SBB_U32", "ADDCARRYX_U32", "SBB_U64", "ADDCARRYX_U64", "TZCNT_U16", "BEXTR_U32", "ADDFETCH", "ORFETCH", "ANDFETCH",
-    "XORFETCH", "NANDFETCH", "FPCLASSIFY"
+    "XORFETCH", "NANDFETCH", "FPCLASSIFY", "ISUNORDERED", "SIGNBIT", "SIGNBITF", "SIGNBITL"
 };
 
 
@@ -117,6 +117,8 @@ static struct Visited {
 static void PrintObj(FILE *, int, const char *, Obj *);
 static void PrintNode(FILE *, int, const char *, Node *);
 static void PrintType(FILE *, int, const char *, Type *);
+static void PrintFpClassify(FILE *, int, const char *, FpClassify *);
+static void PrintInitializer(FILE *, int, const char *, Initializer *);
 static void PrintAsm(FILE *f, int l, const char *s, char *a);
 
 
@@ -242,6 +244,10 @@ static void PrintType(FILE *f, int l, const char *s, Type *t) {
       PrintType(f, l + 2, "return_ty: ", t->return_ty);
       PrintType(f, l + 2, "params: ", t->params);
       PrintBool(f, l + 2, "is_variadic: ", t->is_variadic);
+      PrintType(f, l + 2, "pointertype: ", t->pointertype);
+      PrintType(f, l + 2, "origin: ", t->origin);
+      PrintType(f, l + 2, "decl_next: ", t->decl_next);
+      PrintInt(f, l + 2, "min_vector_width: ", t->min_vector_width);
       PrintLine(f, l, "}");
     } else if (t->name) {
       PrintLine(f, l, "%sTY_%s %.*s # %p", s, kTypeKindStr[t->kind],
@@ -256,6 +262,39 @@ static void PrintAsm(FILE *f, int l, const char *s, char * a) {
 if (!a) return;
   PrintLine(f, l, "%sAsm { # %p", s, a);
   PrintStr(f, l + 2, "str: ", a);
+}
+
+static void PrintFpClassify(FILE *f, int l, const char *s, FpClassify *fpc) {
+  if (!fpc) return;
+  PrintLine(f, l, "%sFpClassify { # %p", s, fpc);
+  PrintNode(f, l + 2, "node: ", fpc->node);
+  for (int i = 0; i < 5; ++i) {
+    PrintInt(f, l + 2, "arg: ", fpc->args[i]);
+  }
+  PrintLine(f, l, "}");
+}
+
+static void PrintInitializer(FILE *f, int l, const char *s, Initializer *init) {
+  if (!init) return;
+  PrintLine(f, l, "%sInitializer { # %p", s, init);
+  PrintType(f, l + 2, "ty: ", init->ty);
+  PrintTokStr(f, l + 2, "tok: ", init->tok);
+  PrintBool(f, l + 2, "is_flexible: ", init->is_flexible);
+  PrintNode(f, l + 2, "expr: ", init->expr);
+  if (init->children && init->ty) {
+     int len = 0;
+     if (init->ty->kind == TY_ARRAY || init->ty->kind == TY_VECTOR) len = init->ty->array_len;
+     else if (init->ty->kind == TY_STRUCT || init->ty->kind == TY_UNION) {
+        for (Member *m = init->ty->members; m; m = m->next) len++;
+     }
+     for (int i = 0; i < len; ++i) {
+        if (init->children[i])
+            PrintInitializer(f, l + 2, "child: ", init->children[i]);
+     }
+  }
+  PrintMember(f, l + 2, "mem: ", init->mem);
+  PrintLine(f, l, "}");
+  if (init->next) PrintInitializer(f, l, "next: ", init->next);
 }
 
 static void PrintNode(FILE *f, int l, const char *s, Node *n) {
@@ -316,6 +355,13 @@ static void PrintNode(FILE *f, int l, const char *s, Node *n) {
     if (n->atomic_expr) PrintNode(f, l + 2, "atomic_expr: ", n->atomic_expr);
     if (n->atomic_addr) PrintObj(f, l + 2, "atomic_addr: ", n->atomic_addr);
     PrintBool(f, l + 2, "atomic_fetch: ", n->atomic_fetch);
+    if (n->builtin_val) PrintNode(f, l + 2, "builtin_val: ", n->builtin_val);
+    for (int i = 0; i < n->builtin_nargs; i++) {
+        PrintNode(f, l + 2, "builtin_arg: ", n->builtin_args[i]);
+    }
+    PrintInt(f, l + 2, "builtin_nargs: ", n->builtin_nargs);
+    if (n->fpc) PrintFpClassify(f, l + 2, "fpc: ", n->fpc);
+    PrintBool(f, l + 2, "is_tail: ", n->is_tail);
     PrintBool(f, l + 2, "is_scalar_promoted: ", n->is_scalar_promoted);
     if (n->fval) PrintLine(f, l + 2, "fval: %Lf", n->fval);
     PrintLine(f, l, "}");
@@ -373,6 +419,18 @@ static void PrintObj(FILE *f, int l, const char *s, Obj *o) {
             "is_force_align_arg_pointer: ", o->is_force_align_arg_pointer);
   PrintBool(f, l + 2,
             "is_no_caller_saved_registers: ", o->is_no_caller_saved_registers);
+
+  PrintTokStr(f, l + 2, "tok: ", o->tok);
+  PrintStr(f, l + 2, "ptr: ", o->ptr);
+  PrintBool(f, l + 2, "is_ms_abi: ", o->is_ms_abi);
+  PrintInt(f, l + 2, "stack_offset: ", o->stack_offset);
+  PrintInt(f, l + 2, "stack_align: ", o->stack_align);
+  for (int i = 0; i < o->refs.len; i++) {
+      PrintStr(f, l + 2, "ref: ", o->refs.data[i]);
+  }
+  PrintInitializer(f, l + 2, "init: ", o->init);
+  PrintBool(f, l + 2, "force_frame_pointer: ", o->force_frame_pointer);
+  PrintInt(f, l + 2, "min_vector_width: ", o->min_vector_width);
 
   PrintInt(f, l + 2, "stack_size: ", o->stack_size);
   PrintInt(f, l + 2, "overflow_arg_area: ", o->overflow_arg_area);
