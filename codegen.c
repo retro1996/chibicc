@@ -2205,24 +2205,13 @@ static void gen_vec_init_v2si(Node *node) {
 
 
 static void gen_vec_ext(Node *node) {
-  gen_expr(node->lhs); 
+  gen_expr(node->lhs);
   push_xmm(0);
-  gen_expr(node->rhs); 
-  println("  mov %%eax, %%ebx");  
+  gen_expr(node->rhs);
+  println("  movslq %%eax, %%rcx");
+  println("  and $%d, %%ecx", node->kind == ND_VECEXTV2SI ? 1 : 3);
+  println("  movl (%%rsp,%%rcx,4), %%eax");
   pop_xmm(0);
-  static int idx = 0;
-  static int label_id = 0;
-  int lbl_zero = label_id++;
-  int lbl_done = label_id++;
-  println("  cmpl $0, %%ebx");
-  println("  je .Lvec_ext_zero_%d", lbl_zero);
-  println("  psrldq $%d, %%xmm0", 4 * idx); 
-  idx++; 
-  println("  movd %%xmm0, %%eax");
-  println("  jmp .Lvec_ext_done_%d", lbl_done);
-  println(".Lvec_ext_zero_%d:", lbl_zero);
-  println("  movd %%xmm0, %%eax");   
-  println(".Lvec_ext_done_%d:", lbl_done);
 }
 
 static void gen_vec_init_binop(Node *node, const char *insn) {
@@ -3743,9 +3732,15 @@ static void gen_sub_and_fetch(Node *node) {
 
 static void gen_prefetch(Node *node) {
   Node *ptr = node->builtin_args[0];
-  //Node *rw = node->builtin_args[1];
+  Node *rw = node->builtin_args[1];
   Node *locality = node->builtin_args[2];
-  gen_expr(ptr);   
+  gen_expr(ptr);
+  push_tmp();
+  if (rw)
+    gen_expr(rw);
+  if (locality)
+    gen_expr(locality);
+
   int loc = 3; 
     if (locality && locality->kind == ND_NUM) {
         loc = locality->val;
@@ -3754,12 +3749,13 @@ static void gen_prefetch(Node *node) {
     const char *instr;
     switch (loc) {
         case 0: instr = "prefetchnta"; break;
-        case 1: instr = "prefetcht0"; break;
+        case 1: instr = "prefetcht2"; break;
         case 2: instr = "prefetcht1"; break;
-        case 3: instr = "prefetcht2"; break;
+        case 3: instr = "prefetcht0"; break;
         default: instr = "prefetcht0"; break;
     }
-    
+
+    pop_tmp("%rax");
     println("  %s (%%rax)", instr);
 
 }

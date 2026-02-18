@@ -120,14 +120,10 @@ git:
 
 memcached:
 	cd ../memcached && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make -j$$(nproc) && \
-	MC_TIMEDRUN=$${MC_TIMEDRUN:-3600}; \
+	MC_TIMEDRUN=$${MC_TIMEDRUN:-600}; \
 	MC_TEST_JOBS=$${MC_TEST_JOBS:-2}; \
-	FAST_TESTS=$$(cd t && ls *.t | grep -v extstore | grep -v '^metaget\.t$$' | sed 's|^|t/|'); \
-	META_TEST=t/metaget.t; \
-	EXTSTORE_TESTS=$$(cd t && ls *extstore*.t 2>/dev/null | sed 's|^|t/|'); \
-	MC_TIMEDRUN=$$MC_TIMEDRUN prove -j $$MC_TEST_JOBS $$FAST_TESTS && \
-	MC_TIMEDRUN=$$MC_TIMEDRUN prove -j 1 $$META_TEST && \
-	MC_TIMEDRUN=$$MC_TIMEDRUN prove -j 1 $$EXTSTORE_TESTS
+	FAST_TESTS=$$(cd t && ls *.t | sed 's|^|t/|'); \
+	MC_TIMEDRUN=$$MC_TIMEDRUN prove -j $$MC_TEST_JOBS $$FAST_TESTS 
 
 openssh-portable:
 	cd ../openssh-portable && make clean && CC=chibicc CFLAGS="-std=c11" ./configure && make && make tests

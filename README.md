@@ -549,7 +549,7 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     git 2 tests failed    
     vim: compile OK, tests OK except one test : on test_channel.vim (Test_error_callback_terminal).
     cpython : compile OK, some tests ko (4 on 500)
-    memcached: compile OK, tests OK (except t/error-extstore.t .......... Failed 1/8 subtests, t/extstore-buckets.t ........ Failed 1/1 subtests)  
+    memcached: compile OK, tests OK (except t/error-extstore.t, t/binary-extstore.t, t/chunked-extstore.t and t/metaget.t that end in timeout)  
        
 
 ## projects compiled successfully with chibicc
