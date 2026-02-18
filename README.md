@@ -503,15 +503,15 @@ cpython: git clone https://github.com/python/cpython.git
 
         27 tests skipped:
         3 tests skipped (resource denied):
-        7 re-run tests:
-        7 tests failed:
-            test.test_gdb.test_pretty_print test_call test_capi test_cmd_line
-            test_frame_pointer_unwind test_math test_userlist
-        463 tests OK.
+        5 re-run tests:
+        4 tests failed:
+            test.test_gdb.test_pretty_print test_call test_faulthandler
+            test_frame_pointer_unwind
+        466 tests OK.
 
-        Total duration: 22 min 49 sec
-        Total tests: run=47,286 failures=66 skipped=2,671
-        Total test files: run=504/500 failed=7 skipped=27 resource_denied=3 rerun=7
+        Total duration: 34 min 51 sec
+        Total tests: run=47,247 failures=44 skipped=2,658
+        Total test files: run=502/500 failed=4 skipped=27 resource_denied=3 rerun=5
         Result: FAILURE then FAILURE
 
 
@@ -546,10 +546,10 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
 ## known issues
 
     postgres execution : ko
-    git 2 tests failed
-    memcached test stuck at t/chunked-extstore.t ........ 1/?
+    git 2 tests failed    
     vim: compile OK, tests OK except one test : on test_channel.vim (Test_error_callback_terminal).
-    cpython : compile OK, some tests ko (7 on 500)
+    cpython : compile OK, some tests ko (4 on 500)
+    memcached: compile OK, tests OK (except t/error-extstore.t .......... Failed 1/8 subtests, t/extstore-buckets.t ........ Failed 1/1 subtests)  
        
 
 ## projects compiled successfully with chibicc
@@ -559,8 +559,7 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     zlib: compile OK, tests OK
     nmap: compile OK, tests OK    
     openssh-portable : compile OK, tests OK
-    vlc: compile OK
-   
+    vlc: compile OK    
 
 
 ## debug
