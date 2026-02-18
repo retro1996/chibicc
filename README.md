@@ -458,6 +458,10 @@ memcached: https://github.com/memcached/memcached.git
     CC=chibicc CFLAGS=-fpic LDFLAGS=-fpic ./configure
     make
     make test
+    All tests successful.
+    Files=113, Tests=180224, 224 wallclock secs (19.91 usr  1.86 sys + 49.12 cusr 22.93 csys = 93.82 CPU)
+    Result: PASS
+    
 
 nmap : https://github.com/nmap/nmap
 
@@ -549,8 +553,7 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     git 2 tests failed    
     vim: compile OK, tests OK except one test : on test_channel.vim (Test_error_callback_terminal).
     cpython : compile OK, some tests ko (4 on 500)
-    memcached: compile OK, tests OK (except t/whitespace.t)
-       
+           
 
 ## projects compiled successfully with chibicc
 
@@ -559,7 +562,8 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     zlib: compile OK, tests OK
     nmap: compile OK, tests OK    
     openssh-portable : compile OK, tests OK
-    vlc: compile OK    
+    vlc: compile OK  
+    memcached : compile OK, tests OK  
 
 
 ## debug
